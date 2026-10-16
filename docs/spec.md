@@ -80,7 +80,7 @@ Rotating logs in `data\logs\` (7 files × 1 MB). Crashes logged with a stack tra
 | Field | Source |
 |---|---|
 | `id` | generated |
-| `content` | **Qt rich-text HTML** (`QTextDocument::toHtml`), the canonical format. Images and files are referenced as `noite-att://<hash>.<ext>` and loaded from `attachments\`. Markdown is export-only: `toMarkdown()` loses bold and tables. (D7) |
+| `content` | **Qt rich-text HTML** (`QTextDocument::toHtml`), the canonical format. Images and files are referenced as `noite-att:<hash>.<ext>` and loaded from `attachments\`. There is no `//`: with an authority, QUrl parses the hash as a hostname, rejects it, and every image ends up sharing one key. Markdown is export-only: `toMarkdown()` loses bold and tables. (D7) |
 | `title` | derived from the first line of text, truncated to 60 chars; no AI. (D10) |
 | `created_at`, `modified_at` | automatic (D10) |
 | `due_date` | optional (D9) |
@@ -130,7 +130,9 @@ Attachments are shared, not duplicated (safe because of D22).
   - `[ ]`, `[]` and `[x]`, either after a bullet or at the start of a line, give a checkbox, and clicking it toggles it.
   - `**bold**`, `*italic*`/`_italic_`, `` `code` ``.
   - `[label](url)`, or a bare URL followed by a space, becomes a link; Ctrl+click opens it.
-  - Pasted markdown text is rendered. A pasted bare URL becomes a link.
+  - Pasted text is rendered as markdown only if it has at least two markdown constructs, and each line stays a line. A pasted bare URL becomes a link. `Ctrl+Shift+V` always pastes plain text.
+  - Ctrl+click opens only `http`, `https` and `mailto` links. Pasted HTML can carry `file:` or other schemes, which Windows would run.
+  - Clipboard precedence: HTML with content beats the bitmap that spreadsheets and OneNote add alongside it.
 - Keys: `Ctrl+Enter` mark done and close · `Esc` hide · `Ctrl+Shift+C` colour. (D30)
 
 ### Paste handling (D21)
@@ -192,7 +194,7 @@ The first automated test is the attachment-safety case: paste image → clone �
 
 ## 10. Deferred to v2
 
-- **Merge** and **split** — rules for combining or dividing content and metadata, designed on top of the D7 document model. The Qt spike proved that a selection with images can be moved into a new document.
+- **Merge** and **split** — rules for combining or dividing content and metadata, designed on top of the D7 document model. The Qt spike moved a selection containing one image into a new document; more images, and tables, are untested.
 - **Audio recording + speech-to-text** — offline, local model (whisper.cpp class) as an optional download to keep the portable zip small.
 - **Linux / macOS** builds.
 - **Code signing** (e.g. Azure Trusted Signing) at public release.

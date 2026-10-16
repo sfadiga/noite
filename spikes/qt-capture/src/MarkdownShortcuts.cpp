@@ -141,9 +141,19 @@ bool MarkdownShortcuts::wrap(const QString& before, const QString& marker, const
     const QString content = before.mid(open + n, close - open - n);
     if (content.front().isSpace() || content.back().isSpace() || content.startsWith(m))
         return false;
+    // Not inside words or numbers ("my_var_name", "2*3*4"), URLs, or code.
+    if (open > 0 && (before[open - 1].isLetterOrNumber() || before[open - 1] == '_'))
+        return false;
+    static const QRegularExpression space(R"(\s)");
+    const QString token = before.mid(before.lastIndexOf(space, open) + 1);
+    if (token.contains("://") || token.startsWith("www."))
+        return false;
 
     const int start = blockStart();
     QTextCursor c = edit_->textCursor();
+    c.setPosition(start + open + 1);
+    if (c.charFormat().fontFixedPitch())
+        return false;
     c.beginEditBlock();
     removeRange(c, start + close, n);
     const QTextCharFormat outside = removeRange(c, start + open, n);

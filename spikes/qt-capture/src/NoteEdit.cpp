@@ -4,8 +4,10 @@
 #include "Trials.h"
 
 #include <QBuffer>
+#include <QClipboard>
 #include <QCryptographicHash>
 #include <QDesktopServices>
+#include <QGuiApplication>
 #include <QKeyEvent>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -25,16 +27,63 @@ bool NoteEdit::canInsertFromMimeData(const QMimeData* source) const
     return source->hasImage() || QTextEdit::canInsertFromMimeData(source);
 }
 
+namespace {
+
+// HTML that carries real content (text, tables), not just a wrapper around one image.
+bool htmlHasContent(const QMimeData* source)
+{
+    if (!source->hasHtml())
+        return false;
+    QString text = QTextDocumentFragment::fromHtml(source->html()).toPlainText();
+    return !text.remove(QChar::ObjectReplacementCharacter).trimmed().isEmpty();
+}
+
+// Rendered as markdown only with at least two markdown constructs; one "- " line in an
+// email or one "# comment" in a shell snippet stays plain text.
+bool looksLikeMarkdown(const QString& text)
+{
+    static const QRegularExpression construct(
+        R"((?:^|\n)[ \t]*(?:#{1,6} |[-*+] |\d+\. |> )|\*\*\S[^*\n]*\*\*|\[[^\]\n]+\]\([^)\s]+\)|`[^`\n]+`)");
+    int count = 0;
+    for (auto it = construct.globalMatch(text); it.hasNext() && count < 2; it.next())
+        ++count;
+    return count >= 2;
+}
+
+// Markdown joins consecutive lines into one paragraph; pasted notes expect each line to
+// stay a line. Separate them with a blank line, except inside fences and table rows.
+QString keepLineBreaks(const QString& markdown)
+{
+    const QStringList lines = markdown.split('\n');
+    QStringList out;
+    bool fenced = false;
+    for (int i = 0; i < lines.size(); ++i) {
+        const QString line = lines[i];
+        out << line;
+        if (line.trimmed().startsWith("```"))
+            fenced = !fenced;
+        const bool next = i + 1 < lines.size() && !lines[i + 1].trimmed().isEmpty();
+        const bool table = line.trimmed().startsWith('|') && next && lines[i + 1].trimmed().startsWith('|');
+        if (!fenced && !table && next && !line.trimmed().isEmpty())
+            out << QString();
+    }
+    return out.join('\n');
+}
+
+} // namespace
+
 void NoteEdit::insertFromMimeData(const QMimeData* source)
 {
-    if (source->hasImage()) {
+    // Spreadsheets and OneNote put a bitmap next to the HTML; the HTML wins when it has content.
+    if (source->hasImage() && !htmlHasContent(source)) {
         const QImage image = qvariant_cast<QImage>(source->imageData());
         if (!image.isNull()) {
             QByteArray png;
             QBuffer buffer(&png);
             buffer.open(QIODevice::WriteOnly);
             image.save(&buffer, "PNG");
-            const QString name = "noite-att://"
+            // No "//": with an authority, QUrl would parse the hash as a hostname and reject it.
+            const QString name = "noite-att:"
                 + QString::fromLatin1(QCryptographicHash::hash(png, QCryptographicHash::Sha256).toHex())
                 + ".png";
             document()->addResource(QTextDocument::ImageResource, QUrl(name), image);
@@ -48,20 +97,30 @@ void NoteEdit::insertFromMimeData(const QMimeData* source)
         const QString text = source->text();
         static const QRegularExpression url(R"(^\s*((?:https?://|www\.)\S+)\s*$)");
         if (const auto m = url.match(text); m.hasMatch()) {
-            QTextCharFormat anchor = currentCharFormat();
+            const QTextCharFormat outside = currentCharFormat();
+            QTextCharFormat anchor = outside;
             anchor.merge(shortcuts_->linkFormat(m.captured(1)));
             textCursor().insertText(m.captured(1), anchor);
+            setCurrentCharFormat(outside);
             return;
         }
-        // Markdown pasted as plain text is rendered; ordinary text keeps its line breaks.
-        static const QRegularExpression markdown(
-            R"((^|\n)\s*(#{1,6} |[-*+] |\d+\. |> )|\*\*\S|\[[^\]]+\]\([^)]+\)|`[^`]+`)");
-        if (markdown.match(text).hasMatch()) {
-            textCursor().insertFragment(QTextDocumentFragment::fromMarkdown(text));
+        if (looksLikeMarkdown(text)) {
+            textCursor().insertFragment(QTextDocumentFragment::fromMarkdown(keepLineBreaks(text)));
             return;
         }
     }
     QTextEdit::insertFromMimeData(source);
+}
+
+bool NoteEdit::isSafeLink(const QUrl& url)
+{
+    static const QStringList allowed = {"http", "https", "mailto"};
+    return url.isValid() && allowed.contains(url.scheme().toLower());
+}
+
+void NoteEdit::pastePlainText()
+{
+    insertPlainText(QGuiApplication::clipboard()->text());
 }
 
 std::unique_ptr<QTextDocument> NoteEdit::takeSelectionAsDocument()
@@ -104,6 +163,10 @@ void NoteEdit::keyPressEvent(QKeyEvent* event)
         emit escapePressed();
         return;
     }
+    if (event->key() == Qt::Key_V && event->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier)) {
+        pastePlainText();
+        return;
+    }
     QTextEdit::keyPressEvent(event);
     const QString text = event->text();
     bool applied = false;
@@ -129,7 +192,8 @@ void NoteEdit::mousePressEvent(QMouseEvent* event)
         if (event->modifiers() & Qt::ControlModifier) {
             const QString href = anchorAt(pos);
             if (!href.isEmpty()) {
-                QDesktopServices::openUrl(QUrl(href));
+                if (isSafeLink(QUrl(href)))
+                    QDesktopServices::openUrl(QUrl(href));
                 return;
             }
         }

@@ -26,6 +26,12 @@ public:
     // Diagnostic: key events typed into this editor since the last call.
     QStringList takeKeyLog();
 
+    // Ctrl+click opens only web and mail links (pasted HTML can carry file: or other schemes).
+    static bool isSafeLink(const QUrl& url);
+
+    // Ctrl+Shift+V: paste the clipboard as plain text, no rendering or link detection.
+    void pastePlainText();
+
 signals:
     void escapePressed();
 

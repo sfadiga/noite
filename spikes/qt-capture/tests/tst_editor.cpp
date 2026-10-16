@@ -1,7 +1,9 @@
 // Spike capability tests: can QTextEdit deliver the D7/D21 editor?
 #include "NoteEdit.h"
 
+#include <QClipboard>
 #include <QElapsedTimer>
+#include <QGuiApplication>
 #include <QMimeData>
 #include <QStyleFactory>
 #include <QTextBlock>
@@ -19,6 +21,15 @@ QTextFragment findFragment(QTextDocument* doc, const QString& text)
     for (QTextBlock b = doc->begin(); b.isValid(); b = b.next())
         for (auto it = b.begin(); !it.atEnd(); ++it)
             if (it.fragment().text() == text)
+                return it.fragment();
+    return {};
+}
+
+QTextFragment fragmentContaining(QTextDocument* doc, const QString& text)
+{
+    for (QTextBlock b = doc->begin(); b.isValid(); b = b.next())
+        for (auto it = b.begin(); !it.atEnd(); ++it)
+            if (it.fragment().text().contains(text))
                 return it.fragment();
     return {};
 }
@@ -243,6 +254,130 @@ private slots:
         QCOMPARE(doc()->toPlainText(), QString("line one\nline two"));
     }
 
+    // Review C1: each pasted image must get its own valid resource key.
+    void twoPastedImagesStayDistinct()
+    {
+        QImage red(8, 8, QImage::Format_ARGB32);
+        red.fill(Qt::red);
+        QImage blue(8, 8, QImage::Format_ARGB32);
+        blue.fill(Qt::blue);
+        paste(red);
+        paste(blue);
+        const QStringList names = imageNames(doc());
+        QCOMPARE(names.size(), 2);
+        QVERIFY(names[0] != names[1]);
+        for (const QString& n : names)
+            QVERIFY2(QUrl(n).isValid(), qPrintable(n));
+        QCOMPARE(doc()->resource(QTextDocument::ImageResource, QUrl(names[0])).value<QImage>().pixelColor(0, 0), QColor(Qt::red));
+        QCOMPARE(doc()->resource(QTextDocument::ImageResource, QUrl(names[1])).value<QImage>().pixelColor(0, 0), QColor(Qt::blue));
+
+        QTextDocument back;
+        back.setHtml(doc()->toHtml());
+        QCOMPARE(imageNames(&back), names);
+    }
+
+    // Review I2: emphasis markers inside words, numbers and URLs are left alone.
+    void intrawordMarkersUntouched_data()
+    {
+        QTest::addColumn<QString>("typed");
+        QTest::newRow("snake_case") << "my_var_name ";
+        QTest::newRow("multiply") << "2*3*4";
+        QTest::newRow("url underscores") << "see https://x.com/a_b_c ";
+        QTest::newRow("url leading underscore") << "https://x.com/_a_ ";
+    }
+
+    void intrawordMarkersUntouched()
+    {
+        QFETCH(QString, typed);
+        QTest::keyClicks(edit.get(), typed);
+        QCOMPARE(doc()->toPlainText(), typed);
+        for (QTextBlock b = doc()->begin(); b.isValid(); b = b.next())
+            for (auto it = b.begin(); !it.atEnd(); ++it)
+                QVERIFY(!it.fragment().charFormat().fontItalic());
+    }
+
+    void urlWithUnderscoresKeepsHref()
+    {
+        QTest::keyClicks(edit.get(), "see https://x.com/a_b_c ");
+        QCOMPARE(findFragment(doc(), "https://x.com/a_b_c").charFormat().anchorHref(), QString("https://x.com/a_b_c"));
+    }
+
+    // Review I3: a single markdown-looking line doesn't reflow ordinary text.
+    void pasteTextWithOneMarkdownLineStaysPlain()
+    {
+        QMimeData mime;
+        mime.setText("Hi team,\nplease see the list:\n- item one\nthanks\nBob");
+        edit->insertFromMimeData(&mime);
+        QCOMPARE(doc()->toPlainText(), QString("Hi team,\nplease see the list:\n- item one\nthanks\nBob"));
+    }
+
+    void pasteMarkdownKeepsLineBreaks()
+    {
+        QMimeData mime;
+        mime.setText("# Notes\nfirst line\nsecond line\n- a\n- b");
+        edit->insertFromMimeData(&mime);
+        QCOMPARE(findBlock(doc(), "Notes").blockFormat().headingLevel(), 1);
+        QVERIFY(findBlock(doc(), "first line").isValid());
+        QVERIFY(findBlock(doc(), "second line").isValid());
+        QVERIFY(findBlock(doc(), "a").textList());
+        QVERIFY(findBlock(doc(), "b").textList());
+    }
+
+    void ctrlShiftVPastesPlainText()
+    {
+        QGuiApplication::clipboard()->setText("**bold** text");
+        QTest::keyClick(edit.get(), Qt::Key_V, Qt::ControlModifier | Qt::ShiftModifier);
+        QCOMPARE(doc()->toPlainText(), QString("**bold** text"));
+        QVERIFY(findFragment(doc(), "**bold** text").charFormat().fontWeight() != QFont::Bold);
+    }
+
+    // Review I4: spreadsheet-style clipboards carry a bitmap too; the table wins.
+    void htmlTableBeatsImage()
+    {
+        QMimeData mime;
+        mime.setImageData(testImage());
+        mime.setHtml("<table><tr><td>a</td><td>b</td></tr></table>");
+        edit->insertFromMimeData(&mime);
+        QVERIFY(hasTable(doc()));
+        QVERIFY(imageNames(doc()).isEmpty());
+    }
+
+    void imageOnlyHtmlStillPastesImage()
+    {
+        QMimeData mime;
+        mime.setImageData(testImage());
+        mime.setHtml("<html><body><img src='file:///C:/tmp/x.png'></body></html>");
+        edit->insertFromMimeData(&mime);
+        const QStringList names = imageNames(doc());
+        QCOMPARE(names.size(), 1);
+        QVERIFY(names[0].startsWith("noite-att:"));
+    }
+
+    // Review I5: Ctrl+click only opens web and mail links.
+    void onlySafeLinkSchemesOpen()
+    {
+        QVERIFY(NoteEdit::isSafeLink(QUrl("https://example.com")));
+        QVERIFY(NoteEdit::isSafeLink(QUrl("http://example.com")));
+        QVERIFY(NoteEdit::isSafeLink(QUrl("mailto:a@b.c")));
+        QVERIFY(!NoteEdit::isSafeLink(QUrl("file:///C:/Windows/System32/calc.exe")));
+        QVERIFY(!NoteEdit::isSafeLink(QUrl("javascript:alert(1)")));
+        QVERIFY(!NoteEdit::isSafeLink(QUrl("ms-settings:")));
+        QVERIFY(!NoteEdit::isSafeLink(QUrl("")));
+    }
+
+    // Review I8: typing after a pasted URL is not part of the link.
+    void pastedUrlFormatDoesNotStick()
+    {
+        QMimeData mime;
+        mime.setText("https://example.com");
+        edit->insertFromMimeData(&mime);
+        QTest::keyClicks(edit.get(), " tail");
+        const QTextFragment tail = fragmentContaining(doc(), "tail");
+        QVERIFY(tail.isValid());
+        QVERIFY2(!tail.charFormat().isAnchor(), qPrintable("anchored fragment: " + tail.text()));
+        QCOMPARE(findFragment(doc(), "https://example.com").charFormat().anchorHref(), QString("https://example.com"));
+    }
+
     void pasteBrowserHtml()
     {
         pasteHtml("<html><body><!--StartFragment--><p><b>bold</b> <a href='https://x.y'>l</a></p>"
@@ -258,7 +393,8 @@ private slots:
         paste(testImage());
         const QStringList names = imageNames(doc());
         QCOMPARE(names.size(), 1);
-        QVERIFY(names[0].startsWith("noite-att://"));
+        QVERIFY(names[0].startsWith("noite-att:"));
+        QVERIFY(QUrl(names[0]).isValid());
         const QImage stored = doc()->resource(QTextDocument::ImageResource, QUrl(names[0])).value<QImage>();
         QCOMPARE(stored.size(), QSize(32, 32));
     }

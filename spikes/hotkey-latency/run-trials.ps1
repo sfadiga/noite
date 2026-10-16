@@ -31,31 +31,33 @@ while (-not (Test-Path "$leakFile.ready")) {
     Start-Sleep -Milliseconds 200
 }
 
-for ($i = 1; $i -le $Trials; $i++) {
-    if (-not $shell.AppActivate($targetTitle)) { throw "could not activate harness target" }
-    Start-Sleep -Milliseconds 300
-    [System.Windows.Forms.SendKeys]::SendWait($Hotkey)
-    [System.Windows.Forms.SendKeys]::SendWait("hello")
-    Start-Sleep -Milliseconds 400
-    [System.Windows.Forms.SendKeys]::SendWait("{ESC}")
-    Start-Sleep -Milliseconds 700
+try {
+    for ($i = 1; $i -le $Trials; $i++) {
+        if (-not $shell.AppActivate($targetTitle)) { throw "could not activate harness target" }
+        Start-Sleep -Milliseconds 300
+        [System.Windows.Forms.SendKeys]::SendWait($Hotkey)
+        [System.Windows.Forms.SendKeys]::SendWait("hello")
+        Start-Sleep -Milliseconds 400
+        [System.Windows.Forms.SendKeys]::SendWait("{ESC}")
+        Start-Sleep -Milliseconds 700
+    }
 }
-
-New-Item -ItemType File -Force "$leakFile.stop" | Out-Null
-if (-not $target.WaitForExit(5000)) { $target.Kill(); throw "harness target did not close; leak check unavailable" }
-Remove-Item "$leakFile.stop", "$leakFile.ready"
+finally {
+    # Always close the target window, even if a trial threw.
+    New-Item -ItemType File -Force "$leakFile.stop" | Out-Null
+    if (-not $target.WaitForExit(5000)) { $target.Kill(); throw "harness target did not close; leak check unavailable" }
+    Remove-Item "$leakFile.stop", "$leakFile.ready" -ErrorAction SilentlyContinue
+}
 $leaked = if (Test-Path $leakFile) { [IO.File]::ReadAllText($leakFile) } else { "" }
 
 $rows = @(Import-Csv $csv | Select-Object -Skip $before)
 $rows | Export-Csv -NoTypeInformation (Join-Path $results "$Label.csv")
 
-$failed = @($rows | Where-Object { $_.text -ne "hello" })
-$ms = @($rows | Where-Object { $_.ready_ms -ne "" } | ForEach-Object { [double]$_.ready_ms } | Sort-Object)
-function Rank([double]$p) { if ($ms.Count -eq 0) { return $null }; $ms[[math]::Max(0, [math]::Ceiling($p * $ms.Count) - 1)] }
-
-"label=$Label trials_sent=$Trials rows=$($rows.Count) failed=$($failed.Count) missing_rows=$($Trials - $rows.Count) leaked_chars=$($leaked.Length)"
-if ($ms.Count -gt 0) {
-    "first={0:N2} p50={1:N2} p95={2:N2} max={3:N2} (ms)" -f [double]$rows[0].ready_ms, (Rank 0.50), (Rank 0.95), $ms[-1]
+. (Join-Path $PSScriptRoot "trial-stats.ps1")
+$s = Measure-Trials $rows
+"label=$Label trials_sent=$Trials rows=$($rows.Count) failed=$($s.Failed.Count) missing_rows=$($Trials - $rows.Count) leaked_chars=$($leaked.Length)"
+if ($s.Ready -gt 0) {
+    "first={0} p50={1:N2} p95={2:N2} max={3:N2} (ms)" -f $(if ($null -ne $s.First) { "{0:N2}" -f $s.First } else { "n/a" }), $s.P50, $s.P95, $s.Max
 }
-$failed | ForEach-Object { "FAILED trial $($_.trial): text='$($_.text)'" }
+$s.Failed | ForEach-Object { "FAILED trial $($_.trial): ready_ms='$($_.ready_ms)' text='$($_.text)'" }
 if ($leaked.Length -gt 0) { "LEAKED into foreground app: '$leaked'" }
