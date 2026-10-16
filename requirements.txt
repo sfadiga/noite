@@ -1,0 +1,29 @@
+noite (placeholder name)
+
+quick description: a taking note app for busy people that get shit done
+
+
+1. the app shall work on Windows (if possible Linux, mac)
+2. on first run the app shall open a step by step configuration
+3. the first configuration should be define the keystroke combination to bring new scratch pad 
+4. by using a combination of keytrokes predefined during setup the app should bring a modal square área where user can write freely
+5. the scratch shall get metadata by context - date/time, title (based on text), color, tbd
+6. the app shall show scratchs at begining of the day by te order of older to show which one is due (as reminder)
+7. the app shall allow pasting images and other objects from clipboard
+8. the app shall persist data in some way
+9. the app shall work without relying on internet or online apis
+10. the app shall be blazing fast (yeah I know shitty requirement right here)
+11. the app is intended to be used to capture to do's and other small notes
+12. the app on the main board shall make possible to bundle scratchs
+13. the app shall be a portable app
+14. the app shall allow to mark items done
+15. the app shall allow trash scraps
+16. thrashed scraps shall be recoverable within 1 month if needed, the recoverable window shall be a setting in the step by step setting
+17. although in one requirement i mentioned that no internet and no online api shall be required also the app shall make possible to automatically backup to google drive (again setup location in step by step)
+18. items mark done will not be displayed in the board, but there should be a complete área to allow to see them
+19. the app shall allow recording áudio and use some áudio to text capture api (ok, I mention no online api, but maybe if this is doable in this feature we can use something, as long as its free , and not intrusive, like saving user data, etc)
+20. the scracth pad shall support markdown, rich text features, like links, etc
+21. the app shall allow cloning scracth and merging to diferente scrachts
+22. the app shall allow split a scratch by selecting text/objects in it
+23. the app shall allow adding meta data for quick filtering in the board
+24. the board shall allow simple filtering (chips selection based on metadata)
