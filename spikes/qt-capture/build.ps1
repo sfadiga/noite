@@ -3,7 +3,8 @@
 # outside the dev shell.
 param(
     [ValidateSet("Debug", "Release")][string]$Config = "Debug",
-    [string]$QtDir = "$env:USERPROFILE\Qt\6.10.3\msvc2022_64"
+    [string]$QtDir = "$env:USERPROFILE\Qt\6.10.3\msvc2022_64",
+    [switch]$Test
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,3 +25,8 @@ $deploy = if ($Config -eq "Release") { "--release" } else { "--debug" }
 & "$QtDir\bin\windeployqt.exe" $deploy --no-translations --no-system-d3d-compiler --no-opengl-sw (Join-Path $bin "qt-capture.exe") | Out-Null
 if ($LASTEXITCODE) { throw "windeployqt failed" }
 "built: $(Join-Path $bin 'qt-capture.exe')"
+
+if ($Test) {
+    ctest --test-dir $bin --output-on-failure -V
+    if ($LASTEXITCODE) { throw "tests failed" }
+}

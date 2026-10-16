@@ -12,6 +12,7 @@ enable_testing()
 add_library(capture_core STATIC
     src/CaptureWindow.cpp src/CaptureWindow.h
     src/HotkeyFilter.cpp src/HotkeyFilter.h
+    src/MarkdownShortcuts.cpp src/MarkdownShortcuts.h
     src/NoteEdit.cpp src/NoteEdit.h
     src/Trials.cpp src/Trials.h
 )
@@ -22,3 +23,11 @@ target_compile_definitions(capture_core PUBLIC
 
 qt_add_executable(qt-capture WIN32 src/main.cpp)
 target_link_libraries(qt-capture PRIVATE capture_core)
+
+qt_add_executable(qt-capture-tests tests/tst_editor.cpp)
+target_link_libraries(qt-capture-tests PRIVATE capture_core Qt6::Test)
+add_test(NAME editor COMMAND qt-capture-tests)
+set_tests_properties(editor PROPERTIES
+    # windeployqt puts only the "windows" platform plugin next to the exes.
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_PLUGIN_PATH=${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}"
+    ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}")
