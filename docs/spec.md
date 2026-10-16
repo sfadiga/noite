@@ -3,6 +3,8 @@
 > Working name. A note-taking app for busy people: press a hotkey, write, and it's there tomorrow.
 >
 > Source requirements: [`requirements.txt`](../requirements.txt). Decision numbers (D1–D30) come from the design session of 2026-10-15; the traceability table at the end maps each requirement to the decisions that satisfy it.
+>
+> **Revised 2026-10-16** after two spikes ([Tauri](spikes/2026-10-hotkey-latency.md), [Qt](spikes/2026-10-qt-capture.md)). The stack moved from Tauri 2 + React + TipTap to **Qt 6 Widgets + C++** (D3, D14, D15). The note format, performance metrics, default hotkey and test tooling changed with it (D5, D7, D24, D28).
 
 ## 1. Scope
 
@@ -17,10 +19,10 @@
 | Concern | Decision |
 |---|---|
 | OS | Windows only in v1; stack must not preclude Linux/macOS later. (D2) |
-| Shell | **Tauri 2.** (D3, D14) |
-| UI | **React + TypeScript + TipTap** (ProseMirror). (D15) |
-| Data ownership | The Rust side exclusively owns the database, attachments, global hotkeys, tray, autostart, backup and purge. The UI never touches the filesystem; it calls a small, typed command API (e.g. `createScratch`, `listBoard`, `trash`). Single writer → no concurrent-write races. (D14) |
-| Process model | Resident tray process. The capture window is created at startup and kept hidden; the hotkey only shows and focuses it. (D5) |
+| Stack | **Qt 6 Widgets + C++20**, one native process, no WebView. Built with CMake + MSVC. (D3, D14) |
+| Editor | **`QTextEdit` / `QTextDocument`**, with hand-written markdown typing shortcuts. The board's toolkit (Widgets, or one embedded QML view) is decided in M3 by measurement. (D15) |
+| Data ownership | A UI-free C++ core library exclusively owns the database, attachments, backup and purge. Widgets never touch the filesystem; they call the core's API (e.g. `createScratch`, `listBoard`, `trash`). One writer, so no concurrent-write races. (D14) |
+| Process model | Resident tray process. The global hotkey uses `RegisterHotKey` plus a native event filter. The capture window is created at startup and kept hidden; the hotkey only positions, shows and focuses it. (D5) |
 | Single instance | One running instance per data folder. Launching a second copy against the same `data\` focuses the running one and exits. Separate portable folders may run side by side. (D27) |
 
 ### Performance budget (D5)
@@ -30,8 +32,9 @@ Enforced by automated benchmarks in CI (see §9).
 | Metric | Target |
 |---|---|
 | Hotkey press → editor focused, caret ready | ≤ 100 ms |
+| First summon after 15 min idle | ≤ 100 ms. The Qt spike measured 97.5 ms (vs 7 ms warm), so M2 must add a mitigation and track it. |
 | Board open with 2,000 notes | ≤ 300 ms |
-| Idle memory | ≤ 80 MB |
+| Idle memory | ≤ 80 MB (Qt spike: 18.9 MB private) |
 
 ## 3. Portability & storage
 
@@ -40,6 +43,7 @@ Enforced by automated benchmarks in CI (see §9).
 ```
 noite\
   noite.exe
+  Qt6*.dll, VC runtime DLLs, platforms\, styles\, imageformats\   (target ≈ 35 MB total)
   data\
     noite.db           SQLite database
     attachments\       content-addressed files (name = hash of contents)
@@ -76,7 +80,7 @@ Rotating logs in `data\logs\` (7 files × 1 MB). Crashes logged with a stack tra
 | Field | Source |
 |---|---|
 | `id` | generated |
-| `content` | TipTap/ProseMirror JSON document — the canonical format. Markdown is export-only. (D7) |
+| `content` | **Qt rich-text HTML** (`QTextDocument::toHtml`), the canonical format. Images and files are referenced as `noite-att://<hash>.<ext>` and loaded from `attachments\`. Markdown is export-only: `toMarkdown()` loses bold and tables. (D7) |
 | `title` | derived from the first line of text, truncated to 60 chars; no AI. (D10) |
 | `created_at`, `modified_at` | automatic (D10) |
 | `due_date` | optional (D9) |
@@ -121,7 +125,12 @@ Attachments are shared, not duplicated (safe because of D22).
 - The hotkey **always opens a new blank scratch**, always-on-top, centred on the monitor with the active window. (D6)
 - Autosave on every keystroke (debounced). No Save button. (D6)
 - `Esc` or clicking away saves and hides it. A scratch closed while empty is discarded. (D6)
-- Editing: WYSIWYG with markdown shortcuts — `**bold**`, `- [ ]` → checkbox, `#` → heading, clickable links. (D7)
+- Editing: WYSIWYG with markdown typing shortcuts. (D7)
+  - `#`/`##`/`###` give headings; `-`/`*` give bullets; `1.` gives a numbered list.
+  - `[ ]`, `[]` and `[x]`, either after a bullet or at the start of a line, give a checkbox, and clicking it toggles it.
+  - `**bold**`, `*italic*`/`_italic_`, `` `code` ``.
+  - `[label](url)`, or a bare URL followed by a space, becomes a link; Ctrl+click opens it.
+  - Pasted markdown text is rendered. A pasted bare URL becomes a link.
 - Keys: `Ctrl+Enter` mark done and close · `Esc` hide · `Ctrl+Shift+C` colour. (D30)
 
 ### Paste handling (D21)
@@ -154,7 +163,7 @@ Configurable day-start hour (default 06:00). The first time the PC is awake and 
 Shown on first run. Every step except step 2 can be skipped.
 
 1. **Welcome** — "Your notes live in this folder. Nothing leaves your PC."
-2. **Capture hotkey** — user presses the combination (default `Ctrl+Alt+N`). Registered immediately; if another app holds it, flag the conflict and ask for another.
+2. **Capture hotkey** — user presses the combination (default `Ctrl+Alt+J`; `Ctrl+Alt+N` and `Ctrl+Alt+Space` were already taken on the author's PC). Registered immediately; if another app holds it, flag the conflict and ask for another.
 3. **Board hotkey** — default `Ctrl+Alt+B`, same conflict check.
 4. **Trash recovery window** — default 30 days (1–365).
 5. **Day-start hour** — default 06:00.
@@ -171,17 +180,19 @@ Shown on first run. Every step except step 2 can be skipped.
 
 | Layer | Tooling | Covers |
 |---|---|---|
-| Rust | `cargo test`, written test-first | storage, trash purge, attachment cleanup, backup snapshots, schema migrations, clone rules |
-| UI logic | Vitest | chip combination logic, `@date` parsing, title derivation |
-| End-to-end | `tauri-driver` / WebDriver on Windows | capture → board → done → trash → restore |
-| Performance | instrumented timestamps ("hotkey received", "editor focused") + seeded 2,000-note benchmark | fails the build if the §2 budget is missed |
+| Core | Qt Test, written test-first | storage, trash purge, attachment cleanup, backup snapshots, schema migrations, clone rules, title/tag derivation |
+| UI logic | Qt Test on the `offscreen` platform | markdown shortcuts, paste handling, chip combination logic, `@date` parsing |
+| End-to-end | keystroke harness from the spikes (dedicated target window, leak detection) | capture → board → done → trash → restore |
+| Performance | instrumented timestamps ("hotkey received", "editor painted with focus") + seeded 2,000-note benchmark + an idle-then-summon scenario | fails the build if the §2 budget is missed |
 | CI | GitHub Actions, `windows-latest` | builds the portable zip |
+
+Keystroke and end-to-end runs send real input, so they only run on CI or while the author is away from the PC.
 
 The first automated test is the attachment-safety case: paste image → clone → trash original → purge → open clone → image still loads.
 
 ## 10. Deferred to v2
 
-- **Merge** and **split** — rules for combining or dividing content and metadata to be designed on top of the D7 document model.
+- **Merge** and **split** — rules for combining or dividing content and metadata, designed on top of the D7 document model. The Qt spike proved that a selection with images can be moved into a new document.
 - **Audio recording + speech-to-text** — offline, local model (whisper.cpp class) as an optional download to keep the portable zip small.
 - **Linux / macOS** builds.
 - **Code signing** (e.g. Azure Trusted Signing) at public release.

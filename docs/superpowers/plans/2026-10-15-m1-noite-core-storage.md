@@ -1,5 +1,7 @@
 # M1: `noite-core` Storage Library Implementation Plan
 
+> **SUPERSEDED (2026-10-16):** the stack moved to Qt 6 Widgets + C++ (see the [roadmap](2026-10-15-noite-roadmap.md)). Don't execute this Rust plan. Its schema, rules, interfaces and test cases are the input to the C++ rewrite of M1.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A Rust library crate that owns all of noite's persistent state (scratches, lifecycle, bundles, search, attachments, trash purge, settings, backups), tested end-to-end with `cargo test` and no UI.
