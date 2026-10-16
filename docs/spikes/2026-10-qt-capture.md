@@ -32,9 +32,12 @@
 | Warm, back-to-back | 50 | 0 | 0 | 6.99 | 7.05 | **7.58** | 8.29 |
 | After 15 min idle | 10 | 0 | 0 | **97.48** | 6.95 | **97.48** | 97.48 |
 | After S3 sleep/resume* | 10 | 0 | 0 | 8.26 | 6.83 | 8.26 | 8.26 |
+| **First summon after S3 resume**† | 10 | 0 | 0 | **18.46** | 7.08 | 18.46 | 18.46 |
 | Harness dry run | 5 | 0 | 0 | 9.75 | 7.32 | 11.07 | 11.07 |
 
 \* The sleep is confirmed in the System log (events 42 → 107). The window was used by hand after waking and before the trials, so this is *not* a first-summon-after-resume measurement.
+
+† Re-run with a fresh app process (started 17:25:05), the window never shown, and the PC slept at 17:38:00 and resumed at 17:38:03 (events 42 → 107). `trials.csv` confirms no summon between resume and the first trial. Caveats: the sleep lasted only 3 s, n=1, and this was also the window's first show since launch, after ~13 min hidden.
 
 | Other measurements | Value |
 |---|---|
@@ -82,8 +85,8 @@ Automated tests run in `tests/tst_editor.cpp`, 23/23 passing on Release (offscre
 | Gate | Condition | Result |
 |---|---|---|
 | G1 warm latency | p95 ≤ 100 ms | **PASS**: 7.6 ms |
-| G2 idle + resume | p95 ≤ 100 ms in both | **idle: at the limit**, 97.5 ms from n=1 first-summon. With Tauri's later stop point it would land around or above 100 ms. **Resume: PENDING**; the run wasn't a first summon after resume. |
-| G3 keystrokes | 0 lost or misdirected | **PASS**: 0 of 75 (5 + 50 + 10 + 10) |
+| G2 idle + resume | p95 ≤ 100 ms in both | **idle: at the limit**, 97.5 ms from n=1 first-summon. With Tauri's later stop point it would land around or above 100 ms. **Resume: PASS**, 18.5 ms first summon after resume (n=1, 3 s sleep; see †). |
+| G3 keystrokes | 0 lost or misdirected | **PASS**: 0 of 85 (5 + 50 + 10 + 10 + 10) |
 | G4 manual checks | all pass | **PARTIAL**: elevated app, hotkey while open, crisp at your scaling all pass; second monitor untested (code picks the foreground window's monitor) |
 | G5 idle memory | ≤ 80 MB private | **PASS**: 18.9 MB |
 
