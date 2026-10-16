@@ -7,8 +7,8 @@ class QTextCursor;
 class QTextEdit;
 
 // Markdown typing shortcuts for a QTextEdit, applied right after a character is typed:
-// "# "/"## "/"### " headings, "- "/"* " bullets, "1. " numbered, "[ ] "/"[x] " in a list
-// item -> checkbox, **bold**, *italic*/_italic_, `code`, [label](url), bare URL + space -> link.
+// "# "/"## "/"### " headings, "- "/"* " bullets, "1. " numbered, "[ ] "/"[] "/"[x] " at
+// block start or in a list item -> checkbox, **bold**, *italic*/_italic_, `code`, [label](url), bare URL + space -> link.
 class MarkdownShortcuts : public QObject {
     Q_OBJECT
 public:

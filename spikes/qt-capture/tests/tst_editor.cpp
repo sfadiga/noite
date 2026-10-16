@@ -138,6 +138,29 @@ private slots:
         QCOMPARE(doc()->firstBlock().blockFormat().marker(), QTextBlockFormat::MarkerType::Checked);
     }
 
+    // The user types "[]" without the inner space (as in Notion); also "[]" with no "- " first.
+    void checkboxShortcutVariants_data()
+    {
+        QTest::addColumn<QString>("typed");
+        QTest::addColumn<bool>("checked");
+        QTest::newRow("- [] ") << "- [] task" << false;
+        QTest::newRow("[] at block start") << "[] task" << false;
+        QTest::newRow("[ ] at block start") << "[ ] task" << false;
+        QTest::newRow("- [X] ") << "- [X] task" << true;
+    }
+
+    void checkboxShortcutVariants()
+    {
+        QFETCH(QString, typed);
+        QFETCH(bool, checked);
+        QTest::keyClicks(edit.get(), typed);
+        const QTextBlock block = doc()->firstBlock();
+        QCOMPARE(block.text(), QString("task"));
+        QVERIFY(block.textList());
+        QCOMPARE(block.blockFormat().marker(),
+                 checked ? QTextBlockFormat::MarkerType::Checked : QTextBlockFormat::MarkerType::Unchecked);
+    }
+
     // Investigation: does the checkbox marker actually get drawn? Saves one image per style.
     void checkboxRenders_data()
     {

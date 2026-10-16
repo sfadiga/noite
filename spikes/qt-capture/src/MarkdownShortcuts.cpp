@@ -50,12 +50,16 @@ bool MarkdownShortcuts::applyBlockRule(const QString& before)
     const int start = blockStart();
     QTextList* list = c.currentList();
 
-    if (list && (before == "[ ] " || before == "[x] ")) {
+    // "[ ] ", "[] " (Notion-style) or "[x] ": in a list item, or at block start (making the list).
+    static const QRegularExpression checkbox(R"(^\[( ?|[xX])\] $)");
+    if (const auto m = checkbox.match(before); m.hasMatch()) {
         c.beginEditBlock();
         removeRange(c, start, before.size());
+        if (!list)
+            c.createList(QTextListFormat::ListDisc);
         QTextBlockFormat f = c.blockFormat();
-        f.setMarker(before == "[x] " ? QTextBlockFormat::MarkerType::Checked
-                                     : QTextBlockFormat::MarkerType::Unchecked);
+        f.setMarker(m.captured(1).trimmed().isEmpty() ? QTextBlockFormat::MarkerType::Unchecked
+                                                      : QTextBlockFormat::MarkerType::Checked);
         c.setBlockFormat(f);
         c.endEditBlock();
         return true;
