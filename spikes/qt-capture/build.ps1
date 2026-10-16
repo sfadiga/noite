@@ -27,6 +27,6 @@ if ($LASTEXITCODE) { throw "windeployqt failed" }
 "built: $(Join-Path $bin 'qt-capture.exe')"
 
 if ($Test) {
-    ctest --test-dir $bin --output-on-failure -V
+    & (Join-Path $src "run-tests.ps1") -Config $Config -QtDir $QtDir
     if ($LASTEXITCODE) { throw "tests failed" }
 }
