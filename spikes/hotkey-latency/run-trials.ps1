@@ -4,15 +4,17 @@
 param(
     [int]$Trials = 50,
     [string]$Label = "run",
-    [string]$Hotkey = "^%j"   # Ctrl+Alt+J (Ctrl+Alt+N is taken on the dev machine)
+    [string]$Hotkey = "^%j",  # Ctrl+Alt+J (Ctrl+Alt+N is taken on the dev machine)
+    [string]$Process = "hotkey-latency",
+    [string]$Csv = (Join-Path $PSScriptRoot "results\trials.csv")
 )
 
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Windows.Forms
 
-$results = Join-Path $PSScriptRoot "results"
-$csv = Join-Path $results "trials.csv"
-if (-not (Get-Process hotkey-latency -ErrorAction SilentlyContinue)) { throw "hotkey-latency.exe is not running" }
+$csv = [IO.Path]::GetFullPath($Csv)
+$results = Split-Path $csv
+if (-not (Get-Process $Process -ErrorAction SilentlyContinue)) { throw "$Process.exe is not running" }
 
 $before = if (Test-Path $csv) { @(Import-Csv $csv).Count } else { 0 }
 

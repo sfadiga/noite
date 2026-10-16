@@ -1,7 +1,9 @@
-# Throwaway spike probe: memory of hotkey-latency.exe plus its whole WebView2 process tree.
+# Throwaway spike probe: memory of the capture process plus its whole child process tree
+# (for Tauri that is the WebView2 tree; for Qt it is normally the process alone).
+param([string]$Process = "hotkey-latency")
 $ErrorActionPreference = "Stop"
 
-$root = Get-Process hotkey-latency | Select-Object -First 1
+$root = Get-Process $Process | Select-Object -First 1
 $all = Get-CimInstance Win32_Process
 $ids = New-Object System.Collections.Generic.List[int]
 $ids.Add($root.Id)
