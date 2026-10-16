@@ -2,7 +2,7 @@
 
 > Working name. A note-taking app for busy people: press a hotkey, write, and it's there tomorrow.
 >
-> Source requirements: [`requirements.txt`](../requirements.txt). Decision numbers (D1–D30) come from the design session of 2026-10-15; the traceability table at the end maps each requirement to the decisions that satisfy it.
+> Source requirements: [`requirements.md`](requirements.md). Decision numbers (D1–D30) come from the design session of 2026-10-15; the traceability table at the end maps each requirement to the decisions that satisfy it.
 >
 > **Revised 2026-10-16** after two spikes ([Tauri](spikes/2026-10-hotkey-latency.md), [Qt](spikes/2026-10-qt-capture.md)). The stack moved from Tauri 2 + React + TipTap to **Qt 6 Widgets + C++** (D3, D14, D15). The note format, performance metrics, default hotkey and test tooling changed with it (D5, D7, D24, D28).
 
@@ -201,7 +201,7 @@ The first automated test is the attachment-safety case: paste image → clone �
 
 ## 11. Requirements traceability
 
-| Req (`requirements.txt`) | Summary | Status | Decisions |
+| Req ([`requirements.md`](requirements.md)) | Summary | Status | Decisions |
 |---|---|---|---|
 | 1 | Windows (Linux, mac if possible) | v1 Windows; others v2 | D2 |
 | 2 | Step-by-step first-run configuration | v1 | D24 |

@@ -1,6 +1,28 @@
+# Build output (CMake / Qt / MSVC)
+build/
+out/
+cmake-build-*/
+CMakeUserPresets.json
+compile_commands.json
+*.user
+*.user.*
+.vs/
+.qtcreator/
+
+# Rust and Node (spikes/hotkey-latency)
 target/
 node_modules/
 dist/
+
+# Runtime data and logs
 /data/
 *.log
+
+# Spike measurement output (trials, diagnostics, deployments)
 spikes/**/results/
+
+# OS / editor noise
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.swp
