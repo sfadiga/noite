@@ -23,6 +23,9 @@ public:
     // Returns null if nothing is selected.
     std::unique_ptr<QTextDocument> takeSelectionAsDocument();
 
+    // Diagnostic: key events typed into this editor since the last call.
+    QStringList takeKeyLog();
+
 signals:
     void escapePressed();
 
@@ -36,4 +39,5 @@ private:
 
     MarkdownShortcuts* shortcuts_;
     Trials* trials_ = nullptr;
+    QStringList keyLog_;
 };

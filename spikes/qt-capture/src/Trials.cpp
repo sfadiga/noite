@@ -57,6 +57,17 @@ QString Trials::resultsDir()
     return QStringLiteral(SPIKE_DIR "/results");
 }
 
+void Trials::writeDiagnostics(const QString& html, const QStringList& keys)
+{
+    QDir().mkpath(resultsDir());
+    QFile h(resultsDir() + "/last-note.html");
+    if (h.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+        h.write(html.toUtf8());
+    QFile k(resultsDir() + "/last-keys.csv");
+    if (k.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+        k.write(("key,text,modifiers,native_vk,scan_code,result\n" + keys.join('\n') + '\n').toUtf8());
+}
+
 void Trials::logStartup(qint64 coldStartMs)
 {
     appendLine("startup.csv", "cold_start_ms", QString::number(coldStartMs));

@@ -9,6 +9,7 @@
 #include <QKeyEvent>
 #include <QMimeData>
 #include <QMouseEvent>
+#include <QRegularExpression>
 #include <QTextBlock>
 #include <QTextDocumentFragment>
 
@@ -40,6 +41,23 @@ void NoteEdit::insertFromMimeData(const QMimeData* source)
             QTextImageFormat format;
             format.setName(name);
             textCursor().insertImage(format);
+            return;
+        }
+    }
+    if (!source->hasHtml() && source->hasText()) {
+        const QString text = source->text();
+        static const QRegularExpression url(R"(^\s*((?:https?://|www\.)\S+)\s*$)");
+        if (const auto m = url.match(text); m.hasMatch()) {
+            QTextCharFormat anchor = currentCharFormat();
+            anchor.merge(shortcuts_->linkFormat(m.captured(1)));
+            textCursor().insertText(m.captured(1), anchor);
+            return;
+        }
+        // Markdown pasted as plain text is rendered; ordinary text keeps its line breaks.
+        static const QRegularExpression markdown(
+            R"((^|\n)\s*(#{1,6} |[-*+] |\d+\. |> )|\*\*\S|\[[^\]]+\]\([^)]+\)|`[^`]+`)");
+        if (markdown.match(text).hasMatch()) {
+            textCursor().insertFragment(QTextDocumentFragment::fromMarkdown(text));
             return;
         }
     }
@@ -75,6 +93,11 @@ std::unique_ptr<QTextDocument> NoteEdit::takeSelectionAsDocument()
     return moved;
 }
 
+QStringList NoteEdit::takeKeyLog()
+{
+    return std::exchange(keyLog_, {});
+}
+
 void NoteEdit::keyPressEvent(QKeyEvent* event)
 {
     if (event->key() == Qt::Key_Escape) {
@@ -83,8 +106,20 @@ void NoteEdit::keyPressEvent(QKeyEvent* event)
     }
     QTextEdit::keyPressEvent(event);
     const QString text = event->text();
+    bool applied = false;
     if (text.size() == 1 && text[0].isPrint())
-        shortcuts_->afterTyped(text[0]);
+        applied = shortcuts_->afterTyped(text[0]);
+
+    QStringList codes;
+    for (QChar c : text)
+        codes << QString("U+%1").arg(uint(c.unicode()), 4, 16, QChar('0')).toUpper();
+    keyLog_ << QString("0x%1,%2,0x%3,%4,%5,%6")
+                   .arg(event->key(), 0, 16)
+                   .arg(codes.join(' '))
+                   .arg(int(event->modifiers()), 0, 16)
+                   .arg(event->nativeVirtualKey())
+                   .arg(event->nativeScanCode())
+                   .arg(applied ? QStringLiteral("shortcut") : QString());
 }
 
 void NoteEdit::mousePressEvent(QMouseEvent* event)

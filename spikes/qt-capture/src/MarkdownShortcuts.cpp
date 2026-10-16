@@ -91,6 +91,8 @@ bool MarkdownShortcuts::applyBlockRule(const QString& before)
 
 bool MarkdownShortcuts::applyInlineRule(const QString& before, QChar typed)
 {
+    if (typed == ' ')
+        return autolink(before);
     if (typed == ')')
         return link(before);
     if (typed == '*') {
@@ -149,6 +151,37 @@ bool MarkdownShortcuts::wrap(const QString& before, const QString& marker, const
     return true;
 }
 
+// A bare URL followed by a typed space becomes a link to itself.
+bool MarkdownShortcuts::autolink(const QString& before)
+{
+    static const QRegularExpression re(R"((?:^|\s)((?:https?://|www\.)\S+) $)");
+    const auto m = re.match(before);
+    if (!m.hasMatch())
+        return false;
+    const int start = blockStart();
+    QTextCursor c = edit_->textCursor();
+    c.setPosition(start + m.capturedStart(1));
+    c.setPosition(start + m.capturedEnd(1), QTextCursor::KeepAnchor);
+    if (c.charFormat().isAnchor())
+        return false;
+    const QTextCharFormat outside = edit_->currentCharFormat();
+    c.beginEditBlock();
+    c.mergeCharFormat(linkFormat(m.captured(1)));
+    c.endEditBlock();
+    edit_->setCurrentCharFormat(outside);
+    return true;
+}
+
+QTextCharFormat MarkdownShortcuts::linkFormat(const QString& url) const
+{
+    QTextCharFormat anchor;
+    anchor.setAnchor(true);
+    anchor.setAnchorHref(url.startsWith("www.") ? "https://" + url : url);
+    anchor.setFontUnderline(true);
+    anchor.setForeground(edit_->palette().link());
+    return anchor;
+}
+
 bool MarkdownShortcuts::link(const QString& before)
 {
     static const QRegularExpression re(R"(\[([^\[\]]+)\]\(([^()\s]+)\)$)");
@@ -161,10 +194,7 @@ bool MarkdownShortcuts::link(const QString& before)
     c.beginEditBlock();
     const QTextCharFormat outside = removeRange(c, start + m.capturedStart(), m.capturedLength());
     QTextCharFormat anchor = outside;
-    anchor.setAnchor(true);
-    anchor.setAnchorHref(m.captured(2));
-    anchor.setFontUnderline(true);
-    anchor.setForeground(edit_->palette().link());
+    anchor.merge(linkFormat(m.captured(2)));
     c.insertText(m.captured(1), anchor);
     c.endEditBlock();
     edit_->setCurrentCharFormat(outside);

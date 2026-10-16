@@ -13,6 +13,7 @@ $exe = Join-Path $PSScriptRoot "build\$Config\qt-capture-tests.exe"
 $out = Join-Path $PSScriptRoot "build\$Config\tests.txt"
 Remove-Item $out -ErrorAction SilentlyContinue
 $p = Start-Process $exe -ArgumentList "-o", "$out,txt" -PassThru -NoNewWindow
+$null = $p.Handle  # without this PowerShell 5.1 loses ExitCode after WaitForExit(timeout)
 if (-not $p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force; Get-Content $out -ErrorAction SilentlyContinue; throw "tests timed out" }
 Get-Content $out
 exit $p.ExitCode

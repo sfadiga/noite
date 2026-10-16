@@ -3,6 +3,7 @@
 
 #include <QElapsedTimer>
 #include <QMimeData>
+#include <QStyleFactory>
 #include <QTextBlock>
 #include <QTextDocumentFragment>
 #include <QTextList>
@@ -137,6 +138,32 @@ private slots:
         QCOMPARE(doc()->firstBlock().blockFormat().marker(), QTextBlockFormat::MarkerType::Checked);
     }
 
+    // Investigation: does the checkbox marker actually get drawn? Saves one image per style.
+    void checkboxRenders_data()
+    {
+        QTest::addColumn<QString>("style");
+        QTest::newRow("fusion") << "fusion";
+        QTest::newRow("windows11") << "windows11";
+    }
+
+    void checkboxRenders()
+    {
+        QFETCH(QString, style);
+        QStyle* s = QStyleFactory::create(style);
+        if (!s)
+            QSKIP(qPrintable("style not available: " + style));
+        edit->setStyle(s);
+        QTest::keyClicks(edit.get(), "- [ ] task");
+        QTest::keyClick(edit.get(), Qt::Key_Return);
+        QTest::keyClicks(edit.get(), "[x] done");
+        QTest::keyClick(edit.get(), Qt::Key_Return);
+        QTest::keyClicks(edit.get(), "plain bullet");
+        QCoreApplication::processEvents();
+        const QString file = QCoreApplication::applicationDirPath() + "/checkbox-" + style + ".png";
+        QVERIFY(edit->grab().save(file));
+        qInfo().noquote() << "saved" << file;
+    }
+
     void boldItalicCode()
     {
         QTest::keyClicks(edit.get(), "**b** *i* `c`");
@@ -154,6 +181,43 @@ private slots:
         const QTextCharFormat f = findFragment(doc(), "site").charFormat();
         QVERIFY(f.isAnchor());
         QCOMPARE(f.anchorHref(), QString("https://example.com"));
+    }
+
+    void pasteBareUrlBecomesLink()
+    {
+        QMimeData mime;
+        mime.setText("https://example.com/a?b=1");
+        edit->insertFromMimeData(&mime);
+        QCOMPARE(doc()->toPlainText(), QString("https://example.com/a?b=1"));
+        QCOMPARE(findFragment(doc(), "https://example.com/a?b=1").charFormat().anchorHref(),
+                 QString("https://example.com/a?b=1"));
+    }
+
+    void typedBareUrlBecomesLink()
+    {
+        QTest::keyClicks(edit.get(), "see https://example.com next");
+        QCOMPARE(doc()->toPlainText(), QString("see https://example.com next"));
+        QCOMPARE(findFragment(doc(), "https://example.com").charFormat().anchorHref(), QString("https://example.com"));
+        QVERIFY(!findFragment(doc(), " next").charFormat().isAnchor());
+    }
+
+    void pasteMarkdownIsRendered()
+    {
+        QMimeData mime;
+        mime.setText("# Title\n\n- [ ] task\n\n**bold** text");
+        edit->insertFromMimeData(&mime);
+        QCOMPARE(findBlock(doc(), "Title").blockFormat().headingLevel(), 1);
+        QCOMPARE(findBlock(doc(), "task").blockFormat().marker(), QTextBlockFormat::MarkerType::Unchecked);
+        QCOMPARE(findFragment(doc(), "bold").charFormat().fontWeight(), int(QFont::Bold));
+    }
+
+    void pastePlainTextUnchanged()
+    {
+        QMimeData mime;
+        mime.setText("line one\nline two");
+        edit->insertFromMimeData(&mime);
+        QCOMPARE(doc()->blockCount(), 2);
+        QCOMPARE(doc()->toPlainText(), QString("line one\nline two"));
     }
 
     void pasteBrowserHtml()

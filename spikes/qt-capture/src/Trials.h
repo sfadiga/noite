@@ -14,6 +14,8 @@ public:
 
     static QString resultsDir();
     static void logStartup(qint64 coldStartMs);
+    // Diagnostic: the last dismissed note as HTML, and the keys typed into it.
+    static void writeDiagnostics(const QString& html, const QStringList& keys);
 
 private:
     QElapsedTimer timer_;

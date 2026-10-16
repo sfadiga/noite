@@ -1,6 +1,7 @@
 #include "CaptureWindow.h"
 
 #include "NoteEdit.h"
+#include "Trials.h"
 
 #include <QGuiApplication>
 #include <QScreen>
@@ -56,6 +57,7 @@ void CaptureWindow::summon()
 void CaptureWindow::dismiss()
 {
     const QString text = editor_->toPlainText();
+    Trials::writeDiagnostics(editor_->toHtml(), editor_->takeKeyLog());
     emit dismissed(text);
     editor_->clear();
     hide();
