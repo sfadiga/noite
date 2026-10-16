@@ -1,49 +1,36 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
+// Throwaway spike: capture window with a TipTap editor that reports readiness.
+import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { listen } from "@tauri-apps/api/event";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const editor = useEditor({ extensions: [StarterKit] });
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  useEffect(() => {
+    if (!editor) return;
+    const unlisten = listen("capture:shown", () => {
+      editor.commands.focus("end");
+      requestAnimationFrame(() => requestAnimationFrame(() => invoke("report_ready")));
+    });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      const text = editor.getText();
+      invoke("report_hidden", { text });
+      editor.commands.clearContent();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      unlisten.then((f) => f());
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [editor]);
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
+    <main style={{ height: "100vh", padding: 16, boxSizing: "border-box" }}>
+      <EditorContent editor={editor} style={{ height: "100%", outline: "none" }} />
     </main>
   );
 }
