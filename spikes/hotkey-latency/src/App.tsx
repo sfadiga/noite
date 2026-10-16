@@ -22,9 +22,20 @@ function App() {
       editor.commands.clearContent();
     };
     window.addEventListener("keydown", onKey);
+    // Diagnostic: record every key and focus change the page actually receives.
+    const logKey = (e: KeyboardEvent) => invoke("log_event", { kind: e.type, key: e.key });
+    const logFocus = (e: FocusEvent) => invoke("log_event", { kind: e.type, key: "" });
+    window.addEventListener("keydown", logKey, true);
+    window.addEventListener("keyup", logKey, true);
+    window.addEventListener("focus", logFocus);
+    window.addEventListener("blur", logFocus);
     return () => {
       unlisten.then((f) => f());
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", logKey, true);
+      window.removeEventListener("keyup", logKey, true);
+      window.removeEventListener("focus", logFocus);
+      window.removeEventListener("blur", logFocus);
     };
   }, [editor]);
 

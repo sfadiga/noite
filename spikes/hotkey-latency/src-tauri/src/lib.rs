@@ -72,6 +72,28 @@ fn report_hidden(app: AppHandle, state: State<Mutex<Trials>>, text: String) -> R
     writeln!(f, "{trial},{ready},{text}").map_err(|e| e.to_string())
 }
 
+// Diagnostic: every DOM key/focus event the capture page sees, per trial.
+#[tauri::command]
+fn log_event(state: State<Mutex<Trials>>, kind: String, key: String) -> Result<(), String> {
+    let (trial, since) = {
+        let t = state.lock().unwrap();
+        let since = t.pressed_at.map(|p| p.elapsed().as_secs_f64() * 1000.0);
+        (t.trial, since)
+    };
+    let path = results_file().with_file_name("events.csv");
+    let new = !path.exists();
+    let mut f = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .map_err(|e| e.to_string())?;
+    if new {
+        writeln!(f, "trial,ms_since_press,kind,key").map_err(|e| e.to_string())?;
+    }
+    let since = since.map(|m| format!("{m:.2}")).unwrap_or_default();
+    writeln!(f, "{trial},{since},{kind},{key}").map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -87,7 +109,7 @@ pub fn run() {
                 })
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![report_ready, report_hidden])
+        .invoke_handler(tauri::generate_handler![report_ready, report_hidden, log_event])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
