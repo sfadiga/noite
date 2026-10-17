@@ -14,7 +14,7 @@
 
 #include <QLineEdit>
 #include <QSignalSpy>
-#include <QTabBar>
+#include "board/TabStrip.h"
 #include <QTest>
 
 #include <windows.h>
@@ -125,7 +125,7 @@ private slots:
 
         app.showBoard();
         QVERIFY(app.boardWindow()->isVisible());
-        QCOMPARE(app.boardWindow()->tabBar()->currentIndex(), int(Tab::Completed));
+        QCOMPARE(app.boardWindow()->tabStrip()->currentIndex(), int(Tab::Completed));
         QCOMPARE(app.boardWindow()->searchField()->text(), QString("x"));
         QCOMPARE(app.boardWindow()->model().search(), QString("x"));
     }

@@ -2,7 +2,9 @@
 
 #include "board/BoardModel.h"
 #include "board/CardDelegate.h"
+#include "Theme.h"
 #include "board/NoteOverlay.h"
+#include "board/TabStrip.h"
 #include "capture/CaptureController.h"
 
 #include <noite/store.h>
@@ -16,7 +18,6 @@
 #include <QLineEdit>
 #include <QListView>
 #include <QMenu>
-#include <QTabBar>
 #include <QVBoxLayout>
 
 using noite::ScratchId;
@@ -29,7 +30,7 @@ BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std:
     , store_(store)
     , model_(new BoardModel(store, today, this))
     , delegate_(new CardDelegate(&attachments, this))
-    , tabs_(new QTabBar(this))
+    , tabs_(new TabStrip(this))
     , search_(new QLineEdit(this))
     , grid_(new QListView(this))
     , empty_(new QLabel(grid_->viewport()))
@@ -39,10 +40,11 @@ BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std:
     setWindowTitle("noite");
     resize(1000, 700);
 
-    for (const QString& name : {tr("Today"), tr("All"), tr("Completed"), tr("Trash")})
-        tabs_->addTab(name);
-    tabs_->setDrawBase(false);
-    search_->setPlaceholderText(tr("Search  /"));
+    QFont searchFont = theme::headerFont(font());
+    searchFont.setWeight(QFont::Normal);
+    search_->setFont(searchFont);
+    search_->setFixedHeight(tabs_->buttonHeight());
+    search_->setPlaceholderText(tr("SEARCH  /"));
     search_->setClearButtonEnabled(true);
 
     grid_->setViewMode(QListView::IconMode);
@@ -82,7 +84,7 @@ BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std:
     searchDelay_.setInterval(kSearchDebounceMs);
     connect(&searchDelay_, &QTimer::timeout, this, [this] { model_->setSearch(search_->text()); });
     connect(search_, &QLineEdit::textChanged, &searchDelay_, qOverload<>(&QTimer::start));
-    connect(tabs_, &QTabBar::currentChanged, this, [this](int index) { model_->setTab(noite::Tab(index)); });
+    connect(tabs_, &TabStrip::currentChanged, this, [this](int index) { model_->setTab(noite::Tab(index)); });
     connect(model_, &QAbstractItemModel::modelReset, this, &BoardWindow::onModelReset);
     connect(model_, &BoardModel::errorOccurred, this, &BoardWindow::showStatus);
 
@@ -359,6 +361,11 @@ void BoardWindow::onModelReset()
     empty_->setText(emptyText());
     empty_->setVisible(model_->rowCount() == 0);
     layoutEmptyLabel();
+    try {
+        tabs_->setCounts(store_.tabCounts(model_->today(), model_->search()));
+    } catch (const std::exception& error) {
+        qWarning() << "board: counts:" << error.what(); // the cards still show; counts stay stale
+    }
 }
 
 void BoardWindow::layoutEmptyLabel()

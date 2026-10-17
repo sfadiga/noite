@@ -21,7 +21,7 @@ class NoteOverlay;
 class QLabel;
 class QLineEdit;
 class QListView;
-class QTabBar;
+class TabStrip;
 
 // The board (D17): tabs Today · All · Completed · Trash, an as-you-type search over the
 // current tab (D19) and a grid of cards. Keys (D30): "/" focuses search; Esc clears a
@@ -69,7 +69,7 @@ public:
     BoardModel& model() const { return *model_; }
     QListView* grid() const { return grid_; }
     QLineEdit* searchField() const { return search_; }
-    QTabBar* tabBar() const { return tabs_; }
+    TabStrip* tabStrip() const { return tabs_; }
     QString statusText() const;
     // "No notes" / "Nothing matches" while the grid is empty; empty otherwise.
     QString emptyText() const;
@@ -100,7 +100,7 @@ private:
     std::optional<noite::ScratchId> undoTarget_; // the card an undo entry asks to select
     BoardModel* model_;
     CardDelegate* delegate_;
-    QTabBar* tabs_;
+    TabStrip* tabs_;
     QLineEdit* search_;
     QListView* grid_;
     QLabel* empty_;
