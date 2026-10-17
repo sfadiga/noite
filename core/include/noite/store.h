@@ -3,6 +3,7 @@
 #include <noite/clock.h>
 #include <noite/data_dir.h>
 #include <noite/model.h>
+#include <noite/settings.h>
 
 #include <memory>
 
@@ -73,6 +74,11 @@ public:
     // Deletes trash older than `retentionDays` (1-365), bundles left empty, and attachment
     // files no remaining scratch references, sparing files younger than kAttachmentGraceMs.
     PurgeReport purgeTrash(int retentionDays);
+
+    // ---- Settings (settings.cpp, D24, D25) ----
+    Settings settings() const;
+    // Validates first (InvalidSetting); nothing is stored if invalid.
+    void saveSettings(const Settings& settings);
     qint64 nowMs() const { return clock_->nowMs(); }
 
     // Internal: for noite-core sources (store_*.cpp, backup.cpp) only.
