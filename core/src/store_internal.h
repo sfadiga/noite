@@ -4,6 +4,8 @@
 
 #include <noite/model.h>
 
+#include <optional>
+
 namespace noite::detail {
 
 class Db;
@@ -22,5 +24,9 @@ void touch(Db& db, const ScratchId& id, qint64 nowMs);
 
 // Deletes bundles that no scratch (of any status) belongs to. Returns how many.
 int deleteEmptyBundles(Db& db);
+
+// Search-box text -> FTS5 query: each whitespace-separated term becomes a quoted prefix
+// ("term"*), so no input can be FTS5 syntax. Blank input -> nullopt (no text filter).
+std::optional<QString> ftsQuery(const QString& input);
 
 } // namespace noite::detail

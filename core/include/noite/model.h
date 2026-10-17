@@ -32,6 +32,29 @@ struct Scratch {
     std::optional<qint64> trashedAt;
 };
 
+// What a board card needs (D17).
+struct ScratchSummary {
+    ScratchId id;
+    QString title;
+    QString preview; // first 200 graphemes of the plain text
+    std::optional<QString> firstImage;
+    std::optional<Color> color;
+    QStringList tags;
+    std::optional<QDate> due;
+    std::optional<BundleId> bundleId;
+    Status status{};
+    qint64 createdAt{};
+    std::optional<qint64> doneAt;
+    std::optional<qint64> trashedAt;
+};
+
+// The start-of-day notification's numbers (D16). `open` = all active scratches.
+struct ReviewCounts {
+    int overdue{};
+    int dueToday{};
+    int open{};
+};
+
 struct Bundle {
     BundleId id;
     QString name;

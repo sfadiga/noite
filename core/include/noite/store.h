@@ -53,6 +53,13 @@ public:
     QList<Bundle> listBundles() const;
     // Copies content, manual tags, colour and bundle; clears the due date; Active; new times.
     Scratch cloneScratch(const ScratchId& id);
+
+    // ---- Board (store_board.cpp, D9, D17, D19) ----
+    // Today: active, overdue -> due today -> undated (oldest first). All: Today's order, then
+    // upcoming by due date. Completed: newest done first. Trash: newest trashed first.
+    // `search` is matched as accent-insensitive word prefixes; blank means no filter.
+    QList<ScratchSummary> list(Tab tab, QDate today, const QString& search = {}) const;
+    ReviewCounts reviewCounts(QDate today) const;
     qint64 nowMs() const { return clock_->nowMs(); }
 
     // Internal: for noite-core sources (store_*.cpp, backup.cpp) only.
