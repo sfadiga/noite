@@ -26,7 +26,8 @@ class NoteOverlay : public QWidget {
 public:
     NoteOverlay(noite::Store& store, AttachmentStore& attachments, std::function<QDate()> today, QWidget* board);
 
-    void openNote(const noite::ScratchId& id);
+    // Read-only for trashed notes (the store rejects their edits): only Esc/backdrop close it.
+    void openNote(const noite::ScratchId& id, bool readOnly = false);
     void openBlank();
     bool isOpen() const { return open_; }
     // Saves and closes if open (the board is closing).

@@ -141,8 +141,11 @@ std::optional<ScratchId> BoardWindow::selectedId() const
 
 void BoardWindow::openSelected()
 {
-    if (const std::optional<ScratchId> id = selectedId())
-        overlay_->openNote(*id);
+    const QModelIndex current = grid_->currentIndex();
+    if (!current.isValid())
+        return;
+    const ScratchSummary& s = model_->summary(current.row());
+    overlay_->openNote(s.id, s.status == noite::Status::Trashed);
 }
 
 void BoardWindow::openNew()

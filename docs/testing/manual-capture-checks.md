@@ -20,7 +20,7 @@ Record pass/fail and a one-line note for any failure. Every failure becomes an a
 | 12 | `Ctrl+Enter` | Type, press `Ctrl+Enter` | Capture closes; the note is marked done |
 | 13 | Colour | `Ctrl+Shift+C` a few times | Footer cycles red → … → purple → none |
 | 14 | Empty capture | Open, press `Esc` without typing | Nothing is saved |
-| 15 | Tray | Left-click the tray icon; right-click → New note | Both open a capture |
+| 15 | Tray | Right-click the tray icon → New note | Opens a capture (left-click opens the board: B1) |
 | 16 | Second launch | Start `noite.exe` again with the same data folder | The running copy opens a capture; no second tray icon |
 | 17 | Second monitor | Focus a window on the other monitor, press the hotkey | Capture centres on that monitor, crisp |
 | 18 | Display scale | Check at the display's scaling | Text crisp, nothing clipped |

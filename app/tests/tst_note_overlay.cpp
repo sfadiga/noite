@@ -135,6 +135,25 @@ private slots:
         QCOMPARE(b.text(b.a), QString("alpha gamma"));
     }
 
+    // Final review: the store rejects edits to trashed notes, so typing there would be lost.
+    void trashedNoteOpensReadOnly()
+    {
+        Board b;
+        b.store().trash(b.a);
+        b.window->setTab(Tab::Trash);
+        b.openA();
+        QVERIFY(b.overlay().editor()->isReadOnly());
+        QTest::keyClicks(b.overlay().editor(), "x");
+        QTest::keyClick(b.overlay().editor(), Qt::Key_Escape);
+        QCOMPARE(b.text(b.a), QString("alpha"));
+        QVERIFY(b.window->statusText().isEmpty()); // no failed save
+
+        b.store().restore(b.a);
+        b.window->setTab(Tab::Today);
+        b.openA();
+        QVERIFY(!b.overlay().editor()->isReadOnly());
+    }
+
     void boardReloadsAfterClose()
     {
         Board b;

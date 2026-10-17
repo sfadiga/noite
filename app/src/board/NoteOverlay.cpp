@@ -45,15 +45,17 @@ NoteOverlay::NoteOverlay(noite::Store& store, AttachmentStore& attachments, std:
     connect(&controller_, &CaptureController::colorChanged, this, &NoteOverlay::updateFooter);
 }
 
-void NoteOverlay::openNote(const noite::ScratchId& id)
+void NoteOverlay::openNote(const noite::ScratchId& id, bool readOnly)
 {
     controller_.open(id);
+    editor_->setReadOnly(readOnly);
     present();
 }
 
 void NoteOverlay::openBlank()
 {
     controller_.begin();
+    editor_->setReadOnly(false);
     present();
 }
 
@@ -109,7 +111,7 @@ bool NoteOverlay::eventFilter(QObject* watched, QEvent* event)
         setGeometry(parentWidget()->rect());
         layoutPanel();
     }
-    if (watched == editor_ && event->type() == QEvent::KeyPress) {
+    if (watched == editor_ && event->type() == QEvent::KeyPress && !editor_->isReadOnly()) {
         const auto* key = static_cast<QKeyEvent*>(event);
         const auto mods = key->modifiers() & ~Qt::KeypadModifier;
         if ((key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) && mods == Qt::ControlModifier) {
