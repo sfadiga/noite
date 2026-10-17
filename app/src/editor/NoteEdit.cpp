@@ -26,6 +26,12 @@ NoteEdit::NoteEdit(QWidget* parent)
     , shortcuts_(new MarkdownShortcuts(this))
 {
     setAcceptRichText(true);
+    connect(shortcuts_, &MarkdownShortcuts::dueDateTyped, this, &NoteEdit::dueDateTyped);
+}
+
+void NoteEdit::setToday(std::function<QDate()> today)
+{
+    shortcuts_->setToday(std::move(today));
 }
 
 bool NoteEdit::canInsertFromMimeData(const QMimeData* source) const

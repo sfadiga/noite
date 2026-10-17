@@ -1,5 +1,7 @@
 #include "editor/MarkdownShortcuts.h"
 
+#include "editor/DateTokens.h"
+
 #include <QRegularExpression>
 #include <QTextBlock>
 #include <QTextCursor>
@@ -97,7 +99,7 @@ bool MarkdownShortcuts::applyBlockRule(const QString& before)
 bool MarkdownShortcuts::applyInlineRule(const QString& before, QChar typed)
 {
     if (typed == ' ')
-        return autolink(before);
+        return dateToken(before) || autolink(before);
     if (typed == ')')
         return link(before);
     if (typed == '*') {
@@ -163,6 +165,29 @@ bool MarkdownShortcuts::wrap(const QString& before, const QString& marker, const
     c.mergeCharFormat(format);
     c.endEditBlock();
     edit_->setCurrentCharFormat(outside);
+    return true;
+}
+
+// "@tomorrow " / "@sex " / "@20/10 ": the token and the space typed after it are removed
+// (so "call bob @tomorrow x" reads "call bob x") and the date is reported, so the capture
+// sets the note's due date (D9). Unknown tokens stay as text.
+bool MarkdownShortcuts::dateToken(const QString& before)
+{
+    static const QRegularExpression re(R"((?:^|\s)@(\S+) $)");
+    const auto m = re.match(before);
+    if (!m.hasMatch())
+        return false;
+    const std::optional<QDate> due = parseDateToken(m.captured(1), today_());
+    if (!due)
+        return false;
+    const int at = blockStart() + int(m.capturedStart(1)) - 1;
+    QTextCursor c = edit_->textCursor();
+    c.beginEditBlock();
+    c.setPosition(at);
+    c.setPosition(at + 1 + int(m.capturedLength(1)) + 1, QTextCursor::KeepAnchor); // "@" + token + space
+    c.removeSelectedText();
+    c.endEditBlock();
+    emit dueDateTyped(*due);
     return true;
 }
 

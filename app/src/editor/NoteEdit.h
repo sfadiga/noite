@@ -26,8 +26,7 @@ public:
     QUrl openTargetFor(const QString& attachmentId) const;
 
     // "Today" for @date tokens; injectable for tests. Defaults to QDate::currentDate().
-    void setToday(std::function<QDate()> today) { today_ = std::move(today); }
-    QDate today() const { return today_(); }
+    void setToday(std::function<QDate()> today);
 
     bool canInsertFromMimeData(const QMimeData* source) const override;
     void insertFromMimeData(const QMimeData* source) override;
@@ -44,6 +43,8 @@ public:
 
 signals:
     void escapePressed();
+    // An "@token " typed in the text named a date (the token itself is removed).
+    void dueDateTyped(QDate due);
 
 protected:
     // Images referenced as noite-att:<id> load from the attachment store.
@@ -60,5 +61,4 @@ private:
 
     MarkdownShortcuts* shortcuts_;
     AttachmentStore* attachments_ = nullptr;
-    std::function<QDate()> today_ = [] { return QDate::currentDate(); };
 };
