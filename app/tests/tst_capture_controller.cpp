@@ -5,6 +5,7 @@
 #include "editor/AttachmentStore.h"
 #include "editor/NoteEdit.h"
 
+#include <noite/content.h>
 #include <noite/store.h>
 
 #include <QBuffer>
@@ -159,6 +160,86 @@ private slots:
         QTest::keyClicks(&c.edit, "two");
         c.controller.dismiss();
         QCOMPARE(c.count(Tab::All), 2);
+    }
+
+    // ---- Opening an existing note (the board's overlay) ----
+
+    void openLoadsWithoutSaving()
+    {
+        Capture c;
+        const ScratchId id = c.store().createScratch(test::html({"hello"})).id;
+        c.store().setDue(id, QDate(2026, 10, 20));
+        c.store().setColor(id, Color::Blue);
+        const qint64 modified = c.store().get(id).modifiedAt;
+        c.f->clock->advance(60'000);
+        QSignalSpy saved(&c.controller, &CaptureController::saved);
+        QSignalSpy due(&c.controller, &CaptureController::dueChanged);
+
+        c.controller.open(id);
+        QCOMPARE(c.edit.toPlainText(), QString("hello"));
+        QCOMPARE(c.controller.currentId(), std::optional<ScratchId>(id));
+        QCOMPARE(c.controller.due(), std::optional<QDate>(QDate(2026, 10, 20)));
+        QCOMPARE(c.controller.color(), std::optional<Color>(Color::Blue));
+        QCOMPARE(due.count(), 1);
+        QTest::qWait(CaptureController::kAutosaveMs + 200);
+        QCOMPARE(c.store().get(id).modifiedAt, modified);
+        QCOMPARE(saved.count(), 0);
+    }
+
+    void editAfterOpenUpdatesSameNote()
+    {
+        Capture c;
+        const ScratchId id = c.store().createScratch(test::html({"hello"})).id;
+        QSignalSpy saved(&c.controller, &CaptureController::saved);
+        c.controller.open(id);
+        QTest::keyClicks(&c.edit, " world"); // typing continues at the end
+        c.controller.flush();
+        QCOMPARE(content::plainText(c.store().get(id).html), QString("hello world"));
+        QCOMPARE(c.count(Tab::All), 1);
+        QCOMPARE(saved.count(), 1);
+        QCOMPARE(saved[0][0].value<ScratchId>(), id);
+    }
+
+    void dismissAfterEmptyingOpenedNoteDeletesIt()
+    {
+        Capture c;
+        const ScratchId id = c.store().createScratch(test::html({"hello"})).id;
+        c.controller.open(id);
+        c.edit.selectAll();
+        QTest::keyClick(&c.edit, Qt::Key_Delete);
+        c.controller.dismiss();
+        QCOMPARE(c.count(Tab::All), 0);
+    }
+
+    void cycleAfterOpenUpdatesStore()
+    {
+        Capture c;
+        const ScratchId id = c.store().createScratch(test::html({"hello"})).id;
+        c.store().setColor(id, Color::Purple);
+        c.controller.open(id);
+        c.controller.cycleColor();
+        QCOMPARE(c.store().get(id).color, std::nullopt);
+    }
+
+    void nextColorCycles()
+    {
+        std::optional<Color> c;
+        const std::optional<Color> expected[] = {Color::Red,  Color::Orange, Color::Yellow, Color::Green,
+                                                 Color::Blue, Color::Purple, std::nullopt};
+        for (const auto& e : expected) {
+            c = CaptureController::nextColor(c);
+            QCOMPARE(c, e);
+        }
+    }
+
+    void openUnknownIdReports()
+    {
+        Capture c;
+        QSignalSpy errors(&c.controller, &CaptureController::errorOccurred);
+        c.controller.open("missing");
+        QCOMPARE(errors.count(), 1);
+        QVERIFY(!c.controller.currentId());
+        QVERIFY(c.edit.toPlainText().isEmpty());
     }
 };
 

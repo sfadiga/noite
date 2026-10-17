@@ -28,11 +28,16 @@ public:
     CaptureController(noite::Store& store, NoteEdit& editor, std::function<QDate()> today, QObject* parent = nullptr);
 
     void begin();            // a fresh, blank capture
+    // Loads an existing note (text, due date, colour) without saving it; typing continues at
+    // the end. On failure reports and is left as after begin().
+    void open(const noite::ScratchId& id);
     void flush();            // save now if there is an unsaved change
     void dismiss();          // Esc / click-away: save, discard if empty, finished()
     void markDoneAndClose(); // Ctrl+Enter
     void cycleColor();       // none -> red -> orange -> yellow -> green -> blue -> purple -> none
     void setDue(std::optional<QDate> due);
+
+    static std::optional<noite::Color> nextColor(std::optional<noite::Color> color);
 
     std::optional<noite::ScratchId> currentId() const { return id_; }
     std::optional<QDate> due() const { return due_; }
@@ -40,11 +45,13 @@ public:
 
 signals:
     void finished();
+    void saved(noite::ScratchId id); // after each successful create or update
     void dueChanged(std::optional<QDate> due);
     void colorChanged(std::optional<noite::Color> color);
     void errorOccurred(QString message);
 
 private:
+    void reset(); // flush, then forget the current note and clear the editor
     void onContentsChanged();
     void save();
     void report(const std::exception& error);

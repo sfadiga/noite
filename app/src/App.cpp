@@ -19,9 +19,7 @@
 #include <QStyle>
 #include <QSystemTrayIcon>
 
-namespace {
-constexpr int kCaptureHotkeyId = 1;
-}
+#include <windows.h>
 
 App::App(AppOptions options, QObject* parent)
     : QObject(parent)
@@ -31,6 +29,10 @@ App::App(AppOptions options, QObject* parent)
 
 App::~App()
 {
+    if (board_) {
+        board_->close(); // saves a note open in its overlay
+        delete board_;   // before the store it uses
+    }
     if (controller_)
         controller_->flush();
 }
@@ -67,6 +69,10 @@ std::optional<int> App::start()
     }
 
     connect(host_.get(), &NativeHost::hotkeyPressed, this, [this](int id) {
+        if (id == kBoardHotkeyId) {
+            showBoard();
+            return;
+        }
         if (id != kCaptureHotkeyId)
             return;
         if (probe_)
@@ -75,14 +81,45 @@ std::optional<int> App::start()
     });
     connect(host_.get(), &NativeHost::activationRequested, window_.get(), &CaptureWindow::summon);
     connect(qApp, &QCoreApplication::aboutToQuit, controller_.get(), &CaptureController::flush);
+    connect(qApp, &QCoreApplication::aboutToQuit, this, [this] {
+        if (board_)
+            board_->close();
+    });
+    // A note captured while the board is open shows up on it.
+    const auto refreshBoard = [this] {
+        if (board_)
+            board_->reload();
+    };
+    connect(controller_.get(), &CaptureController::saved, this, refreshBoard);
+    connect(controller_.get(), &CaptureController::finished, this, refreshBoard);
 
     createTray();
 
-    const QString combo = store_->settings().captureHotkey;
-    const std::optional<Hotkey> hotkey = parseHotkey(combo);
-    if (!hotkey || !host_->registerHotkey(kCaptureHotkeyId, *hotkey))
-        emit hotkeyUnavailable(combo);
+    const noite::Settings settings = store_->settings();
+    registerHotkey(kCaptureHotkeyId, settings.captureHotkey);
+    registerHotkey(kBoardHotkeyId, settings.boardHotkey);
     return std::nullopt;
+}
+
+void App::registerHotkey(int id, const QString& combo)
+{
+    const std::optional<Hotkey> hotkey = parseHotkey(combo);
+    if (!hotkey || !host_->registerHotkey(id, *hotkey))
+        emit hotkeyUnavailable(combo);
+}
+
+void App::showBoard()
+{
+    if (!board_) {
+        board_ = new BoardWindow(*store_, *attachments_, [] { return QDate::currentDate(); });
+        board_->setAttribute(Qt::WA_DeleteOnClose);
+        board_->restoreViewState(boardState_);
+        connect(board_, &BoardWindow::closing, this, [this](const BoardWindow::ViewState& state) { boardState_ = state; });
+    }
+    board_->show();
+    board_->raise();
+    board_->activateWindow();
+    SetForegroundWindow(reinterpret_cast<HWND>(board_->winId()));
 }
 
 int App::run()
@@ -100,15 +137,16 @@ void App::createTray()
     tray_->setToolTip("noite");
     auto* menu = new QMenu;
     menu->addAction(tr("New note"), window_.get(), &CaptureWindow::summon);
+    menu->addAction(tr("Board"), this, &App::showBoard);
     menu->addSeparator();
     menu->addAction(tr("Quit"), qApp, &QCoreApplication::quit);
     tray_->setContextMenu(menu);
     connect(tray_, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
         if (reason == QSystemTrayIcon::Trigger)
-            window_->summon();
+            showBoard(); // B5
     });
     connect(this, &App::hotkeyUnavailable, tray_, [this](const QString& combo) {
-        tray_->showMessage("noite", tr("%1 is already used by another program. Use the tray icon to open a note.").arg(combo),
+        tray_->showMessage("noite", tr("%1 is already used by another program. Use the tray icon instead.").arg(combo),
                            QSystemTrayIcon::Warning);
     });
     tray_->show();

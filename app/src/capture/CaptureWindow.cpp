@@ -2,14 +2,12 @@
 
 #include "capture/CaptureController.h"
 #include "capture/LatencyProbe.h"
+#include "capture/NoteFooter.h"
 #include "editor/NoteEdit.h"
-
-#include <noite/model.h>
 
 #include <QGuiApplication>
 #include <QKeyEvent>
 #include <QLabel>
-#include <QLocale>
 #include <QScreen>
 #include <QVBoxLayout>
 #include <QtGui/qscreen_platform.h>
@@ -83,13 +81,8 @@ QString CaptureWindow::footerText() const
 
 void CaptureWindow::updateFooter()
 {
-    QStringList parts;
-    if (const auto due = controller_.due())
-        parts << tr("Due %1").arg(QLocale().toString(*due, QLocale::ShortFormat));
-    if (const auto color = controller_.color())
-        parts << noite::colorName(*color);
-    footer_->setText(parts.join(QStringLiteral("  ·  ")));
-    footer_->setVisible(!parts.isEmpty());
+    footer_->setText(noteFooterText(controller_.due(), controller_.color()));
+    footer_->setVisible(!footer_->text().isEmpty());
 }
 
 bool CaptureWindow::event(QEvent* event)

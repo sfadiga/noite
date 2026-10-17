@@ -13,6 +13,12 @@ add_library(noite-app STATIC
     src/capture/CaptureWindow.h src/capture/CaptureWindow.cpp
     src/capture/LatencyProbe.h src/capture/LatencyProbe.cpp
     src/capture/KeepWarm.h src/capture/KeepWarm.cpp
+    src/capture/NoteFooter.h src/capture/NoteFooter.cpp
+    src/board/BoardModel.h src/board/BoardModel.cpp
+    src/board/CardDelegate.h src/board/CardDelegate.cpp
+    src/board/BoardWindow.h src/board/BoardWindow.cpp
+    src/board/UndoLog.h src/board/UndoLog.cpp
+    src/board/NoteOverlay.h src/board/NoteOverlay.cpp
 )
 target_include_directories(noite-app PUBLIC src)
 target_link_libraries(noite-app PUBLIC noite-core Qt6::Widgets user32)
@@ -20,6 +26,11 @@ target_compile_definitions(noite-app PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN UNICODE
 
 qt_add_executable(noite WIN32 src/main.cpp)
 target_link_libraries(noite PRIVATE noite-app)
+
+# Board performance gate (D5): not shipped, run by hand on a Release build.
+qt_add_executable(board-bench bench/board_bench.cpp bench/Seed.h bench/Seed.cpp)
+target_include_directories(board-bench PRIVATE bench)
+target_link_libraries(board-bench PRIVATE noite-app psapi)
 
 qt_add_executable(app-tests
     tests/main.cpp
@@ -34,8 +45,14 @@ qt_add_executable(app-tests
     tests/tst_app.cpp
     tests/tst_latency_probe.cpp
     tests/tst_keep_warm.cpp
+    tests/tst_board_model.cpp
+    tests/tst_card_delegate.cpp
+    tests/tst_board_window.cpp
+    tests/tst_board_actions.cpp
+    tests/tst_note_overlay.cpp
+    tests/tst_seed.cpp bench/Seed.h bench/Seed.cpp
 )
 # Reuses core's test registry and helpers.
-target_include_directories(app-tests PRIVATE tests ${PROJECT_SOURCE_DIR}/core/tests)
+target_include_directories(app-tests PRIVATE tests bench ${PROJECT_SOURCE_DIR}/core/tests)
 target_link_libraries(app-tests PRIVATE noite-app Qt6::Test)
 add_test(NAME app COMMAND app-tests)

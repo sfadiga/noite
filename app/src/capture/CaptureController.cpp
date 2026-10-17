@@ -24,7 +24,7 @@ CaptureController::CaptureController(noite::Store& store, NoteEdit& editor, std:
     connect(&editor_, &NoteEdit::dueDateTyped, this, [this](QDate due) { setDue(due); });
 }
 
-void CaptureController::begin()
+void CaptureController::reset()
 {
     flush();
     id_.reset();
@@ -34,6 +34,30 @@ void CaptureController::begin()
     editor_.clear();
     resetting_ = false;
     dirty_ = false;
+}
+
+void CaptureController::begin()
+{
+    reset();
+    emit dueChanged(due_);
+    emit colorChanged(color_);
+}
+
+void CaptureController::open(const noite::ScratchId& id)
+{
+    reset();
+    try {
+        const noite::Scratch scratch = store_.get(id);
+        id_ = scratch.id;
+        due_ = scratch.due;
+        color_ = scratch.color;
+        resetting_ = true;
+        editor_.setHtml(scratch.html);
+        editor_.moveCursor(QTextCursor::End);
+        resetting_ = false;
+    } catch (const std::exception& error) {
+        report(error);
+    }
     emit dueChanged(due_);
     emit colorChanged(color_);
 }
@@ -72,6 +96,7 @@ void CaptureController::save()
             store_.updateContent(*id_, html);
         }
         dirty_ = false;
+        emit saved(*id_);
     } catch (const std::exception& error) {
         report(error);
     }
@@ -104,15 +129,18 @@ void CaptureController::markDoneAndClose()
     emit finished();
 }
 
-void CaptureController::cycleColor()
+std::optional<Color> CaptureController::nextColor(std::optional<Color> color)
 {
     static constexpr Color order[] = {Color::Red, Color::Orange, Color::Yellow, Color::Green, Color::Blue, Color::Purple};
-    if (!color_) {
-        color_ = order[0];
-    } else {
-        const auto it = std::find(std::begin(order), std::end(order), *color_);
-        color_ = (it + 1 == std::end(order)) ? std::nullopt : std::optional<Color>(*(it + 1));
-    }
+    if (!color)
+        return order[0];
+    const auto it = std::find(std::begin(order), std::end(order), *color);
+    return (it + 1 == std::end(order)) ? std::nullopt : std::optional<Color>(*(it + 1));
+}
+
+void CaptureController::cycleColor()
+{
+    color_ = nextColor(color_);
     if (id_) {
         try {
             store_.setColor(*id_, color_);
