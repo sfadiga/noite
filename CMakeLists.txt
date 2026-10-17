@@ -9,9 +9,10 @@ if(MSVC)
     add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/utf-8>")
 endif()
 
-find_package(Qt6 6.10 REQUIRED COMPONENTS Core Gui Test)
+find_package(Qt6 6.10 REQUIRED COMPONENTS Core Gui Widgets Test)
 qt_standard_project_setup()
 enable_testing()
 
 add_subdirectory(third_party/sqlite)
 add_subdirectory(core)
+add_subdirectory(app)
