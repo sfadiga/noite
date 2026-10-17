@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  core:
+    name: noite-core (Windows, MSVC, Qt 6.10.3)
+    runs-on: windows-latest
+    env:
+      QT_QPA_FONTDIR: C:\Windows\Fonts
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.10.3"
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+
+      - name: MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure
+        shell: pwsh
+        run: cmake -S . -B build/Release -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR"
+
+      - name: Build
+        run: cmake --build build/Release
+
+      - name: Test
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/run-tests.ps1 -Config Release -QtDir $env:QT_ROOT_DIR
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-test-results
+          path: build/Release/test-results/
