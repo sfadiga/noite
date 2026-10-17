@@ -20,4 +20,7 @@ void requireEditable(Db& db, const ScratchId& id);
 
 void touch(Db& db, const ScratchId& id, qint64 nowMs);
 
+// Deletes bundles that no scratch (of any status) belongs to. Returns how many.
+int deleteEmptyBundles(Db& db);
+
 } // namespace noite::detail

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QDate>
+#include <QList>
 #include <QString>
 #include <QStringList>
 
@@ -29,6 +30,12 @@ struct Scratch {
     Status status{};
     std::optional<qint64> doneAt;
     std::optional<qint64> trashedAt;
+};
+
+struct Bundle {
+    BundleId id;
+    QString name;
+    qint64 createdAt{};
 };
 
 // Lowercase names, as stored in the database.

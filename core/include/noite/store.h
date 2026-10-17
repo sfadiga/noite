@@ -43,6 +43,16 @@ public:
     void reopen(const ScratchId& id);
     void trash(const ScratchId& id);
     void restore(const ScratchId& id);
+
+    // ---- Bundles and clone (store_bundles.cpp, D12, D20) ----
+    // Dropping `dragged` onto `target`: joins target's bundle, or creates one named after
+    // target's title ("Bundle" if it has none). A bundle with no members is deleted.
+    BundleId bundleTogether(const ScratchId& target, const ScratchId& dragged);
+    void moveToBundle(const ScratchId& id, std::optional<BundleId> bundle);
+    void renameBundle(const BundleId& id, const QString& name);
+    QList<Bundle> listBundles() const;
+    // Copies content, manual tags, colour and bundle; clears the due date; Active; new times.
+    Scratch cloneScratch(const ScratchId& id);
     qint64 nowMs() const { return clock_->nowMs(); }
 
     // Internal: for noite-core sources (store_*.cpp, backup.cpp) only.
