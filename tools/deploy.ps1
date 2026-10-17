@@ -15,8 +15,12 @@ $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 & "$vs\Common7\Tools\Launch-VsDevShell.ps1" -Arch amd64 -HostArch amd64 -SkipAutomaticLocation | Out-Null
 
 $dist = Join-Path $src "dist\noite"
-Remove-Item $dist -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory $dist | Out-Null
+# dist\noite\data is a real data folder once noite has run from here (the default is <exe dir>\data):
+# never delete it, and never redeploy under a running copy.
+$running = @(Get-Process noite -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($dist, [StringComparison]::OrdinalIgnoreCase) })
+if ($running.Count) { throw "noite is running from $dist (PID $($running.Id -join ', ')); quit it first" }
+New-Item -ItemType Directory -Force $dist | Out-Null
+Get-ChildItem $dist -Force | Where-Object { $_.Name -ne "data" } | Remove-Item -Recurse -Force
 Copy-Item $exe $dist
 
 $mode = if ($Config -eq "Release") { "--release" } else { "--debug" }
@@ -35,8 +39,8 @@ $crt = Get-ChildItem "$env:VCToolsRedistDir\x64" -Directory -Filter "Microsoft.V
 if (-not $crt) { throw "VC runtime not found under $env:VCToolsRedistDir\x64" }
 Copy-Item "$($crt.FullName)\msvcp140*.dll", "$($crt.FullName)\vcruntime140*.dll", "$($crt.FullName)\concrt140.dll" $dist
 
-$files = Get-ChildItem $dist -Recurse -File
-$mb = ($files | Measure-Object Length -Sum).Sum / 1MB
+$files = Get-ChildItem $dist -Recurse -File | Where-Object { -not $_.FullName.StartsWith((Join-Path $dist "data\"), [StringComparison]::OrdinalIgnoreCase) }
+$mb =($files | Measure-Object Length -Sum).Sum / 1MB
 "dist: $dist"
 "files: $($files.Count)  size: {0:N1} MB (budget {1} MB)" -f $mb, $MaxMB
 $files | Sort-Object Length -Descending | Select-Object -First 5 | ForEach-Object { "  {0,6:N1} MB  {1}" -f ($_.Length / 1MB), $_.FullName.Substring($dist.Length + 1) }
