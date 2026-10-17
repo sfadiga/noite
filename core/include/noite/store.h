@@ -12,6 +12,9 @@ namespace detail {
 class Db;
 }
 
+inline constexpr qint64 kMaxAttachmentBytes = 26'214'400; // 25 MiB (D21)
+inline constexpr qint64 kAttachmentGraceMs = kDayMs;      // purge never deletes younger files
+
 // All of noite's persistent state. One Store per data dir; the only writer (D14).
 // Non-const methods write; failures throw noite::Error.
 class Store {
@@ -60,6 +63,16 @@ public:
     // `search` is matched as accent-insensitive word prefixes; blank means no filter.
     QList<ScratchSummary> list(Tab tab, QDate today, const QString& search = {}) const;
     ReviewCounts reviewCounts(QDate today) const;
+
+    // ---- Attachments and purge (store_attachments.cpp, D13, D22) ----
+    // Stores bytes under <sha256>.<ext> (ext lowercased; "bin" unless 1-8 alphanumerics),
+    // deduplicated; returns the attachment id. Throws AttachmentTooLarge.
+    QString putAttachment(const QByteArray& bytes, const QString& ext);
+    // Throws InvalidAttachmentId unless `id` is a well-formed attachment id.
+    QString attachmentPath(const QString& id) const;
+    // Deletes trash older than `retentionDays` (1-365), bundles left empty, and attachment
+    // files no remaining scratch references, sparing files younger than kAttachmentGraceMs.
+    PurgeReport purgeTrash(int retentionDays);
     qint64 nowMs() const { return clock_->nowMs(); }
 
     // Internal: for noite-core sources (store_*.cpp, backup.cpp) only.

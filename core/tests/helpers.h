@@ -7,6 +7,7 @@
 
 #include <QDate>
 #include <QDateTime>
+#include <QFile>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTimeZone>
@@ -51,6 +52,13 @@ inline QString htmlWithImage(const QString& text, const QString& attachmentId)
 inline QString fakeAttachmentId(char hex = 'a', const QString& ext = "png")
 {
     return QString(64, QChar(hex)) + "." + ext;
+}
+
+inline void setMtime(const QString& path, qint64 ms)
+{
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::ReadWrite));
+    QVERIFY(file.setFileTime(QDateTime::fromMSecsSinceEpoch(ms, QTimeZone::UTC), QFileDevice::FileModificationTime));
 }
 
 // Closes the store (releasing the lock) and opens it again on the same data dir.

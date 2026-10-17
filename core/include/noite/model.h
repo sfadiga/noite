@@ -55,6 +55,11 @@ struct ReviewCounts {
     int open{};
 };
 
+struct PurgeReport {
+    int scratchesDeleted{};
+    int attachmentsDeleted{};
+};
+
 struct Bundle {
     BundleId id;
     QString name;
