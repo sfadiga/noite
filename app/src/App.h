@@ -1,8 +1,10 @@
 #pragma once
 
 #include "AppOptions.h"
+#include "board/BoardWindow.h"
 
 #include <QObject>
+#include <QPointer>
 
 #include <memory>
 #include <optional>
@@ -18,10 +20,14 @@ class NativeHost;
 class QSystemTrayIcon;
 class StoreAttachments;
 
-// The tray application: owns the data folder, the store, the native host and the capture window.
+// The tray application: owns the data folder, the store, the native host, the capture window
+// and, while it is open, the board (created on open, destroyed on close: B6).
 class App : public QObject {
     Q_OBJECT
 public:
+    static constexpr int kCaptureHotkeyId = 1;
+    static constexpr int kBoardHotkeyId = 2;
+
     explicit App(AppOptions options, QObject* parent = nullptr);
     ~App() override;
 
@@ -34,14 +40,19 @@ public:
     noite::Store* store() const { return store_.get(); }
     NativeHost* host() const { return host_.get(); }
     CaptureWindow* captureWindow() const { return window_.get(); }
+    // Opens the board (creating it, back on the tab and search it was closed with) and brings
+    // it to the front.
+    void showBoard();
+    BoardWindow* boardWindow() const { return board_; } // null while closed
 
 signals:
-    // The capture hotkey could not be registered (another program holds it). noite keeps
-    // running; the tray's "New note" still opens a capture.
+    // A hotkey (capture or board) could not be registered (another program holds it). noite
+    // keeps running; the tray still opens a capture and the board.
     void hotkeyUnavailable(QString combo);
 
 private:
     void createTray();
+    void registerHotkey(int id, const QString& combo);
 
     AppOptions options_;
     std::unique_ptr<noite::Store> store_;
@@ -51,5 +62,7 @@ private:
     std::unique_ptr<CaptureWindow> window_;
     std::unique_ptr<LatencyProbe> probe_;
     std::unique_ptr<KeepWarm> keepWarm_;
+    QPointer<BoardWindow> board_; // deletes itself on close
+    BoardWindow::ViewState boardState_;
     QSystemTrayIcon* tray_ = nullptr;
 };

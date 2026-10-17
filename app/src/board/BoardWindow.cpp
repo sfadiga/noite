@@ -153,6 +153,7 @@ void BoardWindow::openNew()
 void BoardWindow::closeEvent(QCloseEvent* event)
 {
     overlay_->closeAndSave();
+    emit closing(viewState());
     QWidget::closeEvent(event);
 }
 

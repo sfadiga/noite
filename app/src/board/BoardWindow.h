@@ -74,6 +74,10 @@ public:
     // "No notes" / "Nothing matches" while the grid is empty; empty otherwise.
     QString emptyText() const;
 
+signals:
+    // The board is closing (after an open note was saved); `state` is what to restore.
+    void closing(BoardWindow::ViewState state);
+
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
     void showEvent(QShowEvent* event) override;
