@@ -163,7 +163,7 @@ Attachments are shared, not duplicated (safe because of D22).
 The app's core promise: **what you capture stays under your radar until you dismiss it for good.**
 
 - **D31 Radar rule.** Every active scratch stays on the radar until it is marked **done** or **trashed**; those are the only two ways to dismiss one. Nothing expires or drops off on its own.
-- **D32 Morning review.** Once a day (trigger: D16) a review presents the radar: overdue, due today, then undated oldest-first. For each scratch the user can choose **Done**, **Snooze**, **Keep** or **Trash**. Open question for the M3 plan: open the review directly, or notify first and open on click (D16 says the notification never steals focus).
+- **D32 Morning review.** Once a day (trigger: D16) a review presents the radar: overdue, due today, then undated oldest-first. For each scratch the user can choose **Done**, **Snooze**, **Keep** or **Trash**. Open question for the M4 plan: open the review directly, or notify first and open on click (D16 says the notification never steals focus).
 - **D33 Stale resurfacing.** An undated active scratch whose `modified_at` is older than *N* days (setting, default **7**) is moved to the top of the review, so nothing quietly rots at the bottom of the list.
 - **D34 Snooze = due date.** Snoozing sets a future due date (quick picks: tomorrow, next Monday, pick a date). The scratch leaves Today and comes back on that day (D9). There is no separate snooze state.
 
