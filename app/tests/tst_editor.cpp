@@ -1,4 +1,5 @@
 // Editor behaviour tests, ported from the Qt spike (spikes/qt-capture) plus M2 hardening.
+#include "fake_attachments.h"
 #include "registry.h"
 
 #include "editor/NoteEdit.h"
@@ -88,6 +89,7 @@ QImage testImage()
 class EditorTest : public QObject {
     Q_OBJECT
 
+    std::unique_ptr<FakeAttachments> attachments;
     std::unique_ptr<NoteEdit> edit;
     QTextDocument* doc() { return edit->document(); }
 
@@ -108,14 +110,20 @@ class EditorTest : public QObject {
 private slots:
     void init()
     {
+        attachments = std::make_unique<FakeAttachments>();
         edit = std::make_unique<NoteEdit>();
+        edit->setAttachmentStore(attachments.get());
         edit->resize(480, 360);
         edit->show();
         QVERIFY(QTest::qWaitForWindowExposed(edit.get()));
         edit->setFocus();
     }
 
-    void cleanup() { edit.reset(); }
+    void cleanup()
+    {
+        edit.reset();
+        attachments.reset();
+    }
 
     void headingShortcut()
     {

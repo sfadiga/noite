@@ -1,6 +1,12 @@
 #include "editor/NoteEdit.h"
 
 #include "editor/MarkdownShortcuts.h"
+#include "editor/PasteCleaner.h"
+
+#include <noite/error.h>
+#include <noite/store.h>
+
+#include <QFileInfo>
 
 #include <QBuffer>
 #include <QClipboard>
@@ -70,28 +76,89 @@ QString keepLineBreaks(const QString& markdown)
     return out.join('\n');
 }
 
+// Explorer copies: every URL is a local file.
+QStringList localFiles(const QMimeData* source)
+{
+    QStringList files;
+    if (!source->hasUrls())
+        return files;
+    for (const QUrl& url : source->urls()) {
+        if (!url.isLocalFile() || !QFileInfo(url.toLocalFile()).isFile())
+            return {};
+        files << url.toLocalFile();
+    }
+    return files;
+}
+
+// The clipboard's own encoded image if there is one (no re-encoding), else a PNG of it.
+std::pair<QByteArray, QString> imageBytes(const QMimeData* source)
+{
+    for (const auto& [mime, ext] : {std::pair{"image/png", "png"}, {"image/jpeg", "jpg"}, {"image/gif", "gif"}})
+        if (source->hasFormat(mime))
+            return {source->data(mime), ext};
+    QByteArray png;
+    QBuffer buffer(&png);
+    buffer.open(QIODevice::WriteOnly);
+    qvariant_cast<QImage>(source->imageData()).save(&buffer, "PNG");
+    return {png, "png"};
+}
+
 } // namespace
+
+void NoteEdit::insertFileChips(const QStringList& files)
+{
+    QTextCursor cursor = textCursor();
+    const QTextCharFormat outside = currentCharFormat();
+    cursor.beginEditBlock();
+    for (int i = 0; i < files.size(); ++i) {
+        if (i > 0)
+            cursor.insertText(" ", outside);
+        const QFileInfo info(files[i]);
+        QFile file(files[i]);
+        std::optional<QString> id;
+        if (info.size() <= noite::kMaxAttachmentBytes && file.open(QIODevice::ReadOnly)) {
+            try {
+                id = attachments_->put(file.readAll(), info.suffix().isEmpty() ? QString("bin") : info.suffix());
+            } catch (const noite::Error&) {
+            }
+        }
+        if (!id) {
+            cursor.insertText(info.fileName() + " (too large to attach)", outside);
+            continue;
+        }
+        QTextCharFormat chip = outside;
+        chip.merge(shortcuts_->linkFormat("noite-att:" + *id));
+        cursor.insertText(info.fileName(), chip);
+    }
+    cursor.endEditBlock();
+    setCurrentCharFormat(outside);
+}
 
 void NoteEdit::insertFromMimeData(const QMimeData* source)
 {
+    if (const QStringList files = localFiles(source); !files.isEmpty()) {
+        if (attachments_)
+            insertFileChips(files);
+        return;
+    }
     // Spreadsheets and OneNote put a bitmap next to the HTML; the HTML wins when it has content.
     if (source->hasImage() && !htmlHasContent(source)) {
-        const QImage image = qvariant_cast<QImage>(source->imageData());
-        if (!image.isNull()) {
-            QByteArray png;
-            QBuffer buffer(&png);
-            buffer.open(QIODevice::WriteOnly);
-            image.save(&buffer, "PNG");
-            // No "//": with an authority, QUrl would parse the hash as a hostname and reject it.
-            const QString name = "noite-att:"
-                + QString::fromLatin1(QCryptographicHash::hash(png, QCryptographicHash::Sha256).toHex())
-                + ".png";
-            document()->addResource(QTextDocument::ImageResource, QUrl(name), image);
-            QTextImageFormat format;
-            format.setName(name);
-            textCursor().insertImage(format);
+        if (!attachments_)
             return;
+        const auto [bytes, ext] = imageBytes(source);
+        try {
+            if (bytes.size() <= noite::kMaxAttachmentBytes) {
+                QTextImageFormat format;
+                format.setName("noite-att:" + attachments_->put(bytes, ext));
+                textCursor().insertImage(format);
+            }
+        } catch (const noite::Error&) {
         }
+        return;
+    }
+    if (source->hasHtml()) {
+        textCursor().insertFragment(cleanPastedHtml(source->html(), attachments_));
+        return;
     }
     if (!source->hasHtml() && source->hasText()) {
         const QString text = source->text();
@@ -112,9 +179,39 @@ void NoteEdit::insertFromMimeData(const QMimeData* source)
     QTextEdit::insertFromMimeData(source);
 }
 
+QUrl NoteEdit::openTargetFor(const QString& attachmentId) const
+{
+    if (!attachments_)
+        return {};
+    QString path;
+    try {
+        path = attachments_->pathFor(attachmentId);
+    } catch (const noite::Error&) {
+        return {};
+    }
+    static const QStringList runnable = {"exe", "bat", "cmd", "com", "msi", "ps1", "vbs", "vbe", "js", "jse", "wsf",
+                                         "scr", "lnk", "url", "hta", "jar", "reg", "cpl", "msc", "pif", "appref-ms"};
+    const QFileInfo info(path);
+    if (runnable.contains(info.suffix().toLower()))
+        return QUrl::fromLocalFile(info.absolutePath());
+    return QUrl::fromLocalFile(path);
+}
+
+QVariant NoteEdit::loadResource(int type, const QUrl& name)
+{
+    if (type == QTextDocument::ImageResource && name.scheme() == "noite-att" && attachments_) {
+        try {
+            return QImage(attachments_->pathFor(name.path()));
+        } catch (const noite::Error&) {
+            return {};
+        }
+    }
+    return QTextEdit::loadResource(type, name);
+}
+
 bool NoteEdit::isSafeLink(const QUrl& url)
 {
-    static const QStringList allowed = {"http", "https", "mailto"};
+    static const QStringList allowed = {"http", "https", "mailto", "noite-att"};
     return url.isValid() && allowed.contains(url.scheme().toLower());
 }
 
@@ -185,8 +282,13 @@ void NoteEdit::mousePressEvent(QMouseEvent* event)
         if (event->modifiers() & Qt::ControlModifier) {
             const QString href = anchorAt(pos);
             if (!href.isEmpty()) {
-                if (isSafeLink(QUrl(href)))
-                    QDesktopServices::openUrl(QUrl(href));
+                const QUrl url(href);
+                if (url.scheme() == "noite-att") {
+                    if (const QUrl target = openTargetFor(url.path()); target.isValid())
+                        QDesktopServices::openUrl(target);
+                } else if (isSafeLink(url)) {
+                    QDesktopServices::openUrl(url);
+                }
                 return;
             }
         }

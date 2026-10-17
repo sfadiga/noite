@@ -6,6 +6,8 @@ add_library(noite-app STATIC
     src/platform/NativeHost.h src/platform/NativeHost.cpp
     src/editor/MarkdownShortcuts.h src/editor/MarkdownShortcuts.cpp
     src/editor/NoteEdit.h src/editor/NoteEdit.cpp
+    src/editor/AttachmentStore.h src/editor/AttachmentStore.cpp
+    src/editor/PasteCleaner.h src/editor/PasteCleaner.cpp
 )
 target_include_directories(noite-app PUBLIC src)
 target_link_libraries(noite-app PUBLIC noite-core Qt6::Widgets user32)
@@ -19,7 +21,8 @@ qt_add_executable(app-tests
     tests/tst_smoke.cpp
     tests/tst_hotkey.cpp
     tests/tst_native_host.cpp
-    tests/tst_editor.cpp
+    tests/tst_editor.cpp tests/fake_attachments.h
+    tests/tst_paste.cpp
 )
 # Reuses core's test registry and helpers.
 target_include_directories(app-tests PRIVATE tests ${PROJECT_SOURCE_DIR}/core/tests)
