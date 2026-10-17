@@ -13,6 +13,7 @@ add_library(noite-app STATIC
     src/capture/CaptureWindow.h src/capture/CaptureWindow.cpp
     src/capture/LatencyProbe.h src/capture/LatencyProbe.cpp
     src/capture/KeepWarm.h src/capture/KeepWarm.cpp
+    src/capture/NoteFooter.h src/capture/NoteFooter.cpp
     src/board/BoardModel.h src/board/BoardModel.cpp
     src/board/CardDelegate.h src/board/CardDelegate.cpp
     src/board/BoardWindow.h src/board/BoardWindow.cpp
