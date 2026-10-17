@@ -32,7 +32,6 @@ public:
 
     QString root() const { return root_; }
     QString dbPath() const { return root_ + "/noite.db"; }
-    QString attachmentsDir() const { return root_ + "/attachments"; }
     QString logsDir() const { return root_ + "/logs"; }
     QString migrationBackupsDir() const { return root_ + "/migration-backups"; }
 

@@ -45,6 +45,7 @@ QString Store::putAttachment(const QByteArray& bytes, const QString& ext)
     const QString id = QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex()) + "." + suffix;
 
     const QString path = attachmentPath(id);
+    QDir().mkpath(dataDir().root() + "/attachments"); // Task 1 bridge; Task 2 moves blobs into the database
     if (!QFileInfo::exists(path)) {
         QSaveFile file(path); // writes a temp file, renamed into place on commit()
         if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit())
@@ -60,7 +61,7 @@ QString Store::attachmentPath(const QString& id) const
 {
     if (!content::isValidAttachmentId(id))
         throw Error(ErrorCode::InvalidAttachmentId, "invalid attachment id: " + id);
-    return dataDir().attachmentsDir() + "/" + id;
+    return (dataDir().root() + "/attachments") + "/" + id;
 }
 
 PurgeReport Store::purgeTrash(int retentionDays)
@@ -97,7 +98,7 @@ PurgeReport Store::purgeTrash(int retentionDays)
             referenced.insert(id);
 
     // Sweep: unreferenced attachments and leftover temp files, if older than the grace period.
-    const QDir dir(dataDir().attachmentsDir());
+    const QDir dir((dataDir().root() + "/attachments"));
     for (const QFileInfo& file : dir.entryInfoList(QDir::Files)) {
         if (file.lastModified().toMSecsSinceEpoch() > now - kAttachmentGraceMs)
             continue;

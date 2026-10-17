@@ -36,7 +36,7 @@ private slots:
         QCOMPARE(f->store->putAttachment("abc", "png"), id);
         QVERIFY(content::isValidAttachmentId(id));
         QVERIFY(id.endsWith(".png"));
-        QCOMPARE(files(f->store->dataDir().attachmentsDir()), QStringList({id}));
+        QCOMPARE(files((f->store->dataDir().root() + "/attachments")), QStringList({id}));
         QFile stored(f->store->attachmentPath(id));
         QVERIFY(stored.open(QIODevice::ReadOnly));
         QCOMPARE(stored.readAll(), QByteArray("abc"));
@@ -53,7 +53,7 @@ private slots:
     {
         auto f = fixture();
         NOITE_EXPECT_ERROR(ErrorCode::AttachmentTooLarge, f->store->putAttachment(QByteArray(kMaxAttachmentBytes + 1, '\0'), "bin"));
-        QVERIFY(files(f->store->dataDir().attachmentsDir()).isEmpty());
+        QVERIFY(files((f->store->dataDir().root() + "/attachments")).isEmpty());
     }
 
     void attachmentPathRejectsTraversal()
@@ -61,7 +61,7 @@ private slots:
         auto f = fixture();
         for (const QString& bad : {QString("../noite.db"), QString("..\\x"), QString("abc.png"), QString()})
             NOITE_EXPECT_ERROR(ErrorCode::InvalidAttachmentId, f->store->attachmentPath(bad));
-        QCOMPARE(f->store->attachmentPath(fakeAttachmentId()), f->store->dataDir().attachmentsDir() + "/" + fakeAttachmentId());
+        QCOMPARE(f->store->attachmentPath(fakeAttachmentId()), (f->store->dataDir().root() + "/attachments") + "/" + fakeAttachmentId());
     }
 
     void retentionBoundaries()
@@ -160,7 +160,8 @@ private slots:
     void staleTempFilesCleaned()
     {
         auto f = fixture();
-        const QString dir = f->store->dataDir().attachmentsDir();
+        const QString dir = (f->store->dataDir().root() + "/attachments");
+        QVERIFY(QDir().mkpath(dir));
         writeFile(dir + "/stale.tmp", "x");
         setMtime(dir + "/stale.tmp", t0() - 2 * kDayMs);
         writeFile(dir + "/fresh.tmp", "y");

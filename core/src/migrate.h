@@ -14,7 +14,7 @@ struct Migration {
 };
 
 extern const std::vector<Migration> kMigrations;
-inline constexpr int kLatest = 1;
+inline constexpr int kLatest = 2;
 
 // Brings `db` to the highest version in `migrations` (sorted ascending). An existing
 // database is snapshotted to snapshotDir/noite-v<old>-<nowMs>.db first; all pending
