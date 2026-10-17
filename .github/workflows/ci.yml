@@ -6,7 +6,7 @@ on:
 
 jobs:
   core:
-    name: noite-core (Windows, MSVC, Qt 6.10.3)
+    name: core + app (Windows, MSVC, Qt 6.10.3)
     runs-on: windows-latest
     env:
       QT_QPA_FONTDIR: C:\Windows\Fonts
@@ -40,5 +40,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: core-test-results
+          name: test-results
           path: build/Release/test-results/
