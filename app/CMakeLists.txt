@@ -15,6 +15,7 @@ add_library(noite-app STATIC
     src/capture/KeepWarm.h src/capture/KeepWarm.cpp
     src/board/BoardModel.h src/board/BoardModel.cpp
     src/board/CardDelegate.h src/board/CardDelegate.cpp
+    src/board/BoardWindow.h src/board/BoardWindow.cpp
 )
 target_include_directories(noite-app PUBLIC src)
 target_link_libraries(noite-app PUBLIC noite-core Qt6::Widgets user32)
@@ -38,6 +39,7 @@ qt_add_executable(app-tests
     tests/tst_keep_warm.cpp
     tests/tst_board_model.cpp
     tests/tst_card_delegate.cpp
+    tests/tst_board_window.cpp
 )
 # Reuses core's test registry and helpers.
 target_include_directories(app-tests PRIVATE tests ${PROJECT_SOURCE_DIR}/core/tests)
