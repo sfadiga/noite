@@ -1,5 +1,6 @@
 #include "board/NoteOverlay.h"
 
+#include "DragMover.h"
 #include "capture/NoteFooter.h"
 #include "editor/NoteEdit.h"
 
@@ -33,6 +34,7 @@ NoteOverlay::NoteOverlay(noite::Store& store, AttachmentStore& attachments, std:
     footer_->setVisible(false);
     hide();
 
+    new DragMover(panel_, panel_); // by its frame and footer; re-centred on every open
     board->installEventFilter(this);
     editor_->installEventFilter(this);
     connect(editor_, &NoteEdit::escapePressed, &controller_, &CaptureController::dismiss);
@@ -63,6 +65,11 @@ void NoteOverlay::closeAndSave()
 {
     if (open_)
         controller_.dismiss();
+}
+
+QWidget* NoteOverlay::panel() const
+{
+    return panel_;
 }
 
 QString NoteOverlay::footerText() const

@@ -1,5 +1,6 @@
 #include "capture/CaptureWindow.h"
 
+#include "DragMover.h"
 #include "capture/CaptureController.h"
 #include "capture/LatencyProbe.h"
 #include "capture/NoteFooter.h"
@@ -46,6 +47,7 @@ CaptureWindow::CaptureWindow(CaptureController& controller, NoteEdit* editor)
     layout->addWidget(footer_);
     footer_->setVisible(false);
 
+    new DragMover(this, this); // by the margins and footer
     editor_->installEventFilter(this);
     editor_->viewport()->installEventFilter(this);
     connect(editor_, &NoteEdit::escapePressed, &controller_, &CaptureController::dismiss);

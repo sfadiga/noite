@@ -1,5 +1,6 @@
 #include "helpers.h"
 #include "registry.h"
+#include "widget_helpers.h"
 
 #include "board/BoardModel.h"
 #include "board/BoardWindow.h"
@@ -115,6 +116,24 @@ private slots:
         QTest::mouseClick(b.window->grid()->viewport(), Qt::LeftButton, {}, rect.center());
         QVERIFY(b.overlay().isOpen());
         QCOMPARE(b.overlay().editor()->toPlainText(), QString("alpha"));
+    }
+
+    void dragOnPanelFrameMovesItAndRecentresOnReopen()
+    {
+        Board b;
+        b.openA();
+        QWidget* panel = b.overlay().panel();
+        const QPoint centred = panel->pos();
+        test::drag(panel, QPoint(4, 4), QPoint(40, 20));
+        QCOMPARE(panel->pos(), centred + QPoint(40, 20));
+        QVERIFY(b.overlay().isOpen()); // a drag isn't a backdrop click
+
+        test::drag(panel, QPoint(4, 4), QPoint(-5000, -5000)); // stays on the board
+        QVERIFY(b.overlay().rect().contains(panel->geometry()));
+
+        QTest::keyClick(b.overlay().editor(), Qt::Key_Escape);
+        b.openA();
+        QCOMPARE(panel->pos(), centred);
     }
 
     void backdropClickCloses()

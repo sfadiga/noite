@@ -34,6 +34,7 @@ public:
     void closeAndSave();
 
     NoteEdit* editor() const { return editor_; }
+    QWidget* panel() const;
     CaptureController& controller() { return controller_; }
     QString footerText() const;
 
