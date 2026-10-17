@@ -150,9 +150,9 @@ Attachments are shared, not duplicated (safe because of D22).
 ## 6. Board
 
 - A normal window opened by tray click or the board hotkey (default `Ctrl+Alt+B`). (D17)
-- **Tabs:** Today · All · Completed · Trash. (D17)
+- **Tabs:** Today · All · Completed · Trash, each showing how many notes it holds under the current search. (D17)
 - **Layout:** card grid (Google Keep–style). Bundles render as stacked cards that expand in place. Drag a card onto another card or a bundle to bundle it. (D17)
-- **Sort:** automatic — overdue, due today, then undated oldest-first with an age badge (e.g. "12d"). No manual reordering in v1. (D9, D17)
+- **Sort:** automatic — overdue, due today, then undated oldest-first. Every active card shows its age ("3h" on its first day, then "12d"), next to its due label if it has one. No manual reordering in v1. (D9, D17)
 - **Filter chips:** one per tag, one per colour, plus Overdue / Due today / No date. Chips of the same kind combine with OR; different kinds combine with AND. Chips that would yield zero results are hidden. (D18)
 - **Search:** as-you-type full-text search over the current tab, combined with active chips. (D19)
 - Keys: `/` search · `N` new · `D` done · `Del` trash · `Ctrl+Z` undo last board action · arrow keys move between cards. (D30)
