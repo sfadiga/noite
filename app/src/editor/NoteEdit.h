@@ -1,0 +1,64 @@
+#pragma once
+
+#include "editor/AttachmentStore.h"
+
+#include <QDate>
+#include <QTextEdit>
+#include <QUrl>
+
+#include <functional>
+#include <memory>
+
+class MarkdownShortcuts;
+
+// The capture editor: markdown typing shortcuts, rich/image paste, checkbox toggling,
+// Ctrl+click links, and moving a selection into its own document (split, req. 22).
+class NoteEdit : public QTextEdit {
+    Q_OBJECT
+public:
+    explicit NoteEdit(QWidget* parent = nullptr);
+
+    // Pasted images and files go here; without a store they are not accepted.
+    void setAttachmentStore(AttachmentStore* store) { attachments_ = store; }
+
+    // What Ctrl+click on a noite-att link opens: the file, or for programs and scripts
+    // (which would run) the folder that holds it.
+    QUrl openTargetFor(const QString& attachmentId) const;
+
+    // "Today" for @date tokens; injectable for tests. Defaults to QDate::currentDate().
+    void setToday(std::function<QDate()> today);
+
+    bool canInsertFromMimeData(const QMimeData* source) const override;
+    void insertFromMimeData(const QMimeData* source) override;
+
+    // Moves the selection (text, formats and image resources) into a new document.
+    // Returns null if nothing is selected.
+    std::unique_ptr<QTextDocument> takeSelectionAsDocument();
+
+    // Ctrl+click opens only web and mail links (pasted HTML can carry file: or other schemes).
+    static bool isSafeLink(const QUrl& url);
+
+    // Ctrl+Shift+V: paste the clipboard as plain text, no rendering or link detection.
+    void pastePlainText();
+
+signals:
+    void escapePressed();
+    // An "@token " typed in the text named a date (the token itself is removed).
+    void dueDateTyped(QDate due);
+
+protected:
+    // Images referenced as noite-att:<id> load from the attachment store.
+    QVariant loadResource(int type, const QUrl& name) override;
+    void keyPressEvent(QKeyEvent* event) override;
+    // Dictation, IMEs and the emoji panel commit text here instead of through key presses.
+    void inputMethodEvent(QInputMethodEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+
+private:
+    bool toggleCheckboxAt(const QPoint& pos);
+    // Copied files become links ("chips") to their attachment; too-large ones become text.
+    void insertFileChips(const QStringList& files);
+
+    MarkdownShortcuts* shortcuts_;
+    AttachmentStore* attachments_ = nullptr;
+};
