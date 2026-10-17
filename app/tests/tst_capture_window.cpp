@@ -70,6 +70,22 @@ private slots:
         QCOMPARE(w.count(Tab::All), 1);
     }
 
+    // Found by the M2 harness run: hiding the window deactivates it while Qt still reports it
+    // visible, and the click-away handler dismissed a second time (two "finished" per Esc).
+    void deactivationAfterDismissDoesNotDismissAgain()
+    {
+        Window w;
+        QSignalSpy finished(&w.controller, &CaptureController::finished);
+        w.window.summon();
+        QTest::keyClicks(w.edit, "note");
+        QTest::keyClick(w.edit, Qt::Key_Escape);
+        QCOMPARE(finished.count(), 1);
+        w.window.show(); // visible again, but not a new capture (no summon)
+        QEvent deactivate(QEvent::WindowDeactivate);
+        QApplication::sendEvent(&w.window, &deactivate);
+        QCOMPARE(finished.count(), 1);
+    }
+
     void colourKeyCycles()
     {
         Window w;

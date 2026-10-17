@@ -36,4 +36,5 @@ private:
     NoteEdit* editor_;
     QLabel* footer_;
     LatencyProbe* probe_ = nullptr;
+    bool open_ = false; // a capture is in progress (summoned and not yet finished)
 };
