@@ -1,6 +1,7 @@
 #include "capture/CaptureWindow.h"
 
 #include "capture/CaptureController.h"
+#include "capture/LatencyProbe.h"
 #include "editor/NoteEdit.h"
 
 #include <noite/model.h>
@@ -48,8 +49,13 @@ CaptureWindow::CaptureWindow(CaptureController& controller, NoteEdit* editor)
     footer_->setVisible(false);
 
     editor_->installEventFilter(this);
+    editor_->viewport()->installEventFilter(this);
     connect(editor_, &NoteEdit::escapePressed, &controller_, &CaptureController::dismiss);
-    connect(&controller_, &CaptureController::finished, this, &QWidget::hide);
+    connect(&controller_, &CaptureController::finished, this, [this] {
+        if (probe_)
+            probe_->dismissed(editor_->toPlainText());
+        hide();
+    });
     connect(&controller_, &CaptureController::dueChanged, this, &CaptureWindow::updateFooter);
     connect(&controller_, &CaptureController::colorChanged, this, &CaptureWindow::updateFooter);
 }
@@ -94,6 +100,8 @@ bool CaptureWindow::event(QEvent* event)
 
 bool CaptureWindow::eventFilter(QObject* watched, QEvent* event)
 {
+    if (probe_ && watched == editor_->viewport() && event->type() == QEvent::Paint && editor_->hasFocus())
+        probe_->painted();
     if (watched == editor_ && event->type() == QEvent::KeyPress) {
         const auto* key = static_cast<QKeyEvent*>(event);
         const auto mods = key->modifiers() & ~Qt::KeypadModifier;

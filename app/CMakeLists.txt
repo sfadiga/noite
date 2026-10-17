@@ -11,6 +11,7 @@ add_library(noite-app STATIC
     src/editor/DateTokens.h src/editor/DateTokens.cpp
     src/capture/CaptureController.h src/capture/CaptureController.cpp
     src/capture/CaptureWindow.h src/capture/CaptureWindow.cpp
+    src/capture/LatencyProbe.h src/capture/LatencyProbe.cpp
 )
 target_include_directories(noite-app PUBLIC src)
 target_link_libraries(noite-app PUBLIC noite-core Qt6::Widgets user32)
@@ -30,6 +31,7 @@ qt_add_executable(app-tests
     tests/tst_capture_controller.cpp
     tests/tst_capture_window.cpp
     tests/tst_app.cpp
+    tests/tst_latency_probe.cpp
 )
 # Reuses core's test registry and helpers.
 target_include_directories(app-tests PRIVATE tests ${PROJECT_SOURCE_DIR}/core/tests)

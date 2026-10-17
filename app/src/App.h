@@ -12,6 +12,7 @@ class Store;
 }
 class CaptureController;
 class CaptureWindow;
+class LatencyProbe;
 class NativeHost;
 class QSystemTrayIcon;
 class StoreAttachments;
@@ -47,5 +48,6 @@ private:
     std::unique_ptr<StoreAttachments> attachments_;
     std::unique_ptr<CaptureController> controller_;
     std::unique_ptr<CaptureWindow> window_;
+    std::unique_ptr<LatencyProbe> probe_;
     QSystemTrayIcon* tray_ = nullptr;
 };

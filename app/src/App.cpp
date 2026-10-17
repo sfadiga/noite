@@ -2,6 +2,7 @@
 
 #include "capture/CaptureController.h"
 #include "capture/CaptureWindow.h"
+#include "capture/LatencyProbe.h"
 #include "editor/AttachmentStore.h"
 #include "editor/NoteEdit.h"
 #include "platform/Hotkey.h"
@@ -57,10 +58,15 @@ std::optional<int> App::start()
     controller_ = std::make_unique<CaptureController>(*store_, *editor, [] { return QDate::currentDate(); });
     window_ = std::make_unique<CaptureWindow>(*controller_, editor);
     window_->winId(); // create the native window now, while hidden (D5)
+    probe_ = LatencyProbe::fromEnvironment();
+    window_->setLatencyProbe(probe_.get());
 
     connect(host_.get(), &NativeHost::hotkeyPressed, this, [this](int id) {
-        if (id == kCaptureHotkeyId)
-            window_->summon();
+        if (id != kCaptureHotkeyId)
+            return;
+        if (probe_)
+            probe_->pressed();
+        window_->summon();
     });
     connect(host_.get(), &NativeHost::activationRequested, window_.get(), &CaptureWindow::summon);
     connect(qApp, &QCoreApplication::aboutToQuit, controller_.get(), &CaptureController::flush);

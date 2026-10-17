@@ -3,13 +3,16 @@
 
 #include "capture/CaptureController.h"
 #include "capture/CaptureWindow.h"
+#include "capture/LatencyProbe.h"
 #include "editor/AttachmentStore.h"
 #include "editor/NoteEdit.h"
 
 #include <noite/store.h>
 
 #include <QApplication>
+#include <QFile>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QTest>
 
 using namespace noite;
@@ -91,6 +94,23 @@ private slots:
         QTest::keyClicks(w.edit, "abc");
         w.window.summon();
         QCOMPARE(w.edit->toPlainText(), QString("abc"));
+    }
+
+    void windowFeedsTheLatencyProbe()
+    {
+        QTemporaryDir tmp;
+        LatencyProbe probe(tmp.filePath("trials.csv"));
+        Window w;
+        w.window.setLatencyProbe(&probe);
+        probe.pressed();
+        w.window.summon();
+        QTRY_VERIFY(!probe.pending());
+        QVERIFY(probe.lastReadyMs() >= 0);
+        QTest::keyClicks(w.edit, "hello");
+        QTest::keyClick(w.edit, Qt::Key_Escape);
+        QFile csv(tmp.filePath("trials.csv"));
+        QVERIFY(csv.open(QIODevice::ReadOnly | QIODevice::Text));
+        QVERIFY(QString::fromUtf8(csv.readAll()).contains(",\"hello\""));
     }
 
     void summonAfterDismissStartsBlank()

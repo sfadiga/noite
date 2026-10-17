@@ -3,6 +3,7 @@
 #include <QWidget>
 
 class CaptureController;
+class LatencyProbe;
 class NoteEdit;
 class QLabel;
 
@@ -20,6 +21,10 @@ public:
     NoteEdit* editor() const { return editor_; }
     QString footerText() const;
 
+    // Optional (harness runs only): told when the editor first paints with focus and when
+    // the capture closes.
+    void setLatencyProbe(LatencyProbe* probe) { probe_ = probe; }
+
 protected:
     bool event(QEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -30,4 +35,5 @@ private:
     CaptureController& controller_;
     NoteEdit* editor_;
     QLabel* footer_;
+    LatencyProbe* probe_ = nullptr;
 };
