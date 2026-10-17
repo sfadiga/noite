@@ -4,6 +4,8 @@
 >
 > Source requirements: [`requirements.md`](requirements.md). Decision numbers (D1–D30) come from the design session of 2026-10-15; the traceability table at the end maps each requirement to the decisions that satisfy it.
 >
+> **Revised 2026-10-17:** added the radar (D31–D34, §6). Capture is only half of noite; keeping notes in front of the user until they are dismissed is the core promise.
+>
 > **Revised 2026-10-16** after two spikes ([Tauri](spikes/2026-10-hotkey-latency.md), [Qt](spikes/2026-10-qt-capture.md)). The stack moved from Tauri 2 + React + TipTap to **Qt 6 Widgets + C++** (D3, D14, D15). The note format, performance metrics, default hotkey and test tooling changed with it (D5, D7, D24, D28).
 
 ## 1. Scope
@@ -155,6 +157,15 @@ Attachments are shared, not duplicated (safe because of D22).
 - **Search:** as-you-type full-text search over the current tab, combined with active chips. (D19)
 - Keys: `/` search · `N` new · `D` done · `Del` trash · `Ctrl+Z` undo last board action · arrow keys move between cards. (D30)
 - Theme follows Windows light/dark. (D30)
+
+### The radar (D31–D34, added 2026-10-17)
+
+The app's core promise: **what you capture stays under your radar until you dismiss it for good.**
+
+- **D31 Radar rule.** Every active scratch stays on the radar until it is marked **done** or **trashed**; those are the only two ways to dismiss one. Nothing expires or drops off on its own.
+- **D32 Morning review.** Once a day (trigger: D16) a review presents the radar: overdue, due today, then undated oldest-first. For each scratch the user can choose **Done**, **Snooze**, **Keep** or **Trash**. Open question for the M3 plan: open the review directly, or notify first and open on click (D16 says the notification never steals focus).
+- **D33 Stale resurfacing.** An undated active scratch whose `modified_at` is older than *N* days (setting, default **7**) is moved to the top of the review, so nothing quietly rots at the bottom of the list.
+- **D34 Snooze = due date.** Snoozing sets a future due date (quick picks: tomorrow, next Monday, pick a date). The scratch leaves Today and comes back on that day (D9). There is no separate snooze state.
 
 ### Start-of-day review (D16)
 
