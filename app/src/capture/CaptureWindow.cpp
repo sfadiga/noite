@@ -1,0 +1,110 @@
+#include "capture/CaptureWindow.h"
+
+#include "capture/CaptureController.h"
+#include "editor/NoteEdit.h"
+
+#include <noite/model.h>
+
+#include <QGuiApplication>
+#include <QKeyEvent>
+#include <QLabel>
+#include <QLocale>
+#include <QScreen>
+#include <QVBoxLayout>
+#include <QtGui/qscreen_platform.h>
+
+#include <windows.h>
+
+namespace {
+
+// The screen showing the foreground window (D6), else the cursor's, else the primary.
+QScreen* foregroundScreen()
+{
+    const HMONITOR monitor = MonitorFromWindow(GetForegroundWindow(), MONITOR_DEFAULTTONEAREST);
+    for (QScreen* screen : QGuiApplication::screens()) {
+        auto* native = screen->nativeInterface<QNativeInterface::QWindowsScreen>();
+        if (native && native->handle() == monitor)
+            return screen;
+    }
+    if (QScreen* screen = QGuiApplication::screenAt(QCursor::pos()))
+        return screen;
+    return QGuiApplication::primaryScreen();
+}
+
+} // namespace
+
+CaptureWindow::CaptureWindow(CaptureController& controller, NoteEdit* editor)
+    : QWidget(nullptr, Qt::Tool | Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint)
+    , controller_(controller)
+    , editor_(editor)
+    , footer_(new QLabel(this))
+{
+    setWindowTitle("noite");
+    resize(520, 420);
+    auto* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(12, 12, 12, 8);
+    layout->addWidget(editor_);
+    layout->addWidget(footer_);
+    footer_->setVisible(false);
+
+    editor_->installEventFilter(this);
+    connect(editor_, &NoteEdit::escapePressed, &controller_, &CaptureController::dismiss);
+    connect(&controller_, &CaptureController::finished, this, &QWidget::hide);
+    connect(&controller_, &CaptureController::dueChanged, this, &CaptureWindow::updateFooter);
+    connect(&controller_, &CaptureController::colorChanged, this, &CaptureWindow::updateFooter);
+}
+
+void CaptureWindow::summon()
+{
+    if (!isVisible()) {
+        controller_.begin();
+        const QRect area = foregroundScreen()->availableGeometry();
+        move(area.center() - QPoint(width() / 2, height() / 2));
+        show();
+    }
+    raise();
+    activateWindow();
+    SetForegroundWindow(reinterpret_cast<HWND>(winId()));
+    editor_->setFocus(Qt::ActiveWindowFocusReason);
+}
+
+QString CaptureWindow::footerText() const
+{
+    return footer_->text();
+}
+
+void CaptureWindow::updateFooter()
+{
+    QStringList parts;
+    if (const auto due = controller_.due())
+        parts << tr("Due %1").arg(QLocale().toString(*due, QLocale::ShortFormat));
+    if (const auto color = controller_.color())
+        parts << noite::colorName(*color);
+    footer_->setText(parts.join(QStringLiteral("  ·  ")));
+    footer_->setVisible(!parts.isEmpty());
+}
+
+bool CaptureWindow::event(QEvent* event)
+{
+    // Clicking away saves and hides (D6). Only while visible: hide() itself deactivates.
+    if (event->type() == QEvent::WindowDeactivate && isVisible())
+        controller_.dismiss();
+    return QWidget::event(event);
+}
+
+bool CaptureWindow::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched == editor_ && event->type() == QEvent::KeyPress) {
+        const auto* key = static_cast<QKeyEvent*>(event);
+        const auto mods = key->modifiers() & ~Qt::KeypadModifier;
+        if ((key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) && mods == Qt::ControlModifier) {
+            controller_.markDoneAndClose();
+            return true;
+        }
+        if (key->key() == Qt::Key_C && mods == (Qt::ControlModifier | Qt::ShiftModifier)) {
+            controller_.cycleColor();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}

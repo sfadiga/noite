@@ -6,6 +6,6 @@ int main(int argc, char* argv[])
 {
     QApplication qapp(argc, argv);
     qapp.setQuitOnLastWindowClosed(false);
-    App app(AppOptions{});
+    App app(parseArgs(QCoreApplication::arguments()));
     return app.run();
 }
