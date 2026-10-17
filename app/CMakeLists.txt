@@ -18,6 +18,7 @@ add_library(noite-app STATIC
     src/board/CardDelegate.h src/board/CardDelegate.cpp
     src/board/BoardWindow.h src/board/BoardWindow.cpp
     src/board/UndoLog.h src/board/UndoLog.cpp
+    src/board/NoteOverlay.h src/board/NoteOverlay.cpp
 )
 target_include_directories(noite-app PUBLIC src)
 target_link_libraries(noite-app PUBLIC noite-core Qt6::Widgets user32)
@@ -48,6 +49,7 @@ qt_add_executable(app-tests
     tests/tst_card_delegate.cpp
     tests/tst_board_window.cpp
     tests/tst_board_actions.cpp
+    tests/tst_note_overlay.cpp
     tests/tst_seed.cpp bench/Seed.h bench/Seed.cpp
 )
 # Reuses core's test registry and helpers.

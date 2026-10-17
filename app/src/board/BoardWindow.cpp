@@ -2,6 +2,7 @@
 
 #include "board/BoardModel.h"
 #include "board/CardDelegate.h"
+#include "board/NoteOverlay.h"
 #include "capture/CaptureController.h"
 
 #include <noite/store.h>
@@ -26,13 +27,14 @@ BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std:
                          QWidget* parent)
     : QWidget(parent)
     , store_(store)
-    , model_(new BoardModel(store, std::move(today), this))
+    , model_(new BoardModel(store, today, this))
     , delegate_(new CardDelegate(&attachments, this))
     , tabs_(new QTabBar(this))
     , search_(new QLineEdit(this))
     , grid_(new QListView(this))
     , empty_(new QLabel(grid_->viewport()))
     , status_(new QLabel(this))
+    , overlay_(new NoteOverlay(store, attachments, std::move(today), this))
 {
     setWindowTitle("noite");
     resize(1000, 700);
@@ -54,6 +56,12 @@ BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std:
     grid_->setItemDelegate(delegate_);
     grid_->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(grid_, &QWidget::customContextMenuRequested, this, &BoardWindow::showContextMenu);
+    connect(grid_, &QAbstractItemView::clicked, this, &BoardWindow::openSelected);
+    connect(overlay_, &NoteOverlay::closed, this, [this](const std::optional<ScratchId>& id) {
+        reloadSelecting(id ? id : selectedId(), grid_->currentIndex().row());
+        grid_->setFocus(Qt::OtherFocusReason);
+    });
+    connect(&overlay_->controller(), &CaptureController::errorOccurred, this, &BoardWindow::showStatus);
 
     empty_->setAlignment(Qt::AlignCenter);
     empty_->setEnabled(false); // drawn in the palette's disabled (dimmed) text colour
@@ -129,6 +137,23 @@ std::optional<ScratchId> BoardWindow::selectedId() const
     if (!current.isValid())
         return std::nullopt;
     return model_->summary(current.row()).id;
+}
+
+void BoardWindow::openSelected()
+{
+    if (const std::optional<ScratchId> id = selectedId())
+        overlay_->openNote(*id);
+}
+
+void BoardWindow::openNew()
+{
+    overlay_->openBlank();
+}
+
+void BoardWindow::closeEvent(QCloseEvent* event)
+{
+    overlay_->closeAndSave();
+    QWidget::closeEvent(event);
 }
 
 void BoardWindow::reload()
@@ -274,6 +299,8 @@ void BoardWindow::showContextMenu(const QPoint& pos)
     const ScratchSummary s = model_->summary(index.row());
 
     QMenu menu(this);
+    menu.addAction(tr("Open"), this, &BoardWindow::openSelected);
+    menu.addSeparator();
     if (s.status != noite::Status::Trashed)
         menu.addAction(s.status == noite::Status::Done ? tr("Reopen") : tr("Done"), this, &BoardWindow::markDoneOrReopen);
     menu.addAction(s.status == noite::Status::Trashed ? tr("Restore") : tr("Trash"), this, &BoardWindow::trashOrRestore);
@@ -370,6 +397,14 @@ bool BoardWindow::eventFilter(QObject* watched, QEvent* event)
             return true;
         }
         const auto mods = key->modifiers() & ~Qt::KeypadModifier;
+        if ((key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) && mods == Qt::NoModifier) {
+            openSelected();
+            return true;
+        }
+        if (key->key() == Qt::Key_N && mods == Qt::NoModifier) {
+            openNew();
+            return true;
+        }
         if (key->key() == Qt::Key_D && mods == Qt::NoModifier) {
             markDoneOrReopen();
             return true;

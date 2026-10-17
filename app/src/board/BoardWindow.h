@@ -17,6 +17,7 @@ class Store;
 struct AttachmentStore;
 class BoardModel;
 class CardDelegate;
+class NoteOverlay;
 class QLabel;
 class QLineEdit;
 class QListView;
@@ -58,8 +59,13 @@ public:
     void cloneSelected();
     void undo();
 
+    // Click or Enter opens the selected card in the overlay; N opens a blank note there.
+    void openSelected();
+    void openNew();
+
     std::optional<noite::ScratchId> selectedId() const;
     UndoLog& undoLog() { return undo_; }
+    NoteOverlay& overlay() const { return *overlay_; }
     BoardModel& model() const { return *model_; }
     QListView* grid() const { return grid_; }
     QLineEdit* searchField() const { return search_; }
@@ -71,6 +77,7 @@ public:
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
     void showEvent(QShowEvent* event) override;
+    void closeEvent(QCloseEvent* event) override;
 
 private:
     // Runs `action` on the selected card's summary; it returns the card to select afterwards
@@ -94,5 +101,6 @@ private:
     QListView* grid_;
     QLabel* empty_;
     QLabel* status_;
+    NoteOverlay* overlay_;
     QTimer searchDelay_;
 };
