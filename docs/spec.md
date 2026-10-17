@@ -34,7 +34,7 @@ Enforced by automated benchmarks in CI (see §9).
 | Metric | Target |
 |---|---|
 | Hotkey press → editor focused, caret ready | ≤ 100 ms |
-| First summon after 15 min idle | ≤ 100 ms. The Qt spike measured 97.5 ms (vs 7 ms warm), so M2 must add a mitigation and track it. |
+| First summon after 15 min idle | ≤ 100 ms, target ≤ 50 ms. **Known issue:** the M2 app measured 103 ms (keep-warm off) and 91 ms (keep-warm on), one press each (2026-10-17). Keep-warm (offscreen render while hidden) ships on but doesn't reach the target. A phase-by-phase breakdown and the next fix are in M7. |
 | Board open with 2,000 notes | ≤ 300 ms |
 | Idle memory | ≤ 80 MB (Qt spike: 18.9 MB private) |
 

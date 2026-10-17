@@ -16,7 +16,7 @@ v1 is split into milestones. Each one produces software that works and can be te
 | M4 | Board | Board window + hotkey, tabs, card grid, bundle drag/expand, filter chips, search, keyboard nav, undo, theme. **Starts with a measured choice: Widgets vs one embedded QML view.** | D17, D18, D19 (UI), D30 | M3 | later |
 | M5 | Background jobs | Purge scheduler, backup scheduler + "Back up now", rotating logs | D13, D22, D29 | M2 | later |
 | M6 | Setup wizard + Settings | 8-step wizard with hotkey conflict check (now also asks for the stale-after-N-days setting), Settings window, re-run wizard, full tray menu, sync-folder warning shown to user | D24, D25, D33 | M4, M5 | later |
-| M7 | Release hardening | End-to-end runs with the keystroke harness; 2,000-note and idle-summon performance checks gating CI; trimmed portable zip (~35 MB) built in GitHub Actions; upgrade-path test (old data + new exe) | D5, D23, D26, D28 | M6 | later |
+| M7 | Release hardening | **Idle first-summon (known issue, 91–103 ms vs ≤ 50 ms target): measure a phase breakdown (show / activate / paint / flush), then try a working-set floor or other fix.** End-to-end runs with the keystroke harness; 2,000-note and idle-summon performance checks gating CI; trimmed portable zip (~35 MB) built in GitHub Actions; upgrade-path test (old data + new exe) | D5, D23, D26, D28 | M6 | later |
 
 ## Decisions made while planning (not in the spec, confirm on review)
 
