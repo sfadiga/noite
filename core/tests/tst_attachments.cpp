@@ -140,6 +140,23 @@ private slots:
         QVERIFY(QFile::exists(f->store->attachmentPath(id)));
     }
 
+    // Review I1: pasting bytes that already exist must restart the grace period, or the
+    // purge can delete the file while the new note's autosave is still pending.
+    void rePastedOldAttachmentSurvivesPurge()
+    {
+        auto f = fixture();
+        const QString image = f->store->putAttachment("same bytes", "png");
+        const QString original = f->store->createScratch(htmlWithImage("a", image)).id;
+        setMtime(f->store->attachmentPath(image), t0() - 40 * kDayMs);
+        f->store->trash(original);
+        f->clock->set(t0() + 35 * kDayMs);
+
+        QCOMPARE(f->store->putAttachment("same bytes", "png"), image); // pasted again, not saved yet
+        const PurgeReport report = f->store->purgeTrash(30);
+        QCOMPARE(report.scratchesDeleted, 1);
+        QVERIFY(QFile::exists(f->store->attachmentPath(image)));
+    }
+
     void staleTempFilesCleaned()
     {
         auto f = fixture();

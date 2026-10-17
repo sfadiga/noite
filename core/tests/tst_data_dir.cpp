@@ -65,6 +65,20 @@ private slots:
         QVERIFY(!syncProviderFor(R"(C:\Users\u\OneDriveX\noite)", od));
     }
 
+    // Review I2: real-world names the first version missed.
+    void detectsLocalizedAndSharedSyncFolders()
+    {        QVERIFY(syncProviderFor(R"(G:\Meu Drive\noite)", {}) == SyncProvider::GoogleDrive);
+        QVERIFY(syncProviderFor(R"(G:\Mi unidad\noite)", {}) == SyncProvider::GoogleDrive);
+        QVERIFY(syncProviderFor(R"(G:\Shared drives\Team\noite)", {}) == SyncProvider::GoogleDrive);
+        QVERIFY(syncProviderFor(R"(G:\Drives compartilhados\Equipe\noite)", {}) == SyncProvider::GoogleDrive);
+        QVERIFY(syncProviderFor(R"(C:\Users\u\Dropbox (Personal)\noite)", {}) == SyncProvider::Dropbox);
+        QVERIFY(syncProviderFor(R"(C:\Users\u\Dropbox (Acme Inc)\noite)", {}) == SyncProvider::Dropbox);
+        QVERIFY(!syncProviderFor(R"(D:\dropboxer\noite)", {}));
+        // Google Drive for Desktop mounts a volume labelled "Google Drive", whatever the folder names.
+        QVERIFY(syncProviderFor(R"(G:\Whatever\noite)", {}, "Google Drive") == SyncProvider::GoogleDrive);
+        QVERIFY(!syncProviderFor(R"(D:\tools\noite)", {}, "DATA"));
+    }
+
     void fixedClockAdvances()
     {
         FixedClock clock(1000);

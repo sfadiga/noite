@@ -28,6 +28,8 @@ public:
 
     int schemaVersion() const;
     const DataDir& dataDir() const { return dir_; }
+    // Random id created on first open; separates this installation's backups from others'.
+    QString installId() const;
 
     // ---- Scratches (store_scratch.cpp) ----
     Scratch createScratch(const QString& html);

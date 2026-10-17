@@ -6,6 +6,7 @@
 #include <QFileInfo>
 #include <QLockFile>
 #include <QRegularExpression>
+#include <QStorageInfo>
 
 namespace noite {
 
@@ -30,16 +31,30 @@ bool startsWithComponents(const QStringList& path, const QStringList& prefix)
 
 } // namespace
 
-std::optional<SyncProvider> syncProviderFor(const QString& path, const QStringList& oneDriveRoots)
+std::optional<SyncProvider> syncProviderFor(const QString& path, const QStringList& oneDriveRoots,
+                                            const QString& volumeLabel)
 {
     const QStringList parts = components(path);
     for (const QString& root : oneDriveRoots)
         if (startsWithComponents(parts, components(root)))
             return SyncProvider::OneDrive;
-    if (parts.contains("my drive") || parts.contains("google drive"))
+
+    // Google Drive for Desktop mounts a volume labelled "Google Drive" (locale-independent);
+    // the folder names below also catch mirrored folders and other mounts. Best effort.
+    if (volumeLabel.compare("Google Drive", Qt::CaseInsensitive) == 0)
         return SyncProvider::GoogleDrive;
-    if (parts.contains("dropbox"))
-        return SyncProvider::Dropbox;
+    static const QStringList googleNames = {
+        "google drive", "my drive", "shared drives",                  // English
+        "meu drive", "drives compartilhados",                         // Portuguese
+        "mi unidad", "unidades compartidas",                          // Spanish
+        "mon drive", "drives partagés", "meine ablage", "il mio drive", // French, German, Italian
+    };
+    for (const QString& part : parts) {
+        if (googleNames.contains(part))
+            return SyncProvider::GoogleDrive;
+        if (part == "dropbox" || part.startsWith("dropbox (")) // "Dropbox (Personal)", "Dropbox (Team)"
+            return SyncProvider::Dropbox;
+    }
     return std::nullopt;
 }
 
@@ -73,7 +88,7 @@ std::optional<SyncProvider> DataDir::syncWarning() const
     for (const char* var : {"OneDrive", "OneDriveConsumer", "OneDriveCommercial"})
         if (const QString value = qEnvironmentVariable(var); !value.isEmpty())
             roots << value;
-    return syncProviderFor(root_, roots);
+    return syncProviderFor(root_, roots, QStorageInfo(root_).displayName());
 }
 
 } // namespace noite

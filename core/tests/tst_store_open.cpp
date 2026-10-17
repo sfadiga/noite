@@ -45,6 +45,18 @@ private slots:
         QCOMPARE(rawQuery(f->root() + "/noite.db", "PRAGMA journal_mode"), QString("wal"));
     }
 
+    // Review I3: each installation has its own id, so backups from several installs can share a folder.
+    void installIdIsStableAndUnique()
+    {
+        auto a = fixture();
+        auto b = fixture();
+        const QString id = a->store->installId();
+        QVERIFY(!id.isEmpty());
+        QVERIFY(id != b->store->installId());
+        reopen(*a);
+        QCOMPARE(a->store->installId(), id);
+    }
+
     void newerDbRefusedViaStore()
     {
         auto f = fixture();

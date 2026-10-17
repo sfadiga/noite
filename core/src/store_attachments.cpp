@@ -7,7 +7,9 @@
 #include <noite/error.h>
 
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
+#include <QTimeZone>
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QSaveFile>
@@ -16,6 +18,19 @@
 namespace noite {
 
 using namespace detail;
+
+namespace {
+
+// The purge's grace period runs on file mtimes, so writes and re-pastes stamp the mtime
+// from the store's clock.
+void stampMtime(const QString& path, qint64 ms)
+{
+    QFile file(path);
+    if (file.open(QIODevice::ReadWrite))
+        file.setFileTime(QDateTime::fromMSecsSinceEpoch(ms, QTimeZone::UTC), QFileDevice::FileModificationTime);
+}
+
+} // namespace
 
 QString Store::putAttachment(const QByteArray& bytes, const QString& ext)
 {
@@ -30,11 +45,14 @@ QString Store::putAttachment(const QByteArray& bytes, const QString& ext)
     const QString id = QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex()) + "." + suffix;
 
     const QString path = attachmentPath(id);
-    if (QFileInfo::exists(path))
-        return id;
-    QSaveFile file(path); // writes a temp file, renamed into place on commit()
-    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit())
-        throw Error(ErrorCode::Io, "cannot write attachment " + path + ": " + file.errorString());
+    if (!QFileInfo::exists(path)) {
+        QSaveFile file(path); // writes a temp file, renamed into place on commit()
+        if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit())
+            throw Error(ErrorCode::Io, "cannot write attachment " + path + ": " + file.errorString());
+    }
+    // A re-paste of existing bytes restarts the grace period too: the note that will
+    // reference it may not be saved yet.
+    stampMtime(path, nowMs());
     return id;
 }
 

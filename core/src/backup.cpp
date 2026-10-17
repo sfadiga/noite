@@ -17,8 +17,11 @@ namespace noite::backup {
 
 namespace {
 
-QString snapshotsDir(const QString& dest) { return dest + "/noite-backups/snapshots"; }
-QString attachmentsDir(const QString& dest) { return dest + "/noite-backups/attachments"; }
+constexpr qint64 kStaleTempMs = 3'600'000;
+
+QString installDir(const Store& store, const QString& dest) { return dest + "/noite-backups/" + store.installId(); }
+QString snapshotsDir(const Store& store, const QString& dest) { return installDir(store, dest) + "/snapshots"; }
+QString attachmentsDir(const Store& store, const QString& dest) { return installDir(store, dest) + "/attachments"; }
 
 QStringList referencedBy(const QString& snapshotDb)
 {
@@ -45,8 +48,8 @@ QString snapshot(Store& store, const QString& dest)
 {
     if (!QFileInfo(dest).isDir())
         throw Error(ErrorCode::BackupDirMissing, "backup folder not found: " + dest);
-    const QString snaps = snapshotsDir(dest);
-    const QString atts = attachmentsDir(dest);
+    const QString snaps = snapshotsDir(store, dest);
+    const QString atts = attachmentsDir(store, dest);
     if (!QDir().mkpath(snaps) || !QDir().mkpath(atts))
         throw Error(ErrorCode::Io, "cannot create backup folders in " + dest);
 
@@ -67,19 +70,20 @@ QString snapshot(Store& store, const QString& dest)
     return final;
 }
 
-PruneReport prune(const QString& dest, int keep)
+PruneReport prune(const Store& store, const QString& dest, int keep)
 {
     if (keep < 1)
         throw Error(ErrorCode::InvalidSetting, "backups to keep must be at least 1");
     PruneReport report;
-    QDir snaps(snapshotsDir(dest));
-    QDir atts(attachmentsDir(dest));
+    QDir snaps(snapshotsDir(store, dest));
+    QDir atts(attachmentsDir(store, dest));
     if (!snaps.exists())
         return report;
 
     for (QDir* dir : {&snaps, &atts})
-        for (const QString& name : dir->entryList({"*.tmp"}, QDir::Files))
-            dir->remove(name);
+        for (const QFileInfo& tmp : dir->entryInfoList({"*.tmp"}, QDir::Files))
+            if (tmp.lastModified().toMSecsSinceEpoch() <= store.nowMs() - kStaleTempMs)
+                dir->remove(tmp.fileName());
 
     QStringList dbs = snaps.entryList({"*.db"}, QDir::Files, QDir::Name); // names sort by time
     while (dbs.size() > keep) {

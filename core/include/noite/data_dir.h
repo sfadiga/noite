@@ -13,7 +13,8 @@ namespace noite {
 enum class SyncProvider { GoogleDrive, OneDrive, Dropbox };
 
 // Which file-sync service, if any, owns `path` (the live database must never be synced, D13).
-std::optional<SyncProvider> syncProviderFor(const QString& path, const QStringList& oneDriveRoots);
+std::optional<SyncProvider> syncProviderFor(const QString& path, const QStringList& oneDriveRoots,
+                                            const QString& volumeLabel = {});
 
 // The portable data folder (D4), locked for the lifetime of this object so only one
 // noite instance writes to it (D27). Move-only.
