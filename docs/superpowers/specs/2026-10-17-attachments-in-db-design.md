@@ -13,7 +13,7 @@ Everything a note holds lives in one file, `data\noite.db`. Pasted images and co
 | A1 | Blobs in an `attachments` table inside `noite.db` | One file. A second database file or a zip container would still leave more than one file. |
 | A2 | Attachment ids stay `<sha256>.<ext>` | Note HTML (`noite-att:<id>`) is unchanged; no content rewrite, no FTS rebuild. |
 | A3 | A snapshot is one self-contained `.db`; keep 14 | Simplest restore: any snapshot opens on its own. Cost: every snapshot carries every attachment (100 MB of images × 14 ≈ 1.4 GB of backups). |
-| A4 | After migration, `data\attachments\` moves to `migration-backups\attachments-v1-<ms>\` | A fallback next to the pre-migration snapshot; the user deletes it by hand. |
+| A4 | No import of existing attachment files; v2 only adds the table | Unreleased software with no attachments in use (the author's call: not worth the effort). |
 | A5 | Ctrl+click on a file chip writes the file to `%TEMP%\noite\` and opens it there; the folder is emptied on startup | The OS needs a real file. Edits to the opened copy are not saved back (they weren't before either: stored bytes are content-addressed). |
 
 ## Storage
@@ -44,15 +44,14 @@ data\
 
 ## Migration v1 → v2
 
-The runner's `Migration` gains an optional C++ step that runs after the SQL, inside the same transaction:
+noite is unreleased and the author's database holds no attachments, so v2 does **not** import files from `data\attachments\` (ruled 2026-10-17). Existing attachment files, if any, are left alone and are no longer referenced.
 
 1. The existing pre-migration snapshot is taken first (`migration-backups\noite-v1-<ms>.db`).
-2. SQL: create `attachments`.
-3. Step: for every file in `data\attachments\` whose name is a valid attachment id, insert `(id, bytes, size, touched_at = file mtime)`. Other files (temp leftovers) are skipped. An unreadable valid file fails the migration.
-4. Commit and set `user_version = 2`.
-5. Outside the transaction: `PRAGMA auto_vacuum = INCREMENTAL; VACUUM;`, then rename `data\attachments\` to `migration-backups\attachments-v1-<ms>\`. A failed rename is logged and retried on the next start; the data is already safe in the database.
+2. SQL (`schema_v2.sql`): create `attachments`; set `user_version = 2`.
+3. When the store opens a database whose `auto_vacuum` isn't INCREMENTAL, it runs `PRAGMA auto_vacuum = INCREMENTAL; VACUUM;` once. This covers both new and migrated databases.
+4. If `data\attachments\` is empty, the store removes it.
 
-On failure the transaction rolls back, the folder stays where it was, and startup fails with `MigrationFailed`, as for any migration today.
+On failure, startup fails with `MigrationFailed`, as for any migration today.
 
 ## Core API (noite-core)
 
@@ -73,8 +72,8 @@ On failure the transaction rolls back, the folder stays where it was, and startu
 ## Backup (noite-core `backup`)
 
 - `snapshot`: `VACUUM INTO` the final name's `.tmp`, then rename. No attachment copying.
-- `verify`: `integrity_check`. For a v2 snapshot, every `noite-att:` reference must have a row. For a v1 snapshot (no `attachments` table), the check against the backup's `attachments\` folder is unchanged.
-- `prune`: the snapshot count rule is unchanged. Files in the backup's `attachments\` folder are kept only while a remaining **v1** snapshot references them, so the folder empties as old snapshots age out.
+- `verify`: `integrity_check`, and every `noite-att:` reference must have a row.
+- `prune`: the snapshot count rule is unchanged; it no longer touches an `attachments\` folder. There is no compatibility code for v1 snapshots.
 
 ## Errors
 
@@ -82,19 +81,16 @@ On failure the transaction rolls back, the folder stays where it was, and startu
 |---|---|
 | Blob missing for a reference | Broken image or a chip that doesn't open, plus a log line; never a crash. |
 | Temp folder unwritable | The chip doesn't open; the status/log says why. |
-| Migration fails | Rollback; folder untouched; startup error `MigrationFailed`. |
-| Folder rename fails after commit | Logged; retried next start. |
+| Migration fails | Rollback; startup error `MigrationFailed`. |
 
 ## Testing (Qt Test, test-first)
 
 Core:
-- `migrateImportsAttachments`: v1 database plus files → v2; rows match the bytes; the HTML is unchanged; the folder moved to `migration-backups\attachments-v1-*`.
-- `migrateRollsBackOnUnreadableFile`: `user_version` stays 1; the folder stays.
-- `migrateSkipsNonAttachmentFiles`.
+- `migrateV1ToV2`: a v1 database opens as v2 with an empty `attachments` table, its notes intact, and `auto_vacuum` INCREMENTAL; an empty `data\attachments\` is removed and a non-empty one is left.
 - `putDedupsAndStampsTouchedAt`, `attachmentBytesErrors` (invalid id, missing id).
 - `purgeSweepsRowsAfterGraceAndShrinksFile`.
 - The spec's attachment-safety case, rewritten for the database: paste → clone → trash the original → purge → the clone's image bytes are still there.
-- Backup: `snapshotIsSelfContained` (verifies with no `attachments\` folder), `pruneKeepsFilesForV1Snapshots`, `verifyV2MissingRowFails`.
+- Backup: `snapshotIsSelfContained` (verifies with no `attachments\` folder; the image's bytes read back from the snapshot), `verifyMissingRowFails`.
 - DataDir: `attachments\` is not created.
 
 App:
