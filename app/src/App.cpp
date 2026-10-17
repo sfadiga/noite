@@ -2,6 +2,7 @@
 
 #include "capture/CaptureController.h"
 #include "capture/CaptureWindow.h"
+#include "capture/KeepWarm.h"
 #include "capture/LatencyProbe.h"
 #include "editor/AttachmentStore.h"
 #include "editor/NoteEdit.h"
@@ -60,6 +61,10 @@ std::optional<int> App::start()
     window_->winId(); // create the native window now, while hidden (D5)
     probe_ = LatencyProbe::fromEnvironment();
     window_->setLatencyProbe(probe_.get());
+    if (KeepWarm::enabledByEnvironment()) {
+        keepWarm_ = std::make_unique<KeepWarm>(window_.get());
+        keepWarm_->start();
+    }
 
     connect(host_.get(), &NativeHost::hotkeyPressed, this, [this](int id) {
         if (id != kCaptureHotkeyId)
