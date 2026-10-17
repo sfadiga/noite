@@ -34,6 +34,25 @@ inline std::unique_ptr<Fixture> fixture()
     return f;
 }
 
+// One <p> per line, HTML-escaped; an empty line becomes an empty paragraph.
+inline QString html(const QStringList& lines)
+{
+    QString out;
+    for (const QString& line : lines)
+        out += "<p>" + line.toHtmlEscaped() + "</p>";
+    return out;
+}
+
+inline QString htmlWithImage(const QString& text, const QString& attachmentId)
+{
+    return "<p>" + text.toHtmlEscaped() + "<img src=\"noite-att:" + attachmentId + "\"/></p>";
+}
+
+inline QString fakeAttachmentId(char hex = 'a', const QString& ext = "png")
+{
+    return QString(64, QChar(hex)) + "." + ext;
+}
+
 // Closes the store (releasing the lock) and opens it again on the same data dir.
 inline void reopen(Fixture& f)
 {

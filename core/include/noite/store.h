@@ -24,6 +24,17 @@ public:
 
     int schemaVersion() const;
     const DataDir& dataDir() const { return dir_; }
+
+    // ---- Scratches (store_scratch.cpp) ----
+    Scratch createScratch(const QString& html);
+    Scratch updateContent(const ScratchId& id, const QString& html);
+    Scratch get(const ScratchId& id) const;
+    // Hard-deletes the scratch if it has no text and no attachments (D6); never trashes.
+    bool discardIfEmpty(const ScratchId& id);
+    void setDue(const ScratchId& id, std::optional<QDate> due);
+    void setColor(const ScratchId& id, std::optional<Color> color);
+    // Throws InvalidTag (and changes nothing) if any tag is invalid.
+    void setManualTags(const ScratchId& id, const QStringList& tags);
     qint64 nowMs() const { return clock_->nowMs(); }
 
     // Internal: for noite-core sources (store_*.cpp, backup.cpp) only.

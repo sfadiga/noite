@@ -42,8 +42,8 @@ std::optional<E> valueOf(const std::array<std::pair<E, const char*>, N>& table, 
 
 } // namespace
 
-QString toString(Status status) { return nameOf(kStatuses, status); }
-QString toString(Color color) { return nameOf(kColors, color); }
+QString statusName(Status status) { return nameOf(kStatuses, status); }
+QString colorName(Color color) { return nameOf(kColors, color); }
 std::optional<Status> parseStatus(const QString& text) { return valueOf(kStatuses, text); }
 std::optional<Color> parseColor(const QString& text) { return valueOf(kColors, text); }
 

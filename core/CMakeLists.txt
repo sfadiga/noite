@@ -10,6 +10,7 @@ add_library(noite-core STATIC
     include/noite/model.h src/model.cpp
     include/noite/content.h src/content.cpp
     include/noite/store.h src/store.cpp
+    src/store_internal.h src/store_scratch.cpp
     src/db.h src/db.cpp
     src/migrate.h src/migrate.cpp src/schema_v1.sql
 )
@@ -25,6 +26,7 @@ qt_add_executable(core-tests
     tests/tst_migrate.cpp
     tests/tst_store_open.cpp
     tests/tst_content.cpp
+    tests/tst_scratch.cpp
 )
 target_include_directories(core-tests PRIVATE src tests)
 target_link_libraries(core-tests PRIVATE noite-core sqlite3 Qt6::Test)
