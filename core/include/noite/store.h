@@ -35,6 +35,14 @@ public:
     void setColor(const ScratchId& id, std::optional<Color> color);
     // Throws InvalidTag (and changes nothing) if any tag is invalid.
     void setManualTags(const ScratchId& id, const QStringList& tags);
+
+    // ---- Lifecycle (store_lifecycle.cpp, D11) ----
+    // Active -> Done; Done -> Active; Active|Done -> Trashed; Trashed -> previous status.
+    // Anything else throws InvalidTransition.
+    void markDone(const ScratchId& id);
+    void reopen(const ScratchId& id);
+    void trash(const ScratchId& id);
+    void restore(const ScratchId& id);
     qint64 nowMs() const { return clock_->nowMs(); }
 
     // Internal: for noite-core sources (store_*.cpp, backup.cpp) only.
