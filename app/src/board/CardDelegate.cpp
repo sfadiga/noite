@@ -51,19 +51,30 @@ QSize CardDelegate::sizeHint(const QStyleOptionViewItem&, const QModelIndex&) co
     return kCardSize;
 }
 
-QString CardDelegate::badgeText(const noite::ScratchSummary& s, QDate today)
+QString CardDelegate::badgeText(const noite::ScratchSummary& s, QDate today, qint64 now)
 {
     if (s.status != noite::Status::Active)
         return {};
-    if (s.due) {
-        if (*s.due < today)
-            return QStringLiteral("overdue");
-        if (*s.due == today)
-            return QStringLiteral("today");
-        return QLocale().toString(*s.due, QStringLiteral("d MMM"));
-    }
-    const qint64 days = QDateTime::fromMSecsSinceEpoch(s.createdAt).date().daysTo(today);
-    return days > 0 ? QStringLiteral("%1d").arg(days) : QString();
+    const QString age = ageText(s.createdAt, today, now);
+    if (!s.due)
+        return age;
+    QString due;
+    if (*s.due < today)
+        due = QStringLiteral("overdue");
+    else if (*s.due == today)
+        due = QStringLiteral("today");
+    else
+        due = QLocale().toString(*s.due, QStringLiteral("d MMM"));
+    return due + QStringLiteral(" · ") + age;
+}
+
+QString CardDelegate::ageText(qint64 createdAt, QDate today, qint64 now)
+{
+    const qint64 days = QDateTime::fromMSecsSinceEpoch(createdAt).date().daysTo(today);
+    if (days > 0)
+        return QStringLiteral("%1d").arg(days);
+    const qint64 hours = (now - createdAt) / 3'600'000;
+    return hours > 0 ? QStringLiteral("%1h").arg(hours) : QStringLiteral("now");
 }
 
 QColor CardDelegate::tint(std::optional<noite::Color> color, bool dark)
@@ -75,6 +86,35 @@ QColor CardDelegate::tint(std::optional<noite::Color> color, bool dark)
             return QColor(dark ? t.dark : t.light);
     }
     return {};
+}
+
+namespace {
+
+// `from` moved `amount` of the way towards `to`.
+QColor blend(const QColor& from, const QColor& to, qreal amount)
+{
+    return QColor::fromRgbF(from.redF() + (to.redF() - from.redF()) * amount,
+                            from.greenF() + (to.greenF() - from.greenF()) * amount,
+                            from.blueF() + (to.blueF() - from.blueF()) * amount);
+}
+
+bool isDark(const QPalette& palette)
+{
+    return palette.color(QPalette::Base).lightness() < 128;
+}
+
+} // namespace
+
+QColor CardDelegate::cardFill(std::optional<noite::Color> color, const QPalette& palette)
+{
+    if (const QColor t = tint(color, isDark(palette)); t.isValid())
+        return t;
+    return blend(palette.color(QPalette::Base), palette.color(QPalette::Text), 0.07);
+}
+
+QColor CardDelegate::cardBorder(const QPalette& palette)
+{
+    return blend(palette.color(QPalette::Base), palette.color(QPalette::Text), 0.28);
 }
 
 int CardDelegate::titleWidth()
@@ -104,7 +144,6 @@ void CardDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, 
     const auto* model = static_cast<const BoardModel*>(index.model());
     const noite::ScratchSummary& s = model->summary(index.row());
     const QPalette& palette = option.palette;
-    const bool dark = palette.color(QPalette::Base).lightness() < 128;
     const bool selected = option.state & QStyle::State_Selected;
 
     painter->save();
@@ -112,12 +151,8 @@ void CardDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, 
     const QRectF card = QRectF(option.rect).adjusted(kMargin, kMargin, -kMargin, -kMargin);
     QPainterPath shape;
     shape.addRoundedRect(card, kRadius, kRadius);
-    const QColor fill = tint(s.color, dark);
-    painter->fillPath(shape, fill.isValid() ? fill : palette.color(QPalette::Base));
-    QColor border = selected ? palette.color(QPalette::Highlight) : palette.color(QPalette::Mid);
-    if (!selected)
-        border.setAlpha(90);
-    painter->setPen(QPen(border, selected ? 2 : 1));
+    painter->fillPath(shape, cardFill(s.color, palette));
+    painter->setPen(QPen(selected ? palette.color(QPalette::Highlight) : cardBorder(palette), selected ? 2 : 1));
     painter->drawPath(shape);
 
     const QRect content = card.toRect().adjusted(kPadding, kPadding - 2, -kPadding, -kPadding + 2);
@@ -151,7 +186,7 @@ void CardDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, 
     painter->setFont(small);
     const QRect footer(content.left(), content.bottom() - smallMetrics.height() + 1, content.width(),
                        smallMetrics.height());
-    const QString badge = badgeText(s, model->today());
+    const QString badge = badgeText(s, model->today(), QDateTime::currentMSecsSinceEpoch());
     const int badgeWidth = badge.isEmpty() ? 0 : smallMetrics.horizontalAdvance(badge) + 8;
     painter->drawText(footer, Qt::AlignRight | Qt::AlignVCenter, badge);
     painter->drawText(footer.adjusted(0, 0, -badgeWidth, 0), Qt::AlignLeft | Qt::AlignVCenter,
