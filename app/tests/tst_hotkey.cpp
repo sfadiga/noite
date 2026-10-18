@@ -26,6 +26,15 @@ private slots:
         QVERIFY(!parseHotkey(QString::fromUtf8("Ctrl+Alt+Ä")));
     }
 
+    void formatHotkeyIsCanonical()
+    {
+        QCOMPARE(formatHotkey(*parseHotkey("shift+alt+ctrl+j")), QString("Ctrl+Alt+Shift+J"));
+        QCOMPARE(formatHotkey(*parseHotkey("meta+Ctrl+f12")), QString("Ctrl+Win+F12"));
+        QCOMPARE(formatHotkey(*parseHotkey("alt+space")), QString("Alt+Space"));
+        for (const char* text : {"Ctrl+Alt+J", "Win+Shift+N", "Ctrl+7", "Alt+F1", "Ctrl+Alt+F24", "Ctrl+Space"})
+            QVERIFY(parseHotkey(formatHotkey(*parseHotkey(text))) == parseHotkey(text));
+    }
+
     void comboFromKeyFormats()
     {
         QCOMPARE(comboFromKey(Qt::Key_J, Qt::ControlModifier | Qt::AltModifier), std::optional<QString>("Ctrl+Alt+J"));

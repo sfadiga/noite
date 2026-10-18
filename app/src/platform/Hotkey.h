@@ -17,6 +17,10 @@ struct Hotkey {
 // Ctrl, Alt or Win is required, so a hotkey can never swallow ordinary typing.
 std::optional<Hotkey> parseHotkey(const QString& text);
 
+// The canonical text of a hotkey: modifiers in the order Ctrl, Alt, Shift, Win, then the key
+// ("Ctrl+Alt+J"). parseHotkey(formatHotkey(h)) == h for every parsed h.
+QString formatHotkey(Hotkey hotkey);
+
 // The parseHotkey text for a recorded key press ("Ctrl+Alt+J", modifier order Ctrl, Alt, Shift;
 // Win is never produced), or nothing if the press is not a valid hotkey: a modifier key alone,
 // a key parseHotkey does not know, or neither Ctrl nor Alt held.

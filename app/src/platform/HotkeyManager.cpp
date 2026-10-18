@@ -20,7 +20,7 @@ bool HotkeyManager::registerSlot(int id, const QString& combo)
     if (!hotkey || !backend_.registerHotkey(id, *hotkey))
         return false;
     Slot& s = slot(id);
-    s.combo = combo;
+    s.combo = formatHotkey(*hotkey);
     s.registered = true;
     return true;
 }
@@ -38,7 +38,7 @@ HotkeyStatus HotkeyManager::set(int id, const QString& combo)
         // Nothing may be registered now: check the combination, keep it for resume().
         if (probe(combo) != HotkeyStatus::Ok)
             return HotkeyStatus::Taken;
-        slot(id).combo = combo;
+        slot(id).combo = formatHotkey(*hotkey);
         return HotkeyStatus::Ok;
     }
 
@@ -68,8 +68,8 @@ HotkeyOutcome HotkeyManager::apply(const QString& capture, const QString& board)
             if (probe(combo) != HotkeyStatus::Ok)
                 return {HotkeyStatus::Taken, id};
         }
-        capture_.combo = capture;
-        board_.combo = board;
+        capture_.combo = formatHotkey(*captureKey);
+        board_.combo = formatHotkey(*boardKey);
         return {};
     }
 

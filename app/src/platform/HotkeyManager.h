@@ -20,7 +20,7 @@ struct HotkeyOutcome {
 };
 
 // Owns the two global hotkeys (new note and board). Combinations are text in parseHotkey form
-// and are compared parsed, so "ctrl+alt+j" equals "Ctrl+Alt+J".
+// and are compared parsed and stored canonical, so "ctrl+alt+j" equals "Ctrl+Alt+J".
 class HotkeyManager {
 public:
     static constexpr int kCaptureId = 1;
@@ -34,7 +34,8 @@ public:
     HotkeyStatus set(int id, const QString& combo);
     // Sets both, all or nothing (Settings): on any failure both previous combinations are back.
     HotkeyOutcome apply(const QString& capture, const QString& board);
-    // Whether `combo` could be registered right now; leaves nothing registered.
+    // Whether `combo` could be registered right now; leaves nothing registered. A combination
+    // the manager currently holds probes as Taken (the OS refuses it): callers probe while paused.
     HotkeyStatus probe(const QString& combo);
 
     // While paused (a hotkey field is recording) neither hotkey is registered, so the keys reach

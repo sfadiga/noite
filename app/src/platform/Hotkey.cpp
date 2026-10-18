@@ -66,28 +66,43 @@ std::optional<Hotkey> parseHotkey(const QString& text)
     return hotkey;
 }
 
+QString formatHotkey(Hotkey hotkey)
+{
+    QString text;
+    if (hotkey.modifiers & MOD_CONTROL)
+        text += QStringLiteral("Ctrl+");
+    if (hotkey.modifiers & MOD_ALT)
+        text += QStringLiteral("Alt+");
+    if (hotkey.modifiers & MOD_SHIFT)
+        text += QStringLiteral("Shift+");
+    if (hotkey.modifiers & MOD_WIN)
+        text += QStringLiteral("Win+");
+    if (hotkey.vk == VK_SPACE)
+        return text + QStringLiteral("Space");
+    if (hotkey.vk >= VK_F1 && hotkey.vk <= VK_F24)
+        return text + QStringLiteral("F%1").arg(hotkey.vk - VK_F1 + 1);
+    return text + QChar(char16_t(hotkey.vk));
+}
+
 std::optional<QString> comboFromKey(int qtKey, Qt::KeyboardModifiers mods)
 {
-    QString key;
-    if (qtKey >= Qt::Key_A && qtKey <= Qt::Key_Z)
-        key = QChar(qtKey);
-    else if (qtKey >= Qt::Key_0 && qtKey <= Qt::Key_9)
-        key = QChar(qtKey);
+    Hotkey hotkey;
+    if ((qtKey >= Qt::Key_A && qtKey <= Qt::Key_Z) || (qtKey >= Qt::Key_0 && qtKey <= Qt::Key_9))
+        hotkey.vk = unsigned(qtKey); // Qt's A-Z and 0-9 codes are the ASCII (and VK) codes
     else if (qtKey >= Qt::Key_F1 && qtKey <= Qt::Key_F24)
-        key = QStringLiteral("F%1").arg(qtKey - Qt::Key_F1 + 1);
+        hotkey.vk = unsigned(VK_F1 + qtKey - Qt::Key_F1);
     else if (qtKey == Qt::Key_Space)
-        key = QStringLiteral("Space");
+        hotkey.vk = VK_SPACE;
     else
         return std::nullopt;
 
     if (!(mods & (Qt::ControlModifier | Qt::AltModifier)))
         return std::nullopt;
-    QString combo;
     if (mods & Qt::ControlModifier)
-        combo += QStringLiteral("Ctrl+");
+        hotkey.modifiers |= MOD_CONTROL;
     if (mods & Qt::AltModifier)
-        combo += QStringLiteral("Alt+");
+        hotkey.modifiers |= MOD_ALT;
     if (mods & Qt::ShiftModifier)
-        combo += QStringLiteral("Shift+");
-    return combo + key;
+        hotkey.modifiers |= MOD_SHIFT;
+    return formatHotkey(hotkey);
 }
