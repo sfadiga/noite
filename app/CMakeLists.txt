@@ -40,6 +40,7 @@ add_library(noite-app STATIC
     src/setup/SetupTexts.h src/setup/SetupTexts.cpp
     src/setup/HotkeyField.h src/setup/HotkeyField.cpp
     src/setup/BackupFolderField.h src/setup/BackupFolderField.cpp
+    src/setup/SettingsApplier.h src/setup/SettingsApplier.cpp
 )
 target_include_directories(noite-app PUBLIC src)
 target_link_libraries(noite-app PUBLIC noite-core Qt6::Widgets user32 wtsapi32 dbghelp)
@@ -87,6 +88,7 @@ qt_add_executable(app-tests
     tests/tst_setup_texts.cpp
     tests/tst_hotkey_field.cpp tests/fake_hotkeys.h
     tests/tst_backup_folder_field.cpp
+    tests/tst_settings_applier.cpp
     tests/tst_seed.cpp bench/Seed.h bench/Seed.cpp
 )
 # Reuses core's test registry and helpers.
