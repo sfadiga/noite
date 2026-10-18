@@ -49,4 +49,8 @@ QString currentLogPath();
 using FatalHook = void (*)(const char* message);
 void setFatalHook(FatalHook hook);
 
+// For the crash handler only: takes the log mutex if it is free and never releases it, so no
+// other thread writes noite.log while a crash report is appended. Never blocks; false if held.
+bool tryLockForCrash();
+
 } // namespace applog

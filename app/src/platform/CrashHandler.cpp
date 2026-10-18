@@ -23,6 +23,8 @@ constexpr DWORD kCodeFatal = 0xE0000001; // terminate, abort, qFatal
 constexpr DWORD kCodeCrt = 0xE0000002;   // pure call, invalid parameter
 constexpr int kMaxFrames = 64;
 constexpr int kPathChars = 1024;
+constexpr int kLockTries = 50; // 1 ms apart
+constexpr ULONG kStackReserve = 64 * 1024; // left for the report after a stack overflow
 
 // Prepared by install(); the crash path only reads them. Empty when the path did not fit.
 wchar_t g_logPath[kPathChars];
@@ -159,6 +161,11 @@ const char* describe(DWORD code)
 // The CRASH line and the stack go to the log first, so they survive a dump that fails or hangs.
 void writeReport(EXCEPTION_POINTERS* info, const char* reason)
 {
+    // applog's QFile writes at its own cached offset, so another thread logging now would overwrite
+    // the report: hold the log mutex for good (the process ends). Waits a little, never blocks; a
+    // holder that never lets go (this thread crashing inside the log) only costs the wait.
+    for (int i = 0; i < kLockTries && !applog::tryLockForCrash(); ++i)
+        Sleep(1);
     const HANDLE log = CreateFileW(g_logPath, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                    nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     SYSTEMTIME now;
@@ -167,13 +174,13 @@ void writeReport(EXCEPTION_POINTERS* info, const char* reason)
     putPrefix(line, now);
     line.put("CRASH ");
     line.hex(info->ExceptionRecord->ExceptionCode);
+    line.put(" at ");
+    putAddress(line, reinterpret_cast<DWORD64>(info->ExceptionRecord->ExceptionAddress));
     if (reason) {
         line.put(" (");
         line.put(reason);
         line.put(')');
     }
-    line.put(" at ");
-    putAddress(line, reinterpret_cast<DWORD64>(info->ExceptionRecord->ExceptionAddress));
     writeLine(log, line);
 
     CONTEXT context = *info->ContextRecord; // StackWalk64 advances its copy
@@ -183,8 +190,10 @@ void writeReport(EXCEPTION_POINTERS* info, const char* reason)
     frame.AddrStack = {context.Rsp, 0, AddrModeFlat};
     for (int i = 0; i < kMaxFrames; ++i) {
         if (!StackWalk64(IMAGE_FILE_MACHINE_AMD64, GetCurrentProcess(), GetCurrentThread(), &frame, &context, nullptr,
-                         functionTable, moduleBase, nullptr)
-            || frame.AddrPC.Offset == 0)
+                         functionTable, moduleBase, nullptr))
+            break;
+        // Only the first frame may be at 0 (a call through a null pointer); the walk goes on from it.
+        if (frame.AddrPC.Offset == 0 && i > 0)
             break;
         line.put("  ");
         putAddress(line, frame.AddrPC.Offset);
@@ -315,6 +324,7 @@ QString formatFrame(const QString& module, quint64 offset)
 
 void pruneDumps(const QString& logsDir, int keep)
 {
+    keep = qMax(keep, 0);
     const QDir dir(logsDir);
     const QStringList dumps = dir.entryList({"crash-*.dmp"}, QDir::Files, QDir::Name);
     for (qsizetype i = 0; i < dumps.size() - keep; ++i)
@@ -334,12 +344,17 @@ void install(const QString& logsDir)
     // Nothing may open a window: the report replaces Windows Error Reporting and the CRT's boxes.
     SetErrorMode(GetErrorMode() | SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    _set_error_mode(_OUT_TO_STDERR); // a failed C assert() prints instead of opening a box
 #ifdef _DEBUG
     // The debug CRT's assert and error reports are message boxes; the debugger gets them instead,
     // and the failed check then goes on to the invalid parameter handler.
     _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_DEBUG);
     _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_DEBUG);
 #endif
+
+    // The filter runs on the overflowed stack; this thread (the main one) keeps room for it.
+    ULONG reserve = kStackReserve;
+    SetThreadStackGuarantee(&reserve);
 
     SetUnhandledExceptionFilter(onException);
     std::set_terminate(onTerminate);

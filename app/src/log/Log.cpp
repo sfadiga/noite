@@ -207,4 +207,9 @@ void setFatalHook(FatalHook hook)
     s.fatalHook = hook;
 }
 
+bool tryLockForCrash()
+{
+    return state().mutex.tryLock();
+}
+
 } // namespace applog
