@@ -79,7 +79,16 @@ private:
     void updateAutostart(bool enabled);
     void startJobs();
 
+    // Closes the log (after "noite quit") once every member below is gone, the store included.
+    // applog's install/uninstall have a single owner: Apps may only overlap if the later one
+    // never gets the data folder lock (it then never opens the log), as in tests.
+    struct LogSession {
+        bool open = false;
+        ~LogSession();
+    };
+
     AppOptions options_;
+    LogSession log_;
     std::unique_ptr<noite::Store> store_;
     std::unique_ptr<NativeHost> host_;
     std::unique_ptr<StoreAttachments> attachments_;
@@ -99,5 +108,5 @@ private:
     std::unique_ptr<JobScheduler> jobs_;
     QAction* backupAction_ = nullptr;
     std::function<std::optional<QString>()> askFolder_;
-    bool logInstalled_ = false; // this App opened the log, so it closes it
+
 };

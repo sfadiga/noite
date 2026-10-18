@@ -53,11 +53,14 @@ App::~App()
     }
     if (controller_)
         controller_->flush();
-    if (logInstalled_) {
-        qInfo() << "noite quit";
-        store_.reset();
-        applog::uninstall();
-    }
+}
+
+App::LogSession::~LogSession()
+{
+    if (!open)
+        return;
+    qInfo() << "noite quit";
+    applog::uninstall();
 }
 
 std::optional<int> App::start()
@@ -78,7 +81,7 @@ std::optional<int> App::start()
     // The log only opens once the folder lock is ours: a second instance that just activates
     // the first must never write into its log.
     applog::install(dir->logsDir());
-    logInstalled_ = true;
+    log_.open = true;
     if (options_.crashHandler)
         crash::install(dir->logsDir());
     qInfo().noquote() << QString::fromUtf8("noite started · data %1 · Qt %2 · Windows %3")
@@ -174,6 +177,8 @@ void App::startJobs()
     connect(jobs_.get(), &JobScheduler::toast, this, [this](const QString& title, const QString& text) {
         if (tray_)
             tray_->showMessage(title, text);
+        else
+            qInfo().noquote() << "toast:" << text; // no tray: the log is the only trace
         emit toastShown(title, text);
     });
 
@@ -202,6 +207,10 @@ void App::backUpNow()
         }
     } catch (const std::exception& error) {
         qWarning() << "backup folder setting:" << error.what();
+        const QString text = tr("Backup failed: %1").arg(QString::fromUtf8(error.what()));
+        if (tray_)
+            tray_->showMessage(QStringLiteral("noite"), text);
+        emit toastShown(QStringLiteral("noite"), text);
         return;
     }
     jobs_->backUpNow(); // a folder that is gone is reported by its failure toast
