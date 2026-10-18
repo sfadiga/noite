@@ -109,6 +109,9 @@ std::optional<int> App::start()
     autostartAction_ = new QAction(tr("Start with Windows"), this);
     autostartAction_->setCheckable(true);
     autostartAction_->setChecked(settings.startWithWindows);
+    // Only the portable folder's own data manages Start with Windows: a run on another
+    // folder (--data, e.g. a test folder) never re-points or removes the real entry.
+    autostartAction_->setEnabled(autostart_ && !options_.dataFromCommandLine);
     connect(autostartAction_, &QAction::toggled, this, [this](bool enabled) {
         try {
             noite::Settings s = store_->settings();
@@ -138,8 +141,8 @@ std::optional<int> App::start()
 
 void App::updateAutostart(bool enabled)
 {
-    if (!autostart_)
-        return; // not managed (tests)
+    if (!autostart_ || options_.dataFromCommandLine)
+        return; // not managed: no registry given (tests), or another data folder
     const QString exeDir = QCoreApplication::applicationDirPath();
     const QString command = autostartCommand(QCoreApplication::applicationFilePath(), dataRoot_, exeDir + "/data");
     if (!applyAutostart(*autostart_, enabled, command))
@@ -157,6 +160,8 @@ void App::showReview()
             showBoard();
         });
         review_->start();
+    } else if (!review_->isEditing()) {
+        review_->start(); // a window left open (since yesterday, say) gets today's queue
     }
     review_->show();
     review_->raise();

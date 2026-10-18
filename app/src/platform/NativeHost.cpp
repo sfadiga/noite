@@ -79,6 +79,10 @@ NativeHost::NativeHost(const QString& instanceKey, QObject* parent)
         // Lock/unlock arrive as WM_WTSSESSION_CHANGE (the morning review waits for an unlock).
         if (!WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION))
             qWarning() << "native host: no session notifications:" << GetLastError();
+        // Message-only windows get no broadcasts; resume must be asked for explicitly.
+        resumeNotify_ = reinterpret_cast<quintptr>(RegisterSuspendResumeNotification(hwnd, DEVICE_NOTIFY_WINDOW_HANDLE));
+        if (!resumeNotify_)
+            qWarning() << "native host: no resume notifications:" << GetLastError();
     }
     hwnd_ = reinterpret_cast<quintptr>(hwnd);
 }
@@ -90,6 +94,8 @@ NativeHost::~NativeHost()
         UnregisterHotKey(hwnd, id);
     if (hwnd) {
         WTSUnRegisterSessionNotification(hwnd);
+        if (resumeNotify_)
+            UnregisterSuspendResumeNotification(reinterpret_cast<HPOWERNOTIFY>(resumeNotify_));
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
         DestroyWindow(hwnd);
     }

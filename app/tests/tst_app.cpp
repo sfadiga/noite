@@ -81,6 +81,26 @@ private slots:
         QCOMPARE(parseArgs({"noite.exe", "--data", "D:/x"}).dataDir, QString("D:/x"));
         QCOMPARE(parseArgs({"noite.exe", "--data=D:/y"}).dataDir, QString("D:/y"));
         QVERIFY(parseArgs({"noite.exe"}).dataDir.isEmpty());
+        QVERIFY(parseArgs({"noite.exe", "--data", "D:/x"}).dataFromCommandLine);
+        QVERIFY(!parseArgs({"noite.exe"}).dataFromCommandLine);
+    }
+
+    // Final review I1 (the author's call): a run on another folder (--data, e.g. a test
+    // folder) never touches Start with Windows; only the portable folder's own data does.
+    void autostartLeftAloneUnderDataFlag()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9");
+        std::optional<QString> value = QString("\"C:\\real\\noite.exe\"");
+        AppOptions options{root};
+        options.dataFromCommandLine = true;
+        App app(options, nullptr, std::make_unique<FakeAutostart>(&value));
+        QVERIFY(!app.start());
+        QCOMPARE(value, std::optional<QString>("\"C:\\real\\noite.exe\""));
+        QVERIFY(!app.autostartAction()->isEnabled());
+        app.autostartAction()->trigger();
+        QCOMPARE(value, std::optional<QString>("\"C:\\real\\noite.exe\""));
     }
 
     void defaultDataDirIsNextToExe()
@@ -233,15 +253,18 @@ private slots:
         App app(AppOptions{tmp.filePath("data")});
         QVERIFY(!app.start());
         QCoreApplication::processEvents(); // the startup check (nothing due: marked silently)
-        const std::optional<QDate> before = app.store()->lastReviewDay();
         app.store()->setLastReviewDay(QDate(2000, 1, 1));
         app.showReview();
         ReviewWindow* first = app.reviewWindow();
         QVERIFY(first && first->isVisible());
+        QCOMPARE(first->total(), 0);
+        // Final review I6: an open window gets a fresh queue (e.g. left open since yesterday).
+        const Scratch late = app.store()->createScratch(test::html({"late"}));
+        app.store()->setDue(late.id, QDate::currentDate().addDays(-1));
         app.showReview();
         QCOMPARE(app.reviewWindow(), first);
+        QCOMPARE(first->total(), 1);
         QCOMPARE(app.store()->lastReviewDay(), std::optional<QDate>(QDate(2000, 1, 1)));
-        Q_UNUSED(before);
     }
 
     void autostartAppliedOnStart()

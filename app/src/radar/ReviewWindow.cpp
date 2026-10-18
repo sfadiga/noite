@@ -9,6 +9,7 @@
 #include <noite/store.h>
 
 #include <QCalendarWidget>
+#include <QCloseEvent>
 #include <QDebug>
 #include <QDialog>
 #include <QGuiApplication>
@@ -35,6 +36,7 @@ ReviewWindow::ReviewWindow(noite::Store& store, AttachmentStore& attachments, st
     , controller_(store, *editor_, today)
 {
     setWindowTitle(tr("Morning review"));
+    setFocusPolicy(Qt::StrongFocus);
     resize(640, 520);
     editor_->setAttachmentStore(&attachments);
     editor_->setReadOnly(true);
@@ -74,6 +76,8 @@ ReviewWindow::ReviewWindow(noite::Store& store, AttachmentStore& attachments, st
     auto* end = new QWidget(pages_);
     auto* openBoard = new QPushButton(tr("Open board"), end);
     auto* closeButton = new QPushButton(tr("Close"), end);
+    openBoard->setFocusPolicy(Qt::NoFocus); // the window keeps the keys (Left, Ctrl+Z, Esc)
+    closeButton->setFocusPolicy(Qt::NoFocus);
     connect(openBoard, &QPushButton::clicked, this, &ReviewWindow::requestOpenBoard);
     connect(closeButton, &QPushButton::clicked, this, &QWidget::close);
     summary_->setAlignment(Qt::AlignCenter);
@@ -175,6 +179,7 @@ void ReviewWindow::showCurrent()
     if (isFinished()) {
         summary_->setText(queue_.isEmpty() ? tr("Nothing to review") : summaryText());
         pages_->setCurrentIndex(1);
+        setFocus(Qt::OtherFocusReason); // Left, Ctrl+Z and Esc keep working here
         return;
     }
     pages_->setCurrentIndex(0);
@@ -195,7 +200,19 @@ void ReviewWindow::decide(Kind kind, const std::function<std::function<void()>(c
     if (!id || editing_)
         return;
     try {
-        std::function<void()> undo = action(*id);
+        const noite::Scratch note = store_.get(*id); // NotFound: gone elsewhere
+        if (note.status != noite::Status::Active) {  // finished or trashed elsewhere: not a dead end
+            showStatus(tr("That note is no longer on the radar"));
+            ++pos_;
+            showCurrent();
+            return;
+        }
+        std::function<void()> inverse = action(*id);
+        // Every decision touches modified_at; undo puts the stale clock back too.
+        auto undo = [this, id = *id, before = note.modifiedAt, inverse = std::move(inverse)] {
+            inverse();
+            store_.setModifiedAt(id, before);
+        };
         outcomes_[pos_] = Outcome{kind, std::move(undo)};
         decided_.removeAll(pos_);
         decided_.append(pos_);
@@ -227,9 +244,8 @@ void ReviewWindow::done()
 void ReviewWindow::keep()
 {
     decide(Kind::Kept, [this](const noite::ScratchId& id) -> std::function<void()> {
-        const qint64 before = store_.get(id).modifiedAt;
         store_.touch(id);
-        return [this, id, before] { store_.setModifiedAt(id, before); };
+        return [] {}; // decide() restores modified_at
     });
 }
 
@@ -309,6 +325,27 @@ void ReviewWindow::requestOpenBoard()
     emit openBoardRequested();
 }
 
+void ReviewWindow::closeEvent(QCloseEvent* event)
+{
+    finishEditing(); // saves what the autosave hadn't yet
+    QWidget::closeEvent(event);
+}
+
+// Keys that reach the window itself: on the summary page, where the note isn't focused.
+void ReviewWindow::keyPressEvent(QKeyEvent* event)
+{
+    const auto mods = event->modifiers() & ~Qt::KeypadModifier;
+    if (event->key() == Qt::Key_Escape && !editing_) {
+        close();
+    } else if (event->key() == Qt::Key_Left && mods == Qt::NoModifier) {
+        back();
+    } else if (event->key() == Qt::Key_Z && mods == Qt::ControlModifier) {
+        undo();
+    } else {
+        QWidget::keyPressEvent(event);
+    }
+}
+
 void ReviewWindow::pickSnoozeDate()
 {
     QDialog dialog(this);
@@ -384,5 +421,10 @@ bool ReviewWindow::eventFilter(QObject* watched, QEvent* event)
     }
     if (key->key() == Qt::Key_Escape)
         return QWidget::eventFilter(watched, event); // escapePressed closes
-    return mods == Qt::NoModifier && !key->text().isEmpty(); // a read-only note eats stray letters
+    // Read-only means read-only: no stray letters, no Ctrl+Shift+V paste. Copying, selecting
+    // and moving around still work.
+    const bool allowed = (mods == Qt::ControlModifier && (key->key() == Qt::Key_C || key->key() == Qt::Key_A))
+        || key->key() == Qt::Key_Up || key->key() == Qt::Key_Down || key->key() == Qt::Key_PageUp
+        || key->key() == Qt::Key_PageDown || key->key() == Qt::Key_Home || key->key() == Qt::Key_End;
+    return !allowed;
 }

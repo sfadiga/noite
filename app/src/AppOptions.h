@@ -6,6 +6,7 @@
 // Command-line options. An empty dataDir means "<exe dir>/data" (D4).
 struct AppOptions {
     QString dataDir;
+    bool dataFromCommandLine = false; // --data was given (not the portable folder's own data)
 };
 
 // Reads "--data <dir>" or "--data=<dir>" (used by tests and development).

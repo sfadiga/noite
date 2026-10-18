@@ -54,4 +54,4 @@ Record pass/fail and a one-line note for any failure. Every failure becomes an a
 | R1 | Review on unlock | Have an overdue note; lock the PC (`Win+L`) after the day start and unlock | The morning review opens in front, once; locking again doesn't reopen it today |
 | R2 | Review keys | `D`, `K`, `Del`, `S` then `1`, `←`, `Ctrl+Z`, `Enter` to edit then `Esc` | Each acts and moves on; `←`/`Ctrl+Z` undo; the summary counts are right; edits are saved |
 | R3 | Finish later | `Esc` halfway through | The review closes; untouched notes are unchanged; it doesn't come back until tomorrow (tray → Morning review still opens it) |
-| R4 | Start with Windows | Tray → untick, check `HKCU\…\CurrentVersion\Run` (no `noite`); tick again; reboot | The value matches the exe path (with `--data` only for a non-default folder); after the reboot noite is in the tray |
+| R4 | Start with Windows | Tray → untick, check `HKCU\…\CurrentVersion\Run` (no `noite`); tick again; reboot; also start a copy with `--data C:\temp\x` | The value is the quoted exe path; after the reboot noite is in the tray; the `--data` run leaves the value alone and greys out the tray item |

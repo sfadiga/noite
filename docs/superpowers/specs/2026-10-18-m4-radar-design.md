@@ -66,6 +66,7 @@ check():
 
 - **When on:** every launch writes `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, value `noite` = `"<exe path>"`, plus ` --data "<dir>"` when the data folder isn't the default. Rewriting it each launch keeps it right if the portable folder moves (D4).
 - **When off:** the value is deleted.
+- **Only for the portable folder's own data** (final review; the author's call): a run with `--data` (a test folder, say) never writes or deletes the value, and the tray item is disabled. Relative or drive-root `--data` paths therefore never reach the registry.
 - **Implementation:** behind `AutostartRegistry` (`bool set(QString command)`, `bool remove()`, `std::optional<QString> current()`). The app uses a `QSettings(NativeFormat)` implementation; tests use a fake.
 - **Tray:** a checkable "Start with Windows" item. It saves `Settings::startWithWindows` and applies it at once.
 

@@ -8,6 +8,8 @@
 #include <noite/content.h>
 #include <noite/store.h>
 
+#include <QClipboard>
+#include <QGuiApplication>
 #include <QSignalSpy>
 #include <QTest>
 
@@ -150,15 +152,78 @@ private slots:
         QCOMPARE(r.text(r.overdue), QString("pay rent more"));
     }
 
-    // A store refusal (here: the note was trashed elsewhere, so it can't be marked done)
-    // leaves the note current and says why.
-    void storeErrorKeepsNote()
+    // Final review I4 (and Review Focus 2): a note trashed or finished elsewhere is skipped,
+    // never a dead end.
+    void noteNoLongerActiveIsSkipped()
     {
         Review r;
         r.store().trash(r.overdue);
         r.key(Qt::Key_D);
-        QVERIFY(!r.window->statusText().isEmpty());
-        QCOMPARE(r.window->position(), 1);
+        QCOMPARE(r.window->statusText(), QString("That note is no longer on the radar"));
+        QCOMPARE(r.window->position(), 2);
+        r.store().markDone(r.dueToday);
+        r.key(Qt::Key_K);
+        QCOMPARE(r.window->position(), 3);
+    }
+
+    // Final review I3: undoing Done, Trash or Snooze puts the stale clock back too.
+    void undoRestoresStaleClock()
+    {
+        Review r;
+        r.key(Qt::Key_K);
+        r.key(Qt::Key_K); // now on staleA
+        const qint64 before = r.store().get(r.staleA).modifiedAt;
+        r.f->clock->advance(60'000);
+        r.key(Qt::Key_D);
+        r.key(Qt::Key_Left);
+        QCOMPARE(r.store().get(r.staleA).modifiedAt, before);
+        r.key(Qt::Key_Delete);
+        r.key(Qt::Key_Left);
+        QCOMPARE(r.store().get(r.staleA).modifiedAt, before);
+        r.key(Qt::Key_S);
+        r.key(Qt::Key_1);
+        r.key(Qt::Key_Left);
+        QCOMPARE(r.store().get(r.staleA).modifiedAt, before);
+        QCOMPARE(r.store().get(r.staleA).due, std::optional<QDate>());
+    }
+
+    // Final review I7.
+    void closingMidEditSaves()
+    {
+        Review r;
+        r.key(Qt::Key_Return);
+        r.window->editor()->moveCursor(QTextCursor::End);
+        QTest::keyClicks(r.window->editor(), " now");
+        r.window->close(); // inside the autosave debounce
+        QCOMPARE(r.text(r.overdue), QString("pay rent now"));
+    }
+
+    // Final review I8: the summary page still takes Left, Ctrl+Z and Esc.
+    void summaryKeysStillWork()
+    {
+        Review r;
+        for (int i = 0; i < 4; ++i)
+            r.key(Qt::Key_K);
+        QVERIFY(r.window->isFinished());
+        QTest::keyClick(r.window.get(), Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(r.window->position(), 4);
+        r.key(Qt::Key_K);
+        QTest::keyClick(r.window.get(), Qt::Key_Left);
+        QCOMPARE(r.window->position(), 4);
+        r.key(Qt::Key_K);
+        QTest::keyClick(r.window.get(), Qt::Key_Escape);
+        QVERIFY(!r.window->isVisible());
+    }
+
+    // Final review minor 1, regraded: a read-only note takes no paste.
+    void readOnlyNoteTakesNoPaste()
+    {
+        Review r;
+        QGuiApplication::clipboard()->setText("zzz");
+        r.key(Qt::Key_V, Qt::ControlModifier | Qt::ShiftModifier);
+        r.key(Qt::Key_V, Qt::ControlModifier);
+        QCOMPARE(r.window->editor()->toPlainText(), QString("pay rent"));
+        QCOMPARE(r.text(r.overdue), QString("pay rent"));
     }
 
     // Review Focus 2.

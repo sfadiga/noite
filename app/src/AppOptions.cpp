@@ -7,10 +7,13 @@ AppOptions parseArgs(const QStringList& args)
     AppOptions options;
     for (qsizetype i = 1; i < args.size(); ++i) {
         const QString& arg = args[i];
-        if (arg == "--data" && i + 1 < args.size())
+        if (arg == "--data" && i + 1 < args.size()) {
             options.dataDir = args[++i];
-        else if (arg.startsWith("--data="))
+            options.dataFromCommandLine = true;
+        } else if (arg.startsWith("--data=")) {
             options.dataDir = arg.mid(7);
+            options.dataFromCommandLine = true;
+        }
     }
     return options;
 }

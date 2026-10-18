@@ -45,4 +45,5 @@ private:
     quintptr hwnd_ = 0;
     QSet<int> hotkeys_;
     bool unlocked_ = true;
+    quintptr resumeNotify_ = 0; // HPOWERNOTIFY
 };
