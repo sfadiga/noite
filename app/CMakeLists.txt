@@ -28,9 +28,10 @@ add_library(noite-app STATIC
     src/Theme.h src/Theme.cpp
     src/DragMover.h src/DragMover.cpp
     src/radar/ReviewScheduler.h src/radar/ReviewScheduler.cpp
+    src/platform/Autostart.h src/platform/Autostart.cpp
 )
 target_include_directories(noite-app PUBLIC src)
-target_link_libraries(noite-app PUBLIC noite-core Qt6::Widgets user32)
+target_link_libraries(noite-app PUBLIC noite-core Qt6::Widgets user32 wtsapi32)
 target_compile_definitions(noite-app PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
 
 qt_add_executable(noite WIN32 src/main.cpp)
@@ -63,6 +64,7 @@ qt_add_executable(app-tests
     tests/tst_chip_bar.cpp
     tests/tst_tag_field.cpp
     tests/tst_review_scheduler.cpp
+    tests/tst_autostart.cpp
     tests/tst_seed.cpp bench/Seed.h bench/Seed.cpp
 )
 # Reuses core's test registry and helpers.

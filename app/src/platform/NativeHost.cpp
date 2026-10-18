@@ -1,10 +1,12 @@
 #include "platform/NativeHost.h"
 
 #include <QCryptographicHash>
+#include <QDebug>
 #include <QDir>
 #include <QFileInfo>
 
 #include <windows.h>
+#include <wtsapi32.h>
 
 namespace {
 
@@ -35,6 +37,20 @@ struct NativeHostAccess {
             emit host->activationRequested();
             return 0;
         }
+        if (host && message == WM_WTSSESSION_CHANGE) {
+            if (wParam == WTS_SESSION_LOCK) {
+                host->unlocked_ = false;
+                emit host->sessionLocked();
+            } else if (wParam == WTS_SESSION_UNLOCK) {
+                host->unlocked_ = true;
+                emit host->sessionUnlocked();
+            }
+            return 0;
+        }
+        if (host && message == WM_POWERBROADCAST && wParam == PBT_APMRESUMEAUTOMATIC) {
+            emit host->resumed();
+            return TRUE;
+        }
         return DefWindowProcW(hwnd, message, wParam, lParam);
     }
 };
@@ -58,8 +74,12 @@ NativeHost::NativeHost(const QString& instanceKey, QObject* parent)
 
     const std::wstring title = windowTitle(instanceKey);
     HWND hwnd = CreateWindowExW(0, kWindowClass, title.c_str(), 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, instance, nullptr);
-    if (hwnd)
+    if (hwnd) {
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
+        // Lock/unlock arrive as WM_WTSSESSION_CHANGE (the morning review waits for an unlock).
+        if (!WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION))
+            qWarning() << "native host: no session notifications:" << GetLastError();
+    }
     hwnd_ = reinterpret_cast<quintptr>(hwnd);
 }
 
@@ -69,6 +89,7 @@ NativeHost::~NativeHost()
     for (int id : std::as_const(hotkeys_))
         UnregisterHotKey(hwnd, id);
     if (hwnd) {
+        WTSUnRegisterSessionNotification(hwnd);
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
         DestroyWindow(hwnd);
     }
