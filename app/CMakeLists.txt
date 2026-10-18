@@ -34,6 +34,7 @@ add_library(noite-app STATIC
     src/platform/CrashHandler.h src/platform/CrashHandler.cpp
     src/platform/DriveFolder.h src/platform/DriveFolder.cpp
     src/jobs/BackupFolderDialog.h src/jobs/BackupFolderDialog.cpp
+    src/jobs/BackupRunner.h src/jobs/BackupRunner.cpp
 )
 target_include_directories(noite-app PUBLIC src)
 target_link_libraries(noite-app PUBLIC noite-core Qt6::Widgets user32 wtsapi32 dbghelp)
@@ -75,6 +76,7 @@ qt_add_executable(app-tests
     tests/tst_crash.cpp
     tests/tst_drive_folder.cpp
     tests/tst_backup_folder_dialog.cpp
+    tests/tst_backup_runner.cpp
     tests/tst_seed.cpp bench/Seed.h bench/Seed.cpp
 )
 # Reuses core's test registry and helpers.
