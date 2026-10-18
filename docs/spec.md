@@ -142,7 +142,7 @@ Attachments are shared, not duplicated (safe because of D22).
 | Clipboard content | Result |
 |---|---|
 | Image | inline image (stored as attachment) |
-| Copied file(s) | stored in the database, shown as a clickable file chip; max 25 MB each. Ctrl+click writes it to `%TEMP%\noite\` under the chip's name and opens it (programs open their folder instead); that folder is emptied at startup |
+| Copied file(s) | stored in the database, shown as a clickable file chip; max 25 MB each. Ctrl+click writes it to `%TEMP%\noite-open\` under the chip's name, always with the stored file type, and opens it (programs and untyped files open their folder instead); those copies are removed at startup |
 | Rich HTML (browser, Word) | converted to the editor's supported formatting |
 | Spreadsheet cells | simple table |
 | Anything else | plain text |

@@ -56,7 +56,7 @@ private slots:
     // A5: files opened from chips last one session.
     void startupClearsOpenFolder()
     {
-        const QString stale = defaultOpenFolder() + "/abc123/x.txt";
+        const QString stale = defaultOpenFolder() + "/abcdef012345/x.txt";
         QVERIFY(QDir().mkpath(QFileInfo(stale).absolutePath()));
         QFile file(stale);
         QVERIFY(file.open(QIODevice::WriteOnly));

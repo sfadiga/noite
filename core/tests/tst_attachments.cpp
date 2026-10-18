@@ -5,6 +5,8 @@
 
 #include <noite/content.h>
 
+#include <QFileInfo>
+
 using namespace noite;
 using namespace noite::test;
 
@@ -156,6 +158,9 @@ private slots:
         QCOMPARE(rowCount(*f->store), 0);
         QVERIFY2(before - dbBytes(*f->store) >= 3 * 1024 * 1024,
                  qPrintable(QString("before %1 after %2").arg(before).arg(dbBytes(*f->store))));
+        // Final review I3: on disk too, the WAL included, while the store is still open.
+        const qint64 onDisk = QFileInfo(f->root() + "/noite.db").size() + QFileInfo(f->root() + "/noite.db-wal").size();
+        QVERIFY2(onDisk < 2 * 1024 * 1024, qPrintable(QString("db+wal %1 bytes").arg(onDisk)));
     }
 
     // Pasted while autosave is still pending, so nothing references it yet.

@@ -200,7 +200,13 @@ QUrl NoteEdit::openTargetFor(const QString& attachmentId, const QString& name) c
         return {};
     }
     const QString dir = openFolder_ + "/" + attachmentId.left(12);
-    const QString path = dir + "/" + safeFileName(name, attachmentId);
+    // The file's type always comes from the stored id (1-8 alphanumerics, or "bin"), never
+    // from the chip's free text: "run.exe" over PDF bytes is written as "run.exe.pdf".
+    const QString ext = QFileInfo(attachmentId).suffix().toLower();
+    QString fileName = safeFileName(name, attachmentId);
+    if (QFileInfo(fileName).suffix().toLower() != ext)
+        fileName += "." + ext;
+    const QString path = dir + "/" + fileName;
     if (QFileInfo(path).size() != bytes.size() || !QFileInfo::exists(path)) {
         QSaveFile file(path);
         if (!QDir().mkpath(dir) || !file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size()
@@ -209,12 +215,12 @@ QUrl NoteEdit::openTargetFor(const QString& attachmentId, const QString& name) c
             return {};
         }
     }
-    // Both the stored id's extension and the written name's count: the chip's text is just
-    // text, so "report.pdf" bytes shown as "run.exe" must not be launched either.
+    // Programs and scripts would run, and an untyped (.bin) file may be anything: show the
+    // folder instead.
     static const QStringList runnable = {"exe", "bat", "cmd", "com", "msi", "ps1", "vbs", "vbe", "js", "jse", "wsf",
-                                         "scr", "lnk", "url", "hta", "jar", "reg", "cpl", "msc", "pif", "appref-ms"};
-    if (runnable.contains(QFileInfo(attachmentId).suffix().toLower())
-        || runnable.contains(QFileInfo(path).suffix().toLower()))
+                                         "scr", "lnk", "url", "hta", "jar", "reg", "cpl", "msc", "pif", "appref-ms",
+                                         "bin"};
+    if (runnable.contains(ext))
         return QUrl::fromLocalFile(dir);
     return QUrl::fromLocalFile(path);
 }

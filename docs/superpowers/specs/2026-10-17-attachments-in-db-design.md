@@ -14,7 +14,7 @@ Everything a note holds lives in one file, `data\noite.db`. Pasted images and co
 | A2 | Attachment ids stay `<sha256>.<ext>` | Note HTML (`noite-att:<id>`) is unchanged; no content rewrite, no FTS rebuild. |
 | A3 | A snapshot is one self-contained `.db`; keep 14 | Simplest restore: any snapshot opens on its own. Cost: every snapshot carries every attachment (100 MB of images × 14 ≈ 1.4 GB of backups). |
 | A4 | No import of existing attachment files; v2 only adds the table | Unreleased software with no attachments in use (the author's call: not worth the effort). |
-| A5 | Ctrl+click on a file chip writes the file to `%TEMP%\noite\` and opens it there; the folder is emptied on startup | The OS needs a real file. Edits to the opened copy are not saved back (they weren't before either: stored bytes are content-addressed). |
+| A5 | Ctrl+click on a file chip writes the file to `%TEMP%\noite-open\` and opens it there; noite's folders there are removed on startup | The OS needs a real file. Edits to the opened copy are not saved back (they weren't before either: stored bytes are content-addressed). |
 
 ## Storage
 
@@ -64,10 +64,10 @@ On failure, startup fails with `MigrationFailed`, as for any migration today.
 - `AttachmentStore::pathFor(id)` becomes `bytes(id) → QByteArray`; `StoreAttachments` forwards to `attachmentBytes`. The test fake follows suit.
 - `NoteEdit::loadResource` and `CardDelegate::thumbnail` use `QImage::fromData(bytes)`. Errors give a null image, as a missing file does today.
 - `NoteEdit::openTargetFor(id, name)`:
-  - writes the bytes to `%TEMP%\noite\<first 12 hex of id>\<name>`, where `name` is the chip's text with characters invalid in Windows file names replaced by `_`; if that leaves nothing, the id is the name;
+  - writes the bytes to `%TEMP%\noite-open\<first 12 hex of id>\<name>`, where `name` is the chip's text with characters invalid in Windows file names replaced by `_`; if that leaves nothing, the id is the name. The id's extension is appended unless the name already ends with it, so the chip's text never picks the file type (final review);
   - an existing file with identical size is reused;
   - runnable extensions (the existing list) still return the containing folder.
-- `App` empties `%TEMP%\noite\` at startup, best-effort: files still open elsewhere stay.
+- `App` removes the 12-hex folders in `%TEMP%\noite-open\` at startup, best-effort: files still open elsewhere stay, and nothing else there is touched (the temp path can fall back to the profile folder).
 
 ## Backup (noite-core `backup`)
 
@@ -96,7 +96,7 @@ Core:
 App:
 - The editor loads a pasted image from the database after a reopen; a card thumbnail is drawn from the bytes.
 - `openTargetFor` writes the temp file under the chip name (sanitised), reuses it, and returns the folder for runnable types.
-- Startup empties `%TEMP%\noite`.
+- Startup removes only noite's folders from `%TEMP%\noite-open`.
 
 ## Spec edits (spec.md)
 

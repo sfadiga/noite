@@ -1,22 +1,22 @@
 #include "editor/OpenFolder.h"
 
 #include <QDir>
+#include <QRegularExpression>
 
 QString defaultOpenFolder()
 {
-    return QDir::tempPath() + "/noite";
+    return QDir::tempPath() + "/noite-open";
 }
 
 void clearOpenFolder(const QString& dir)
 {
-    QDir folder(dir);
-    if (!folder.exists())
-        return;
-    for (const QFileInfo& entry : folder.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden)) {
-        if (entry.isDir())
+    // Only the per-attachment folders noite writes (the id's first 12 hex digits): the open
+    // folder isn't guaranteed to be a private temp folder.
+    static const QRegularExpression chipFolder("^[0-9a-f]{12}$");
+    const QDir folder(dir);
+    for (const QFileInfo& entry : folder.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden)) {
+        if (chipFolder.match(entry.fileName()).hasMatch() && !entry.isSymLink())
             QDir(entry.absoluteFilePath()).removeRecursively();
-        else
-            QFile::remove(entry.absoluteFilePath());
     }
 }
 

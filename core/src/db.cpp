@@ -126,7 +126,10 @@ Db Db::open(const QString& path, bool readOnly)
         throwDb(raw, "open " + path);
     sqlite3_busy_timeout(raw, 5000);
     if (!readOnly)
-        db.exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;");
+        // journal_size_limit: a pasted 25 MB attachment would otherwise leave the WAL that big
+        // for the life of the process (it is reset, not truncated, after checkpoints).
+        db.exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON; "
+                "PRAGMA journal_size_limit=4194304;");
     return db;
 }
 

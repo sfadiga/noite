@@ -95,8 +95,10 @@ PurgeReport Store::purgeTrash(int retentionDays)
     report.attachmentsDeleted = int(sweep.size());
     tx.commit();
 
+    // Give the space back on disk now: the vacuum's moved pages land in the WAL, so
+    // checkpoint and truncate it too.
     if (!sweep.isEmpty())
-        db().exec("PRAGMA incremental_vacuum");
+        db().exec("PRAGMA incremental_vacuum; PRAGMA wal_checkpoint(TRUNCATE);");
     return report;
 }
 

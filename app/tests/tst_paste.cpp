@@ -227,8 +227,44 @@ private slots:
         const QFileInfo opened(edit->openTargetFor(pdf, "Report Q3.pdf").toLocalFile());
         QCOMPARE(opened.fileName(), QString("Report Q3.pdf"));
         QCOMPARE(opened.absolutePath(), tmp.path() + "/" + pdf.left(12));
-        // A chip renamed to a program name opens its folder, never the file.
-        QVERIFY(QFileInfo(edit->openTargetFor(pdf, "run.exe").toLocalFile()).isDir());
+    }
+
+    // Final review I2: the launched file's type comes from what was stored, never from the
+    // chip's free text; untyped (.bin) attachments open their folder.
+    void chipKeepsTheStoredExtension()
+    {
+        QTemporaryDir tmp;
+        edit->setOpenFolder(tmp.path());
+        const QString pdf = store->put("pdf bytes", "pdf");
+        QCOMPARE(QFileInfo(edit->openTargetFor(pdf, "report").toLocalFile()).fileName(), QString("report.pdf"));
+        QCOMPARE(QFileInfo(edit->openTargetFor(pdf, "run.exe").toLocalFile()).fileName(), QString("run.exe.pdf"));
+        QCOMPARE(QFileInfo(edit->openTargetFor(pdf, "x.settingcontent-ms").toLocalFile()).fileName(),
+                 QString("x.settingcontent-ms.pdf"));
+        QCOMPARE(QFileInfo(edit->openTargetFor(pdf, "Report.PDF").toLocalFile()).fileName(), QString("Report.PDF"));
+        const QString bin = store->put("untyped", "bin");
+        QVERIFY(QFileInfo(edit->openTargetFor(bin, "x.library-ms").toLocalFile()).isDir());
+    }
+
+    // Final review I1: startup only removes the folders noite wrote, whatever the open
+    // folder turns out to be (GetTempPath can fall back to the profile or Windows folder).
+    void clearOpenFolderOnlyRemovesChipFolders()
+    {
+        QVERIFY(defaultOpenFolder().endsWith("/noite-open"));
+        QTemporaryDir tmp;
+        QVERIFY(QDir().mkpath(tmp.filePath("abcdef012345")));
+        QFile chip(tmp.filePath("abcdef012345/r.pdf"));
+        QVERIFY(chip.open(QIODevice::WriteOnly));
+        chip.close();
+        QVERIFY(QDir().mkpath(tmp.filePath("data/logs")));
+        QVERIFY(QDir().mkpath(tmp.filePath("ABCDEF999999"))); // not ours: ids are lowercase hex
+        QFile other(tmp.filePath("notes.txt"));
+        QVERIFY(other.open(QIODevice::WriteOnly));
+        other.close();
+        clearOpenFolder(tmp.path());
+        QVERIFY(!QFileInfo::exists(tmp.filePath("abcdef012345")));
+        QVERIFY(QFileInfo::exists(tmp.filePath("data/logs")));
+        QVERIFY(QFileInfo::exists(tmp.filePath("ABCDEF999999")));
+        QVERIFY(QFileInfo::exists(tmp.filePath("notes.txt")));
     }
 
     // Review Focus 2.
