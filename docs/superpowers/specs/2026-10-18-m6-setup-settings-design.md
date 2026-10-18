@@ -53,7 +53,8 @@ Finishing applies the settings with `setupCompleted = true`. With `viaHotkey`, t
   - Free: "✓ Ctrl+Alt+J".
   - Taken: "Ctrl+Alt+N is used by another program. Try another."
   - Same as the other field: "That's already the board hotkey." / "That's already the new-note hotkey."
-- **Nothing is registered by the field itself.** Registration happens when the wizard finishes or Settings saves.
+- **Nothing is registered by the field itself.** The wizard registers the capture hotkey when it leaves page 2, and the board hotkey when it leaves page 3 (D24: "registered immediately"), so page 8 can detect the press. Settings registers both on Save, all-or-nothing, so swapping the two combinations works.
+- **While the wizard is open,** a capture-hotkey press does something only on page 8; board-hotkey presses are ignored.
 
 ### Settings window
 
