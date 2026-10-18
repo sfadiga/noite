@@ -89,7 +89,7 @@ Result run(const Job& job, const std::atomic<bool>* cancel)
     const QString final = prepareSnapshotPath(job.installId, job.dest, job.nowMs);
     const QString tmp = final + ".tmp";
     if (cancel && cancel->load())
-        throw Error(ErrorCode::Cancelled, "backup cancelled");
+        throw Error(ErrorCode::Cancelled, "backup cancelled before start");
     QFile::remove(tmp);
     try {
         detail::Db db = detail::Db::open(job.dbPath, true);
@@ -99,7 +99,7 @@ Result run(const Job& job, const std::atomic<bool>* cancel)
             detail::vacuumInto(db, tmp);
         } catch (const Error&) {
             if (sqlite3_errcode(db.handle()) == SQLITE_INTERRUPT)
-                throw Error(ErrorCode::Cancelled, "backup cancelled");
+                throw Error(ErrorCode::Cancelled, "backup cancelled during snapshot");
             throw;
         }
     } catch (...) {
@@ -113,7 +113,7 @@ Result run(const Job& job, const std::atomic<bool>* cancel)
 
     if (cancel && cancel->load()) { // a quit should not wait for the integrity check
         QFile::remove(final);
-        throw Error(ErrorCode::Cancelled, "backup cancelled");
+        throw Error(ErrorCode::Cancelled, "backup cancelled before verify");
     }
     try {
         verify(final);

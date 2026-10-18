@@ -7,7 +7,6 @@
 
 #include <QDir>
 #include <QFile>
-#include <QRandomGenerator>
 
 #include <atomic>
 #include <thread>
@@ -130,11 +129,9 @@ private slots:
     void cancelDuringVacuumStopsIt()
     {
         auto f = fixture();
-        for (int i = 0; i < 20; ++i) {
-            QByteArray bytes(1'000'000, 0);
-            QRandomGenerator::global()->fillRange(reinterpret_cast<quint32*>(bytes.data()), bytes.size() / 4);
-            f->store->putAttachment(bytes, "bin");
-        }
+        // The handler counts VDBE ops, not bytes, so the copy needs many rows (not big blobs).
+        f->store->db().exec("CREATE TABLE junk(a, b); WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n "
+                            "WHERE i < 400000) INSERT INTO junk SELECT i, hex(randomblob(16)) FROM n");
         QTemporaryDir dest;
         const QString snaps = snapshotsDir(*f->store, dest.path());
         std::atomic<bool> cancel{false};
@@ -142,8 +139,7 @@ private slots:
         // Flips the flag once the copy is under way (its .tmp exists and has data).
         std::thread watcher([&] {
             while (!done) {
-                if (const QStringList tmps = entries(snaps, "*.tmp");
-                    !tmps.isEmpty() && QFileInfo(snaps + "/" + tmps.first()).size() > 0) {
+                if (!entries(snaps, "*.tmp").isEmpty()) {
                     cancel = true;
                     return;
                 }
@@ -151,14 +147,18 @@ private slots:
             }
         });
         bool cancelled = false;
+        QString message;
         try {
             backup::run(jobFor(*f->store, dest.path()), &cancel);
         } catch (const Error& e) {
             cancelled = e.code() == ErrorCode::Cancelled;
+            message = QString::fromUtf8(e.what());
         }
         done = true;
         watcher.join();
         QVERIFY(cancelled);
+        // The interrupt itself, not the later checks.
+        QVERIFY2(message.contains("during snapshot"), qPrintable(message));
         QVERIFY(entries(snaps, "*.db").isEmpty());
         QVERIFY(entries(snaps, "*.tmp").isEmpty());
     }
