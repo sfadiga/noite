@@ -5,6 +5,7 @@
 #include <noite/model.h>
 
 #include <QDate>
+#include <QSet>
 #include <QTimer>
 #include <QWidget>
 
@@ -37,6 +38,8 @@ public:
     struct ViewState {
         noite::Tab tab = noite::Tab::Today;
         QString search;
+        noite::BoardFilter filter;           // active chips
+        QSet<noite::BundleId> expanded;      // open stacks
     };
 
     BoardWindow(noite::Store& store, AttachmentStore& attachments, std::function<QDate()> today,
@@ -63,7 +66,14 @@ public:
     void openSelected();
     void openNew();
 
+    // Bundles (M3b): click/Enter on a stack toggles it; menus rename it or take a card out.
+    void toggleSelectedStack();
+    void renameSelectedBundle(const QString& name);
+    void removeSelectedFromBundle();
+
+    // Empty while a stack is selected.
     std::optional<noite::ScratchId> selectedId() const;
+    std::optional<noite::BundleId> selectedStack() const;
     UndoLog& undoLog() { return undo_; }
     NoteOverlay& overlay() const { return *overlay_; }
     BoardModel& model() const { return *model_; }
@@ -94,6 +104,13 @@ private:
     void pickDue();
     void onModelReset();
     void layoutEmptyLabel();
+    void escapeOnGrid();
+    void selectStack(const noite::BundleId& bundle);
+    QString bundleName(const noite::BundleId& bundle) const; // null if the bundle no longer exists
+    // Undo of leaving a bundle: back into `bundle`, or, if it emptied and was deleted, a new
+    // bundle around `partner` (a former member) named `name`.
+    void rejoin(const noite::ScratchId& id, const std::optional<noite::BundleId>& bundle, const QString& name,
+                const std::optional<noite::ScratchId>& partner);
 
     noite::Store& store_;
     UndoLog undo_;

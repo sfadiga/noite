@@ -13,6 +13,7 @@
 #include <QDebug>
 #include <QDialog>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -99,7 +100,7 @@ BoardWindow::~BoardWindow() = default;
 
 BoardWindow::ViewState BoardWindow::viewState() const
 {
-    return {model_->tab(), search_->text()};
+    return {model_->tab(), search_->text(), model_->filter(), model_->expanded()};
 }
 
 void BoardWindow::restoreViewState(const ViewState& state)
@@ -113,6 +114,8 @@ void BoardWindow::restoreViewState(const ViewState& state)
     searchDelay_.stop();
     model_->setTab(state.tab);
     model_->setSearch(state.search);
+    model_->setExpandedSet(state.expanded);
+    model_->setFilter(state.filter);
 }
 
 void BoardWindow::setTab(noite::Tab tab)
@@ -136,9 +139,17 @@ QString BoardWindow::statusText() const
 std::optional<ScratchId> BoardWindow::selectedId() const
 {
     const QModelIndex current = grid_->currentIndex();
-    if (!current.isValid())
+    if (!current.isValid() || model_->isStack(current.row()))
         return std::nullopt;
     return model_->summary(current.row()).id;
+}
+
+std::optional<noite::BundleId> BoardWindow::selectedStack() const
+{
+    const QModelIndex current = grid_->currentIndex();
+    if (!current.isValid() || !model_->isStack(current.row()))
+        return std::nullopt;
+    return model_->row(current.row()).bundleId;
 }
 
 void BoardWindow::openSelected()
@@ -146,8 +157,91 @@ void BoardWindow::openSelected()
     const QModelIndex current = grid_->currentIndex();
     if (!current.isValid())
         return;
+    if (model_->isStack(current.row())) {
+        toggleSelectedStack();
+        return;
+    }
     const ScratchSummary& s = model_->summary(current.row());
     overlay_->openNote(s.id, s.status == noite::Status::Trashed);
+}
+
+void BoardWindow::toggleSelectedStack()
+{
+    const std::optional<noite::BundleId> bundle = selectedStack();
+    if (!bundle)
+        return;
+    model_->setExpanded(*bundle, !model_->isExpanded(*bundle));
+    selectStack(*bundle);
+}
+
+void BoardWindow::selectStack(const noite::BundleId& bundle)
+{
+    if (const int row = model_->rowOfStack(bundle); row >= 0)
+        grid_->setCurrentIndex(model_->index(row));
+}
+
+QString BoardWindow::bundleName(const noite::BundleId& bundle) const
+{
+    for (const noite::Bundle& b : store_.listBundles())
+        if (b.id == bundle)
+            return b.name;
+    return {};
+}
+
+void BoardWindow::renameSelectedBundle(const QString& name)
+{
+    const std::optional<noite::BundleId> bundle = selectedStack();
+    if (!bundle)
+        return;
+    if (name.trimmed().isEmpty()) {
+        showStatus(tr("A bundle needs a name"));
+        return;
+    }
+    try {
+        store_.renameBundle(*bundle, name.trimmed());
+        showStatus(tr("Renamed to %1").arg(name.trimmed()));
+    } catch (const std::exception& error) {
+        qWarning() << "board:" << error.what();
+        showStatus(QString::fromUtf8(error.what()));
+    }
+    model_->reload();
+    selectStack(*bundle);
+}
+
+void BoardWindow::rejoin(const ScratchId& id, const std::optional<noite::BundleId>& bundle, const QString& name,
+                         const std::optional<ScratchId>& partner)
+{
+    if (!bundle) {
+        store_.moveToBundle(id, std::nullopt);
+        return;
+    }
+    if (!bundleName(*bundle).isNull() || !partner) {
+        if (!bundleName(*bundle).isNull())
+            store_.moveToBundle(id, bundle);
+        return; // emptied and deleted, with no former member left to rebuild it around
+    }
+    const noite::BundleId rebuilt = store_.bundleTogether(*partner, id);
+    store_.renameBundle(rebuilt, name);
+}
+
+void BoardWindow::removeSelectedFromBundle()
+{
+    act([this](const ScratchSummary& s) -> std::optional<ScratchId> {
+        if (!s.bundleId)
+            return std::nullopt;
+        const ScratchId id = s.id;
+        const noite::BundleId bundle = *s.bundleId;
+        const QString name = bundleName(bundle);
+        std::optional<ScratchId> partner;
+        if (const int stackRow = model_->rowOfStack(bundle); stackRow >= 0)
+            for (const ScratchSummary& m : model_->row(stackRow).members)
+                if (m.id != id && !partner)
+                    partner = m.id;
+        store_.moveToBundle(id, std::nullopt);
+        pushUndo(tr("Remove from bundle"), id, [this, id, bundle, name, partner] { rejoin(id, bundle, name, partner); });
+        showStatus(tr("Removed from %1").arg(name));
+        return std::nullopt;
+    });
 }
 
 void BoardWindow::openNew()
@@ -164,6 +258,15 @@ void BoardWindow::closeEvent(QCloseEvent* event)
 
 void BoardWindow::reload()
 {
+    if (const std::optional<noite::BundleId> stack = selectedStack()) {
+        const int row = grid_->currentIndex().row();
+        model_->reload();
+        if (model_->rowOfStack(*stack) >= 0)
+            selectStack(*stack);
+        else if (model_->rowCount() > 0)
+            grid_->setCurrentIndex(model_->index(std::min(row, model_->rowCount() - 1)));
+        return;
+    }
     reloadSelecting(selectedId(), grid_->currentIndex().row());
 }
 
@@ -171,6 +274,13 @@ void BoardWindow::reloadSelecting(const std::optional<ScratchId>& id, int fallba
 {
     model_->reload();
     int row = id ? model_->rowOf(*id) : -1;
+    if (row < 0 && id) { // a member of a collapsed bundle: select its stack
+        for (int r = 0; r < model_->rowCount() && row < 0; ++r)
+            if (model_->isStack(r))
+                for (const ScratchSummary& m : model_->row(r).members)
+                    if (m.id == *id)
+                        row = r;
+    }
     if (row < 0)
         row = std::min(fallbackRow, model_->rowCount() - 1);
     if (row >= 0)
@@ -182,6 +292,10 @@ void BoardWindow::act(const std::function<std::optional<ScratchId>(const Scratch
     const QModelIndex current = grid_->currentIndex();
     if (!current.isValid())
         return;
+    if (model_->isStack(current.row())) { // C7: nothing acts on many notes at once
+        showStatus(tr("Open the bundle to act on its notes"));
+        return;
+    }
     const int row = current.row();
     const ScratchSummary summary = model_->summary(row); // the action reloads the model
     std::optional<ScratchId> select;
@@ -302,10 +416,25 @@ void BoardWindow::showContextMenu(const QPoint& pos)
     if (!index.isValid())
         return;
     grid_->setCurrentIndex(index);
+    QMenu menu(this);
+    if (model_->isStack(index.row())) {
+        const BoardRow& stack = model_->row(index.row());
+        menu.addAction(stack.expanded ? tr("Collapse") : tr("Expand"), this, &BoardWindow::toggleSelectedStack);
+        menu.addAction(tr("Rename bundle…"), this, [this, name = stack.bundleName] {
+            bool ok = false;
+            const QString renamed = QInputDialog::getText(this, tr("Rename bundle"), tr("Name"), QLineEdit::Normal,
+                                                          name, &ok);
+            if (ok)
+                renameSelectedBundle(renamed);
+        });
+        menu.exec(grid_->viewport()->mapToGlobal(pos));
+        return;
+    }
     const ScratchSummary s = model_->summary(index.row());
 
-    QMenu menu(this);
     menu.addAction(tr("Open"), this, &BoardWindow::openSelected);
+    if (s.bundleId)
+        menu.addAction(tr("Remove from bundle"), this, &BoardWindow::removeSelectedFromBundle);
     menu.addSeparator();
     if (s.status != noite::Status::Trashed)
         menu.addAction(s.status == noite::Status::Done ? tr("Reopen") : tr("Done"), this, &BoardWindow::markDoneOrReopen);
@@ -368,6 +497,22 @@ void BoardWindow::onModelReset()
     }
 }
 
+// Esc on the grid: collapse the bundle of a selected member, else close.
+void BoardWindow::escapeOnGrid()
+{
+    const QModelIndex current = grid_->currentIndex();
+    if (current.isValid() && !model_->isStack(current.row())) {
+        const BoardRow& row = model_->row(current.row());
+        if (row.inBundle && row.card.bundleId) {
+            const noite::BundleId bundle = *row.card.bundleId;
+            model_->setExpanded(bundle, false);
+            selectStack(bundle);
+            return;
+        }
+    }
+    close();
+}
+
 void BoardWindow::layoutEmptyLabel()
 {
     empty_->setGeometry(grid_->viewport()->rect());
@@ -393,7 +538,7 @@ bool BoardWindow::eventFilter(QObject* watched, QEvent* event)
             searchDelay_.stop();
             model_->setSearch({});
         } else {
-            close();
+            escapeOnGrid();
         }
         return true;
     }
@@ -404,7 +549,7 @@ bool BoardWindow::eventFilter(QObject* watched, QEvent* event)
             return true;
         }
         if (key->key() == Qt::Key_Escape) {
-            close();
+            escapeOnGrid();
             return true;
         }
         const auto mods = key->modifiers() & ~Qt::KeypadModifier;

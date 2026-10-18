@@ -3,6 +3,7 @@
 
 #include "board/BoardModel.h"
 #include "board/BoardWindow.h"
+#include "board/NoteOverlay.h"
 #include "board/UndoLog.h"
 #include "editor/AttachmentStore.h"
 
@@ -44,6 +45,19 @@ struct Board {
     void select(const ScratchId& id) { grid()->setCurrentIndex(window->model().index(window->model().rowOf(id))); }
     ScratchId current() { return window->model().summary(grid()->currentIndex().row()).id; }
     qsizetype count(Tab tab) { return store().list(tab, test::today()).size(); }
+    // Bundles B and C as "bravo" (alpha, [bravo], on the board).
+    BundleId bundleBC()
+    {
+        const BundleId bundle = store().bundleTogether(b, c);
+        window->reload();
+        return bundle;
+    }
+    void selectStack(const BundleId& bundle)
+    {
+        grid()->setCurrentIndex(window->model().index(window->model().rowOfStack(bundle)));
+    }
+    bool stackSelected() { return window->model().isStack(grid()->currentIndex().row()); }
+    std::optional<BundleId> bundleOf(const ScratchId& id) { return store().get(id).bundleId; }
 };
 
 } // namespace
@@ -194,6 +208,99 @@ private slots:
         log.push("x", [] {});
         log.clear();
         QCOMPARE(log.size(), 0);
+    }
+
+    // ---- M3b: stacks ----
+
+    void clickOrEnterTogglesStack()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.selectStack(bundle);
+        QTest::keyClick(t.grid(), Qt::Key_Return);
+        QVERIFY(t.window->model().isExpanded(bundle));
+        QVERIFY(t.stackSelected()); // the stack keeps the selection
+        QTest::keyClick(t.grid(), Qt::Key_Return);
+        QVERIFY(!t.window->model().isExpanded(bundle));
+        const QRect rect = t.grid()->visualRect(t.window->model().index(t.window->model().rowOfStack(bundle)));
+        QTest::mouseClick(t.grid()->viewport(), Qt::LeftButton, {}, rect.center());
+        QVERIFY(t.window->model().isExpanded(bundle));
+        QVERIFY(!t.window->overlay().isOpen()); // a stack opens in place, not in the editor
+    }
+
+    void escOnMemberCollapsesToStack()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.window->model().setExpanded(bundle, true);
+        t.select(t.c);
+        QTest::keyClick(t.grid(), Qt::Key_Escape);
+        QVERIFY(!t.window->model().isExpanded(bundle));
+        QVERIFY(t.stackSelected());
+        QVERIFY(t.window->isVisible());
+    }
+
+    void viewStateKeepsFilterAndExpanded()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.store().setColor(t.b, Color::Red);
+        BoardFilter red;
+        red.colors = {Color::Red};
+        t.window->model().setExpanded(bundle, true);
+        t.window->model().setFilter(red);
+        const BoardWindow::ViewState state = t.window->viewState();
+        QCOMPARE(state.filter, red);
+        QCOMPARE(state.expanded, QSet<BundleId>({bundle}));
+
+        BoardWindow other(t.store(), t.attachments, [] { return test::today(); });
+        other.restoreViewState(state);
+        QCOMPARE(other.model().filter(), red);
+        QVERIFY(other.model().isExpanded(bundle));
+    }
+
+    // C7.
+    void stackIgnoresCardActions()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.selectStack(bundle);
+        QTest::keyClick(t.grid(), Qt::Key_D);
+        QTest::keyClick(t.grid(), Qt::Key_Delete);
+        QTest::keyClick(t.grid(), Qt::Key_C, Qt::ControlModifier | Qt::ShiftModifier);
+        QCOMPARE(t.store().get(t.b).status, Status::Active);
+        QCOMPARE(t.store().get(t.c).status, Status::Active);
+        QCOMPARE(t.store().get(t.b).color, std::optional<Color>());
+        QCOMPARE(t.window->statusText(), QString("Open the bundle to act on its notes"));
+        QCOMPARE(t.window->undoLog().size(), 0);
+    }
+
+    void renameBundle()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.selectStack(bundle);
+        t.window->renameSelectedBundle("Trip");
+        QCOMPARE(t.store().listBundles().first().name, QString("Trip"));
+        QCOMPARE(t.window->model().row(t.window->model().rowOfStack(bundle)).bundleName, QString("Trip"));
+        QVERIFY(t.stackSelected());
+        t.window->renameSelectedBundle("   ");
+        QCOMPARE(t.store().listBundles().first().name, QString("Trip"));
+        QVERIFY(!t.window->statusText().isEmpty());
+    }
+
+    void removeFromBundleMenuAction()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.window->model().setExpanded(bundle, true);
+        t.select(t.c);
+        t.window->removeSelectedFromBundle();
+        QCOMPARE(t.bundleOf(t.c), std::optional<BundleId>());
+        QCOMPARE(t.window->statusText(), QString("Removed from bravo"));
+        QCOMPARE(t.current(), t.c);
+        QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(t.bundleOf(t.c), std::optional<BundleId>(bundle));
     }
 };
 
