@@ -62,8 +62,21 @@ CaptureWindow::CaptureWindow(CaptureController& controller, NoteEdit* editor)
 
 void CaptureWindow::summon()
 {
-    if (!isVisible()) {
+    if (!isVisible())
         controller_.begin();
+    showAndFocus();
+}
+
+void CaptureWindow::summonNote(const noite::ScratchId& id)
+{
+    if (!isVisible())
+        controller_.open(id);
+    showAndFocus();
+}
+
+void CaptureWindow::showAndFocus()
+{
+    if (!isVisible()) {
         open_ = true;
         const QRect area = foregroundScreen()->availableGeometry();
         move(area.center() - QPoint(width() / 2, height() / 2));
