@@ -14,7 +14,7 @@ class Db;
 }
 
 inline constexpr qint64 kMaxAttachmentBytes = 26'214'400; // 25 MiB (D21)
-inline constexpr qint64 kAttachmentGraceMs = kDayMs;      // purge never deletes younger files
+inline constexpr qint64 kAttachmentGraceMs = kDayMs;      // purge never deletes rows touched more recently
 
 // All of noite's persistent state. One Store per data dir; the only writer (D14).
 // Non-const methods write; failures throw noite::Error.
@@ -67,14 +67,15 @@ public:
     QList<ScratchSummary> list(Tab tab, QDate today, const QString& search = {}) const;
     ReviewCounts reviewCounts(QDate today) const;
 
-    // ---- Attachments and purge (store_attachments.cpp, D13, D22) ----
+    // ---- Attachments and purge (store_attachments.cpp, D13, D22; in the database, A1) ----
     // Stores bytes under <sha256>.<ext> (ext lowercased; "bin" unless 1-8 alphanumerics),
-    // deduplicated; returns the attachment id. Throws AttachmentTooLarge.
+    // deduplicated; a re-put restarts its grace period. Returns the id. Throws AttachmentTooLarge.
     QString putAttachment(const QByteArray& bytes, const QString& ext);
-    // Throws InvalidAttachmentId unless `id` is a well-formed attachment id.
-    QString attachmentPath(const QString& id) const;
+    // The stored bytes. Throws InvalidAttachmentId for a malformed id, AttachmentMissing if absent.
+    QByteArray attachmentBytes(const QString& id) const;
     // Deletes trash older than `retentionDays` (1-365), bundles left empty, and attachment
-    // files no remaining scratch references, sparing files younger than kAttachmentGraceMs.
+    // rows no remaining scratch references (sparing ones touched within kAttachmentGraceMs),
+    // then returns the freed pages to the filesystem.
     PurgeReport purgeTrash(int retentionDays);
 
     // ---- Settings (settings.cpp, D24, D25) ----

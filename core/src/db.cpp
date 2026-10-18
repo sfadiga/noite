@@ -48,6 +48,13 @@ Stmt& Stmt::bind(int index, const QString& value)
     return *this;
 }
 
+Stmt& Stmt::bindBlob(int index, const QByteArray& value)
+{
+    if (sqlite3_bind_blob64(stmt_, index, value.constData(), sqlite3_uint64(value.size()), SQLITE_TRANSIENT) != SQLITE_OK)
+        throwDb(db_, "bind");
+    return *this;
+}
+
 Stmt& Stmt::bind(int index, std::nullopt_t)
 {
     if (sqlite3_bind_null(stmt_, index) != SQLITE_OK)
@@ -80,6 +87,12 @@ QString Stmt::text(int column) const
 {
     const auto* data = reinterpret_cast<const char*>(sqlite3_column_text(stmt_, column));
     return QString::fromUtf8(data, sqlite3_column_bytes(stmt_, column));
+}
+
+QByteArray Stmt::blob(int column) const
+{
+    const auto* data = static_cast<const char*>(sqlite3_column_blob(stmt_, column));
+    return QByteArray(data, sqlite3_column_bytes(stmt_, column));
 }
 
 bool Stmt::isNull(int column) const

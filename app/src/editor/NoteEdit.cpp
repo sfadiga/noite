@@ -6,7 +6,10 @@
 #include <noite/error.h>
 #include <noite/store.h>
 
+#include <QDebug>
+#include <QDir>
 #include <QFileInfo>
+#include <QSaveFile>
 
 #include <QBuffer>
 #include <QClipboard>
@@ -189,10 +192,18 @@ QUrl NoteEdit::openTargetFor(const QString& attachmentId) const
 {
     if (!attachments_)
         return {};
-    QString path;
+    QByteArray bytes;
     try {
-        path = attachments_->pathFor(attachmentId);
-    } catch (const noite::Error&) {
+        bytes = attachments_->bytes(attachmentId);
+    } catch (const noite::Error& error) {
+        qWarning() << "open attachment:" << error.what();
+        return {};
+    }
+    const QString dir = openFolder_ + "/" + attachmentId.left(12);
+    const QString path = dir + "/" + attachmentId;
+    QSaveFile file(path);
+    if (!QDir().mkpath(dir) || !file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
+        qWarning() << "open attachment: cannot write" << path << file.errorString();
         return {};
     }
     static const QStringList runnable = {"exe", "bat", "cmd", "com", "msi", "ps1", "vbs", "vbe", "js", "jse", "wsf",
@@ -207,8 +218,9 @@ QVariant NoteEdit::loadResource(int type, const QUrl& name)
 {
     if (type == QTextDocument::ImageResource && name.scheme() == "noite-att" && attachments_) {
         try {
-            return QImage(attachments_->pathFor(name.path()));
-        } catch (const noite::Error&) {
+            return QImage::fromData(attachments_->bytes(name.path()));
+        } catch (const noite::Error& error) {
+            qWarning() << "image:" << error.what();
             return {};
         }
     }

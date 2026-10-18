@@ -3,6 +3,7 @@
 #include "editor/AttachmentStore.h"
 
 #include <QDate>
+#include <QDir>
 #include <QTextEdit>
 #include <QUrl>
 
@@ -21,9 +22,13 @@ public:
     // Pasted images and files go here; without a store they are not accepted.
     void setAttachmentStore(AttachmentStore* store) { attachments_ = store; }
 
-    // What Ctrl+click on a noite-att link opens: the file, or for programs and scripts
-    // (which would run) the folder that holds it.
+    // What Ctrl+click on a noite-att link opens. The bytes are written to
+    // <open folder>/<first 12 hex of the id>/<id> and that file is returned, or for programs
+    // and scripts (which would run) the folder that holds it. Empty if the bytes can't be
+    // read or written.
     QUrl openTargetFor(const QString& attachmentId) const;
+    // Where openTargetFor writes; defaults to %TEMP%\noite (A5).
+    void setOpenFolder(const QString& dir) { openFolder_ = dir; }
 
     // "Today" for @date tokens; injectable for tests. Defaults to QDate::currentDate().
     void setToday(std::function<QDate()> today);
@@ -61,4 +66,5 @@ private:
 
     MarkdownShortcuts* shortcuts_;
     AttachmentStore* attachments_ = nullptr;
+    QString openFolder_ = QDir::tempPath() + "/noite";
 };

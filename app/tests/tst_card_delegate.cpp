@@ -118,11 +118,7 @@ private slots:
         f->store->createScratch(test::html({"plain"}));
         const QString image = f->store->putAttachment(pngBytes(), "png");
         f->store->createScratch(test::htmlWithImage("with image", image));
-        QByteArray other = pngBytes();
-        other.append('x'); // a different hash, so a different file
-        const QString gone = f->store->putAttachment(other, "png");
-        f->store->createScratch(test::htmlWithImage("missing image", gone));
-        QVERIFY(QFile::remove(f->store->attachmentPath(gone)));
+        f->store->createScratch(test::htmlWithImage("missing image", test::fakeAttachmentId())); // never stored
         f->store->createScratch(test::html({QString(200, 'T')}));
         const ScratchId late = f->store->createScratch(test::html({"late"})).id;
         f->store->setDue(late, QDate(2026, 10, 1));

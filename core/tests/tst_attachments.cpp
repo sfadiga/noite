@@ -1,26 +1,46 @@
 #include "helpers.h"
 #include "registry.h"
 
-#include <noite/content.h>
+#include "db.h"
 
-#include <QDir>
-#include <QFile>
+#include <noite/content.h>
 
 using namespace noite;
 using namespace noite::test;
 
 namespace {
 
-QStringList files(const QString& dir)
+qint64 scalar(Store& store, const QString& sql, const QString& id = {})
 {
-    return QDir(dir).entryList(QDir::Files);
+    detail::Stmt s = store.db().prepare(sql);
+    if (!id.isEmpty())
+        s.bind(1, id);
+    s.step();
+    return s.int64(0);
 }
 
-void writeFile(const QString& path, const QByteArray& bytes)
+qint64 rowCount(Store& store)
 {
-    QFile f(path);
-    QVERIFY(f.open(QIODevice::WriteOnly));
-    f.write(bytes);
+    return scalar(store, "SELECT count(*) FROM attachments");
+}
+
+qint64 touchedAt(Store& store, const QString& id)
+{
+    return scalar(store, "SELECT touched_at FROM attachments WHERE id = ?", id);
+}
+
+// Ages a row, as if it was pasted at `ms`.
+void setTouchedAt(Store& store, const QString& id, qint64 ms)
+{
+    detail::Stmt s = store.db().prepare("UPDATE attachments SET touched_at = ? WHERE id = ?");
+    s.bind(1, ms);
+    s.bind(2, id);
+    s.step();
+}
+
+qint64 dbBytes(Store& store)
+{
+    return scalar(store, "PRAGMA page_count") * scalar(store, "PRAGMA page_size");
 }
 
 } // namespace
@@ -29,17 +49,20 @@ class AttachmentsTest : public QObject {
     Q_OBJECT
 
 private slots:
-    void putDedupesAndNamesByHash()
+    void putDedupsAndStampsTouchedAt()
     {
         auto f = fixture();
         const QString id = f->store->putAttachment("abc", "PNG");
         QCOMPARE(f->store->putAttachment("abc", "png"), id);
         QVERIFY(content::isValidAttachmentId(id));
         QVERIFY(id.endsWith(".png"));
-        QCOMPARE(files((f->store->dataDir().root() + "/attachments")), QStringList({id}));
-        QFile stored(f->store->attachmentPath(id));
-        QVERIFY(stored.open(QIODevice::ReadOnly));
-        QCOMPARE(stored.readAll(), QByteArray("abc"));
+        QCOMPARE(rowCount(*f->store), 1);
+        QCOMPARE(f->store->attachmentBytes(id), QByteArray("abc"));
+        QCOMPARE(touchedAt(*f->store, id), t0());
+        f->clock->advance(1000);
+        f->store->putAttachment("abc", "png");
+        QCOMPARE(touchedAt(*f->store, id), t0() + 1000);
+        QVERIFY(!QDir(f->root() + "/attachments").exists()); // nothing on disk
     }
 
     void badExtensionBecomesBin()
@@ -53,15 +76,15 @@ private slots:
     {
         auto f = fixture();
         NOITE_EXPECT_ERROR(ErrorCode::AttachmentTooLarge, f->store->putAttachment(QByteArray(kMaxAttachmentBytes + 1, '\0'), "bin"));
-        QVERIFY(files((f->store->dataDir().root() + "/attachments")).isEmpty());
+        QCOMPARE(rowCount(*f->store), 0);
     }
 
-    void attachmentPathRejectsTraversal()
+    void attachmentBytesErrors()
     {
         auto f = fixture();
         for (const QString& bad : {QString("../noite.db"), QString("..\\x"), QString("abc.png"), QString()})
-            NOITE_EXPECT_ERROR(ErrorCode::InvalidAttachmentId, f->store->attachmentPath(bad));
-        QCOMPARE(f->store->attachmentPath(fakeAttachmentId()), (f->store->dataDir().root() + "/attachments") + "/" + fakeAttachmentId());
+            NOITE_EXPECT_ERROR(ErrorCode::InvalidAttachmentId, f->store->attachmentBytes(bad));
+        NOITE_EXPECT_ERROR(ErrorCode::AttachmentMissing, f->store->attachmentBytes(fakeAttachmentId()));
     }
 
     void retentionBoundaries()
@@ -108,7 +131,7 @@ private slots:
     {
         auto f = fixture();
         const QString image = f->store->putAttachment("png-bytes", "png");
-        setMtime(f->store->attachmentPath(image), t0() - 2 * kDayMs);
+        setTouchedAt(*f->store, image, t0() - 2 * kDayMs);
         const QString original = f->store->createScratch(htmlWithImage("pic", image)).id;
         const QString clone = f->store->cloneScratch(original).id;
         f->store->trash(original);
@@ -117,57 +140,50 @@ private slots:
         const PurgeReport report = f->store->purgeTrash(30);
         QCOMPARE(report.scratchesDeleted, 1);
         QCOMPARE(report.attachmentsDeleted, 0);
-        QVERIFY(QFile::exists(f->store->attachmentPath(image)));
+        QCOMPARE(f->store->attachmentBytes(image), QByteArray("png-bytes"));
         QVERIFY(content::attachmentRefs(f->store->get(clone).html).contains(image));
     }
 
-    void unreferencedOldAttachmentDeleted()
+    // Review Focus 4: big blobs leave the file when they are purged.
+    void purgeSweepsRowsAfterGraceAndShrinksFile()
     {
         auto f = fixture();
-        const QString id = f->store->putAttachment("orphan", "png");
-        setMtime(f->store->attachmentPath(id), t0() - 2 * kDayMs);
+        const QString id = f->store->putAttachment(QByteArray(4 * 1024 * 1024, 'z'), "bin");
+        setTouchedAt(*f->store, id, t0() - 2 * kDayMs);
+        const qint64 before = dbBytes(*f->store);
+        QVERIFY(before > 4 * 1024 * 1024);
         QCOMPARE(f->store->purgeTrash(30).attachmentsDeleted, 1);
-        QVERIFY(!QFile::exists(f->store->attachmentPath(id)));
+        QCOMPARE(rowCount(*f->store), 0);
+        QVERIFY2(before - dbBytes(*f->store) >= 3 * 1024 * 1024,
+                 qPrintable(QString("before %1 after %2").arg(before).arg(dbBytes(*f->store))));
     }
 
-    // Review Focus 4: pasted while autosave is still pending, so nothing references it yet.
+    // Pasted while autosave is still pending, so nothing references it yet.
     void unreferencedFreshAttachmentSurvives()
     {
         auto f = fixture();
         const QString id = f->store->putAttachment("just pasted", "png");
-        setMtime(f->store->attachmentPath(id), t0() - 3'600'000);
+        setTouchedAt(*f->store, id, t0() - 3'600'000);
         QCOMPARE(f->store->purgeTrash(30).attachmentsDeleted, 0);
-        QVERIFY(QFile::exists(f->store->attachmentPath(id)));
+        QCOMPARE(f->store->attachmentBytes(id), QByteArray("just pasted"));
     }
 
-    // Review I1: pasting bytes that already exist must restart the grace period, or the
-    // purge can delete the file while the new note's autosave is still pending.
+    // Review Focus 3: pasting bytes that already exist must restart the grace period, or the
+    // purge can delete the row while the new note's autosave is still pending.
     void rePastedOldAttachmentSurvivesPurge()
     {
         auto f = fixture();
         const QString image = f->store->putAttachment("same bytes", "png");
         const QString original = f->store->createScratch(htmlWithImage("a", image)).id;
-        setMtime(f->store->attachmentPath(image), t0() - 40 * kDayMs);
+        setTouchedAt(*f->store, image, t0() - 40 * kDayMs);
         f->store->trash(original);
         f->clock->set(t0() + 35 * kDayMs);
 
         QCOMPARE(f->store->putAttachment("same bytes", "png"), image); // pasted again, not saved yet
         const PurgeReport report = f->store->purgeTrash(30);
         QCOMPARE(report.scratchesDeleted, 1);
-        QVERIFY(QFile::exists(f->store->attachmentPath(image)));
-    }
-
-    void staleTempFilesCleaned()
-    {
-        auto f = fixture();
-        const QString dir = (f->store->dataDir().root() + "/attachments");
-        QVERIFY(QDir().mkpath(dir));
-        writeFile(dir + "/stale.tmp", "x");
-        setMtime(dir + "/stale.tmp", t0() - 2 * kDayMs);
-        writeFile(dir + "/fresh.tmp", "y");
-        setMtime(dir + "/fresh.tmp", t0() - 3'600'000);
-        f->store->purgeTrash(30);
-        QCOMPARE(files(dir), QStringList({"fresh.tmp"}));
+        QCOMPARE(report.attachmentsDeleted, 0);
+        QCOMPARE(f->store->attachmentBytes(image), QByteArray("same bytes"));
     }
 
     void purgeDeletesBundleLeftEmpty()

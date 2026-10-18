@@ -3,7 +3,10 @@
 #include "board/BoardModel.h"
 #include "editor/AttachmentStore.h"
 
+#include <noite/error.h>
+
 #include <QDateTime>
+#include <QDebug>
 #include <QLocale>
 #include <QPainter>
 #include <QPainterPath>
@@ -92,7 +95,12 @@ QPixmap CardDelegate::thumbnail(const QString& attachmentId) const
     if (QPixmap* cached = thumbnails_.object(attachmentId))
         return *cached;
     QPixmap pixmap;
-    QImage image(attachments_->pathFor(attachmentId));
+    QImage image;
+    try {
+        image = QImage::fromData(attachments_->bytes(attachmentId));
+    } catch (const noite::Error& error) {
+        qWarning() << "thumbnail:" << error.what();
+    }
     if (!image.isNull())
         pixmap = QPixmap::fromImage(image.scaled(kThumb, kThumb, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     thumbnails_.insert(attachmentId, new QPixmap(pixmap)); // a failed load is cached as null

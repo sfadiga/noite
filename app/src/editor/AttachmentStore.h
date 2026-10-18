@@ -13,7 +13,8 @@ struct AttachmentStore {
     virtual ~AttachmentStore() = default;
     // Returns the attachment id (<sha256>.<ext>). May throw noite::Error.
     virtual QString put(const QByteArray& bytes, const QString& ext) = 0;
-    virtual QString pathFor(const QString& id) const = 0;
+    // The stored bytes. Throws noite::Error (e.g. AttachmentMissing).
+    virtual QByteArray bytes(const QString& id) const = 0;
 };
 
 class StoreAttachments final : public AttachmentStore {
@@ -23,7 +24,7 @@ public:
     {
     }
     QString put(const QByteArray& bytes, const QString& ext) override;
-    QString pathFor(const QString& id) const override;
+    QByteArray bytes(const QString& id) const override;
 
 private:
     noite::Store& store_;

@@ -1,6 +1,8 @@
 #include "helpers.h"
 #include "registry.h"
 
+#include "db.h"
+
 #include <noite/backup.h>
 
 #include <QDir>
@@ -14,7 +16,6 @@ namespace {
 // Each installation backs up into its own subfolder: <dest>/noite-backups/<installId>/.
 QString installDir(const Store& store, const QString& dest) { return dest + "/noite-backups/" + store.installId(); }
 QString snapshotsDir(const Store& store, const QString& dest) { return installDir(store, dest) + "/snapshots"; }
-QString backupAttachmentsDir(const Store& store, const QString& dest) { return installDir(store, dest) + "/attachments"; }
 
 QStringList entries(const QString& dir, const QString& pattern = "*")
 {
@@ -36,19 +37,28 @@ class BackupTest : public QObject {
     Q_OBJECT
 
 private slots:
-    void snapshotLayoutAndContents()
+    // A3: a snapshot is one self-contained .db; restoring it needs nothing else.
+    void snapshotIsSelfContained()
     {
         auto f = fixture();
         const QString image = f->store->putAttachment("png", "png");
-        f->store->createScratch(htmlWithImage("pic", image));
+        const Scratch original = f->store->createScratch(htmlWithImage("pic", image));
         QTemporaryDir dest;
 
         const QString path = backup::snapshot(*f->store, dest.path());
         QCOMPARE(path, snapshotsDir(*f->store, dest.path()) + "/noite-20261015T080000000Z.db");
         QVERIFY(QFile::exists(path));
-        QCOMPARE(entries(backupAttachmentsDir(*f->store, dest.path())), QStringList({image}));
+        QVERIFY(!QDir(installDir(*f->store, dest.path()) + "/attachments").exists());
         QVERIFY(entries(snapshotsDir(*f->store, dest.path()), "*.tmp").isEmpty());
         backup::verify(path);
+
+        QTemporaryDir restored;
+        const QString root = restored.filePath("data");
+        QVERIFY(QDir().mkpath(root));
+        QVERIFY(QFile::copy(path, root + "/noite.db"));
+        auto store = Store::open(DataDir::acquire(root), f->clock);
+        QCOMPARE(store->get(original.id).html, original.html);
+        QCOMPARE(store->attachmentBytes(image), QByteArray("png"));
     }
 
     void missingDestIsAnError()
@@ -60,33 +70,17 @@ private slots:
         QVERIFY(!QFileInfo::exists(gone));
     }
 
-    void snapshotRestoresIntoFreshStore()
-    {
-        auto f = fixture();
-        const QString image = f->store->putAttachment("png", "png");
-        const Scratch original = f->store->createScratch(htmlWithImage("pic", image));
-        QTemporaryDir dest;
-        const QString path = backup::snapshot(*f->store, dest.path());
-
-        QTemporaryDir restored;
-        const QString root = restored.filePath("data");
-        QVERIFY(QDir().mkpath(root + "/attachments"));
-        QVERIFY(QFile::copy(path, root + "/noite.db"));
-        QVERIFY(QFile::copy(backupAttachmentsDir(*f->store, dest.path()) + "/" + image, root + "/attachments/" + image));
-
-        auto store = Store::open(DataDir::acquire(root), f->clock);
-        QCOMPARE(store->get(original.id).html, original.html);
-        QVERIFY(QFile::exists(store->attachmentPath(image)));
-    }
-
-    void verifyDetectsMissingAttachment()
+    void verifyMissingRowFails()
     {
         auto f = fixture();
         const QString image = f->store->putAttachment("png", "png");
         f->store->createScratch(htmlWithImage("pic", image));
         QTemporaryDir dest;
         const QString path = backup::snapshot(*f->store, dest.path());
-        QVERIFY(QFile::remove(backupAttachmentsDir(*f->store, dest.path()) + "/" + image));
+        {
+            detail::Db snap = detail::Db::open(path);
+            snap.exec("DELETE FROM attachments");
+        }
         NOITE_EXPECT_ERROR(ErrorCode::BackupInvalid, backup::verify(path));
     }
 
@@ -103,23 +97,6 @@ private slots:
         const backup::PruneReport report = backup::prune(*f->store, dest.path(), 2);
         QCOMPARE(report.snapshotsDeleted, 2);
         QCOMPARE(entries(snapshotsDir(*f->store, dest.path()), "*.db"), made.mid(2));
-    }
-
-    void pruneSweepsUnreferencedBackupAttachments()
-    {
-        auto f = fixture();
-        const QString image = f->store->putAttachment("png", "png");
-        const Scratch s = f->store->createScratch(htmlWithImage("pic", image));
-        QTemporaryDir dest;
-        backup::snapshot(*f->store, dest.path());
-        f->store->updateContent(s.id, html({"no image now"}));
-        for (int i = 0; i < 2; ++i) {
-            f->clock->advance(60'000);
-            backup::snapshot(*f->store, dest.path());
-        }
-        const backup::PruneReport report = backup::prune(*f->store, dest.path(), 2);
-        QCOMPARE(report.attachmentsDeleted, 1);
-        QVERIFY(entries(backupAttachmentsDir(*f->store, dest.path())).isEmpty());
     }
 
     // Review I3: a temp file may be another machine's snapshot in progress (synced folder);
