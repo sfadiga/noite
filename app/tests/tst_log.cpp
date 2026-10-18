@@ -43,6 +43,17 @@ QStringList readLines(const QString& path)
     return lines;
 }
 
+QString g_hookPath;
+QStringList g_hookFileLines;
+QString g_hookPathSeen;
+QStringList readLines(const QString& path);
+void fatalHook(const char*)
+{
+    g_hookFileLines = readLines(g_hookPath);
+    g_hookPathSeen = applog::currentLogPath(); // takes the log mutex
+    qInfo("from hook");                          // goes through the handler again
+}
+
 QString numbered(int i)
 {
     return QString::number(i).rightJustified(30, '0');
@@ -194,6 +205,60 @@ private slots:
         qWarning("after");
         QCOMPARE(g_seen, (QStringList{"after"}));
         QVERIFY(readLines(path).isEmpty()); // the file did not see it
+    }
+
+    void unopenableDirKeepsRunning()
+    {
+        Capture capture;
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        QFile blocker(dir.filePath("file"));
+        QVERIFY(blocker.open(QIODevice::WriteOnly));
+        blocker.close();
+
+        startBuffering();
+        install(dir.filePath("file/logs")); // a folder cannot be created under a file
+        qWarning("nowhere to go");
+        QVERIFY(currentLogPath().isEmpty());
+        uninstall();
+        // The chained handler (Qt's default one in production, which feeds the debugger) still got it.
+        QCOMPARE(g_seen, (QStringList{"nowhere to go"}));
+    }
+
+    void previousHandlerIsNeverNull()
+    {
+        // Qt hands back its default handler when none was installed, so there is always something to chain to.
+        Capture capture;
+        qInstallMessageHandler(nullptr);
+        const QtMessageHandler previous = qInstallMessageHandler(captureHandler);
+        QVERIFY(previous != nullptr);
+    }
+
+    void fatalHookRunsAfterWriteWithMutexFree()
+    {
+        Capture capture;
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        install(dir.path());
+        g_hookPath = currentLogPath();
+        g_hookFileLines.clear();
+        g_hookPathSeen.clear();
+        setFatalHook(fatalHook);
+
+        const QtMessageHandler ours = qInstallMessageHandler(nullptr); // read our handler back
+        qInstallMessageHandler(ours);
+        static const QMessageLogContext context;
+        ours(QtFatalMsg, context, "boom");
+        setFatalHook(nullptr);
+        const QString path = currentLogPath();
+        uninstall();
+
+        QCOMPARE(g_hookFileLines.size(), 1); // written and flushed before the hook ran
+        QVERIFY(g_hookFileLines[0].endsWith(" F [main] boom"));
+        QCOMPARE(g_hookPathSeen, g_hookPath); // no deadlock on the mutex
+        const QStringList lines = readLines(path);
+        QCOMPARE(lines.size(), 2);
+        QVERIFY(lines[1].endsWith(" I [main] from hook"));
     }
 };
 

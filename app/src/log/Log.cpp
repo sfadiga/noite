@@ -7,7 +7,6 @@
 #include <QStringList>
 #include <QThread>
 
-#include <cstdio>
 #include <memory>
 
 namespace applog {
@@ -86,6 +85,7 @@ constexpr bool kDebugBuild = true;
 constexpr int kBufferLines = 256;
 
 thread_local QString t_threadName;
+thread_local bool t_inHandler = false;
 
 struct State {
     QMutex mutex;
@@ -114,6 +114,10 @@ QString threadLabel()
 
 void handler(QtMsgType type, const QMessageLogContext& context, const QString& message)
 {
+    // A message logged from inside the handler (on this thread) is dropped rather than deadlocking.
+    if (t_inHandler)
+        return;
+    t_inHandler = true;
     const QString line = formatLine(type, QDateTime::currentDateTime(), threadLabel(), message);
     QtMessageHandler previous = nullptr;
     FatalHook hook = nullptr;
@@ -131,8 +135,7 @@ void handler(QtMsgType type, const QMessageLogContext& context, const QString& m
     }
     if (previous)
         previous(type, context, message);
-    else
-        std::fprintf(stderr, "%s\n", qPrintable(line));
+    t_inHandler = false;
     if (type == QtFatalMsg && hook)
         hook(message.toUtf8().constData());
 }
