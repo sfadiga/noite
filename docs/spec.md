@@ -163,13 +163,13 @@ Attachments are shared, not duplicated (safe because of D22).
 The app's core promise: **what you capture stays under your radar until you dismiss it for good.**
 
 - **D31 Radar rule.** Every active scratch stays on the radar until it is marked **done** or **trashed**; those are the only two ways to dismiss one. Nothing expires or drops off on its own.
-- **D32 Morning review.** Once a day (trigger: D16) a review presents the radar: overdue, due today, then undated oldest-first. For each scratch the user can choose **Done**, **Snooze**, **Keep** or **Trash**. Open question for the M4 plan: open the review directly, or notify first and open on click (D16 says the notification never steals focus).
-- **D33 Stale resurfacing.** An undated active scratch whose `modified_at` is older than *N* days (setting, default **7**) is moved to the top of the review, so nothing quietly rots at the bottom of the list.
+- **D32 Morning review.** Once a day (trigger: D16) a review steps through what needs a decision: overdue (most overdue first), due today, then stale (D33). The rest of the radar stays on the board. For each scratch the user can choose **Done**, **Snooze**, **Keep** or **Trash**. Left goes back and undoes the previous choice. Esc ends early; the notes not reached stay as they are. (M4 R2, R3)
+- **D33 Stale resurfacing.** An undated active scratch whose `modified_at` is older than *N* days (setting, default **7**, range 1–90) comes after the due-today notes in the review, so nothing quietly rots. **Keep** marks it as looked at (`modified_at` = now), so it returns only after another *N* untouched days. (M4 R2, R4)
 - **D34 Snooze = due date.** Snoozing sets a future due date (quick picks: tomorrow, next Monday, pick a date). The scratch leaves Today and comes back on that day (D9). There is no separate snooze state.
 
 ### Start-of-day review (D16)
 
-Configurable day-start hour (default 06:00). The first time the PC is awake and unlocked after that hour, show a Windows notification: "3 overdue · 2 due today · 14 open". Clicking it opens the board on the Today tab. It never steals focus.
+Configurable day-start hour (default 06:00). The first time the PC is awake and unlocked after that hour, the morning review (D32) opens directly, in front (the author's choice in M4, R1). Triggers: app start, session unlock, resume from sleep, and a timer at the day start. It counts as shown once it opens, so closing it early doesn't bring it back that day. If nothing needs a decision, nothing opens. The tray's "Morning review" opens it any time.
 
 ## 7. Setup wizard (D24)
 
@@ -187,7 +187,7 @@ Shown on first run. Every step except step 2 can be skipped.
 ## 8. Settings & tray (D25)
 
 - Every wizard setting is editable later in a Settings window; the wizard can be re-run from Settings.
-- Tray menu: New scratch · Open board · Settings · Back up now · Quit.
+- Tray menu: New scratch · Open board · Morning review · Start with Windows (checkable) · Settings · Back up now · Quit. Left-click opens the board.
 
 ## 9. Testing & CI (D28)
 

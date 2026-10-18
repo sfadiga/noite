@@ -9,27 +9,36 @@
 #include "editor/OpenFolder.h"
 #include "platform/Hotkey.h"
 #include "platform/NativeHost.h"
+#include "radar/ReviewScheduler.h"
 
 #include <noite/data_dir.h>
 #include <noite/error.h>
 #include <noite/store.h>
 
+#include <QAction>
 #include <QApplication>
+#include <QDateTime>
 #include <QDebug>
 #include <QMenu>
 #include <QStyle>
 #include <QSystemTrayIcon>
+#include <QTimer>
 
 #include <windows.h>
 
-App::App(AppOptions options, QObject* parent)
+App::App(AppOptions options, QObject* parent, std::unique_ptr<AutostartRegistry> autostart)
     : QObject(parent)
     , options_(std::move(options))
+    , autostart_(std::move(autostart))
 {
 }
 
 App::~App()
 {
+    if (review_) {
+        review_->close(); // saves a note being edited in it
+        delete review_;   // before the store it uses
+    }
     if (board_) {
         board_->close(); // saves a note open in its overlay
         delete board_;   // before the store it uses
@@ -95,12 +104,64 @@ std::optional<int> App::start()
     connect(controller_.get(), &CaptureController::saved, this, refreshBoard);
     connect(controller_.get(), &CaptureController::finished, this, refreshBoard);
 
+    const noite::Settings settings = store_->settings();
+    dataRoot_ = root;
+    autostartAction_ = new QAction(tr("Start with Windows"), this);
+    autostartAction_->setCheckable(true);
+    autostartAction_->setChecked(settings.startWithWindows);
+    connect(autostartAction_, &QAction::toggled, this, [this](bool enabled) {
+        try {
+            noite::Settings s = store_->settings();
+            s.startWithWindows = enabled;
+            store_->saveSettings(s);
+        } catch (const std::exception& error) {
+            qWarning() << "autostart setting:" << error.what();
+        }
+        updateAutostart(enabled);
+    });
+    updateAutostart(settings.startWithWindows);
+
+    // The morning review (M4): checked now, on unlock, on resume and at the next day start.
+    scheduler_ = std::make_unique<ReviewScheduler>(
+        *store_, [] { return QDateTime::currentDateTime(); }, [this] { return host_->isUnlocked(); });
+    connect(host_.get(), &NativeHost::sessionUnlocked, scheduler_.get(), &ReviewScheduler::check);
+    connect(host_.get(), &NativeHost::resumed, scheduler_.get(), &ReviewScheduler::check);
+    connect(scheduler_.get(), &ReviewScheduler::reviewDue, this, &App::showReview);
+    QTimer::singleShot(0, scheduler_.get(), &ReviewScheduler::check);
+
     createTray();
 
-    const noite::Settings settings = store_->settings();
     registerHotkey(kCaptureHotkeyId, settings.captureHotkey);
     registerHotkey(kBoardHotkeyId, settings.boardHotkey);
     return std::nullopt;
+}
+
+void App::updateAutostart(bool enabled)
+{
+    if (!autostart_)
+        return; // not managed (tests)
+    const QString exeDir = QCoreApplication::applicationDirPath();
+    const QString command = autostartCommand(QCoreApplication::applicationFilePath(), dataRoot_, exeDir + "/data");
+    if (!applyAutostart(*autostart_, enabled, command))
+        qWarning() << "autostart: the Run key could not be updated";
+}
+
+void App::showReview()
+{
+    if (!review_) {
+        review_ = new ReviewWindow(*store_, *attachments_, [] { return QDate::currentDate(); });
+        review_->setAttribute(Qt::WA_DeleteOnClose);
+        connect(review_, &ReviewWindow::openBoardRequested, this, [this] {
+            if (review_)
+                review_->close();
+            showBoard();
+        });
+        review_->start();
+    }
+    review_->show();
+    review_->raise();
+    review_->activateWindow();
+    SetForegroundWindow(reinterpret_cast<HWND>(review_->winId()));
 }
 
 void App::registerHotkey(int id, const QString& combo)
@@ -140,6 +201,9 @@ void App::createTray()
     auto* menu = new QMenu;
     menu->addAction(tr("New note"), window_.get(), &CaptureWindow::summon);
     menu->addAction(tr("Board"), this, &App::showBoard);
+    menu->addAction(tr("Morning review"), this, &App::showReview);
+    menu->addSeparator();
+    menu->addAction(autostartAction_);
     menu->addSeparator();
     menu->addAction(tr("Quit"), qApp, &QCoreApplication::quit);
     tray_->setContextMenu(menu);
