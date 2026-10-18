@@ -105,6 +105,13 @@ int main(int argc, char* argv[])
             board = std::make_unique<BoardWindow>(*store, attachments, [today] { return today; });
             window = board.get();
         }
+        if (run % 2 == 1) { // alternate runs open with a tag chip active (M3b)
+            noite::BoardFilter work;
+            work.tags = {"work"};
+            window->restoreViewState({noite::Tab::Today, {}, work, {}});
+        } else {
+            window->restoreViewState({});
+        }
         FirstPaint watch(window->grid()->viewport(), loop);
         window->show();
         loop.exec();

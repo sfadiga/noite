@@ -46,6 +46,16 @@ void BoardModel::setExpandedSet(QSet<noite::BundleId> expanded)
     reload();
 }
 
+void BoardModel::setView(noite::Tab tab, const QString& search, const noite::BoardFilter& filter,
+                         QSet<noite::BundleId> expanded)
+{
+    tab_ = tab;
+    search_ = search;
+    filter_ = filter;
+    expanded_ = std::move(expanded);
+    reload();
+}
+
 void BoardModel::reload()
 {
     QList<noite::ScratchSummary> notes;

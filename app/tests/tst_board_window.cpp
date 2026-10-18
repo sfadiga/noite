@@ -11,6 +11,7 @@
 #include <QLineEdit>
 #include <QListView>
 #include "board/TabStrip.h"
+#include <QSignalSpy>
 #include <QTest>
 
 using namespace noite;
@@ -176,6 +177,20 @@ private slots:
         b.show();
         QCOMPARE(b.window->grid()->currentIndex().row(), 0);
         QVERIFY(b.window->grid()->selectionModel()->isSelected(b.window->grid()->currentIndex()));
+    }
+
+    // Opening the board restores its view in one query round, not one per field.
+    void restoreViewStateReloadsOnce()
+    {
+        Board b;
+        QSignalSpy resets(&b.window->model(), &QAbstractItemModel::modelReset);
+        BoardFilter red;
+        red.colors = {Color::Red};
+        b.window->restoreViewState({Tab::All, "milk", red, {}});
+        QCOMPARE(resets.size(), 1);
+        QCOMPARE(b.window->model().tab(), Tab::All);
+        QCOMPARE(b.window->model().search(), QString("milk"));
+        QCOMPARE(b.window->model().filter(), red);
     }
 
     // ---- M3b: chips ----

@@ -43,6 +43,9 @@ public:
     bool isExpanded(const noite::BundleId& bundle) const { return expanded_.contains(bundle); }
     QSet<noite::BundleId> expanded() const { return expanded_; }
     void setExpandedSet(QSet<noite::BundleId> expanded);
+    // All of the view at once, with a single reload (opening the board).
+    void setView(noite::Tab tab, const QString& search, const noite::BoardFilter& filter,
+                 QSet<noite::BundleId> expanded);
     void reload();
 
     const BoardRow& row(int row) const { return rows_.at(row); }

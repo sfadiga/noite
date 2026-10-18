@@ -125,10 +125,7 @@ void BoardWindow::restoreViewState(const ViewState& state)
         search_->setText(state.search);
     }
     searchDelay_.stop();
-    model_->setTab(state.tab);
-    model_->setSearch(state.search);
-    model_->setExpandedSet(state.expanded);
-    model_->setFilter(state.filter);
+    model_->setView(state.tab, state.search, state.filter, state.expanded);
 }
 
 void BoardWindow::setTab(noite::Tab tab)
