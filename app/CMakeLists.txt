@@ -27,6 +27,7 @@ add_library(noite-app STATIC
     src/board/ChipBar.h src/board/ChipBar.cpp
     src/Theme.h src/Theme.cpp
     src/DragMover.h src/DragMover.cpp
+    src/radar/ReviewScheduler.h src/radar/ReviewScheduler.cpp
 )
 target_include_directories(noite-app PUBLIC src)
 target_link_libraries(noite-app PUBLIC noite-core Qt6::Widgets user32)
@@ -61,6 +62,7 @@ qt_add_executable(app-tests
     tests/tst_theme.cpp
     tests/tst_chip_bar.cpp
     tests/tst_tag_field.cpp
+    tests/tst_review_scheduler.cpp
     tests/tst_seed.cpp bench/Seed.h bench/Seed.cpp
 )
 # Reuses core's test registry and helpers.
