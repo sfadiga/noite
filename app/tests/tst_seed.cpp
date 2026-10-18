@@ -36,6 +36,20 @@ private slots:
             all.begin(), all.end(), [](const ScratchSummary& a, const ScratchSummary& b) { return a.createdAt < b.createdAt; });
         QVERIFY(newest->createdAt - oldest->createdAt > 30 * kDayMs);
     }
+
+    // M3b: the bench exercises stacks and tag chips too.
+    void seedsBundlesAndTags()
+    {
+        auto f = test::fixture();
+        seedBoard(*f->store, 200, test::today(), 42, [&](qint64 ms) { f->clock->set(ms); });
+        QVERIFY(!f->store->listBundles().isEmpty());
+        qsizetype bundled = 0;
+        for (Tab tab : {Tab::All, Tab::Completed, Tab::Trash})
+            for (const ScratchSummary& s : f->store->list(tab, test::today()))
+                bundled += s.bundleId.has_value();
+        QVERIFY2(bundled >= 10, qPrintable(QString::number(bundled)));
+        QVERIFY(f->store->listTags().size() >= 3);
+    }
 };
 
 NOITE_TEST(SeedTest)

@@ -57,6 +57,12 @@ public:
     void moveToBundle(const ScratchId& id, std::optional<BundleId> bundle);
     void renameBundle(const BundleId& id, const QString& name);
     QList<Bundle> listBundles() const;
+    // Undo support: puts back a deleted bundle with its id, name and creation time (no-op if
+    // it exists). It stays empty until a scratch moves in, which the same undo step must do.
+    void recreateBundle(const Bundle& bundle);
+    // Every member (any status) leaves and the bundle is deleted. Returns the members.
+    // Throws NotFound for an unknown bundle.
+    QStringList dissolveBundle(const BundleId& id);
     // Copies content, manual tags, colour and bundle; clears the due date; Active; new times.
     Scratch cloneScratch(const ScratchId& id);
 
@@ -64,9 +70,15 @@ public:
     // Today: active, overdue -> due today -> undated (oldest first). All: Today's order, then
     // upcoming by due date. Completed: newest done first. Trash: newest trashed first.
     // `search` is matched as accent-insensitive word prefixes; blank means no filter.
-    QList<ScratchSummary> list(Tab tab, QDate today, const QString& search = {}) const;
-    // The size of list(tab, today, search) for every tab, in one query.
-    TabCounts tabCounts(QDate today, const QString& search = {}) const;
+    // `filter` applies the chips (D18): OR within a kind, AND across kinds.
+    QList<ScratchSummary> list(Tab tab, QDate today, const QString& search = {}, const BoardFilter& filter = {}) const;
+    // The size of list(tab, today, search, filter) for every tab, in one query.
+    TabCounts tabCounts(QDate today, const QString& search = {}, const BoardFilter& filter = {}) const;
+    // The chips to show for `tab`: each kind counted under the search and the *other* kinds'
+    // chips, zero counts dropped, active chips always kept (C6).
+    ChipFacets chipFacets(Tab tab, QDate today, const QString& search, const BoardFilter& filter) const;
+    // Every tag in use, inline or manual, alphabetical.
+    QStringList listTags() const;
     ReviewCounts reviewCounts(QDate today) const;
 
     // ---- Attachments and purge (store_attachments.cpp, D13, D22; in the database, A1) ----

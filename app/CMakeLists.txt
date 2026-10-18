@@ -15,12 +15,16 @@ add_library(noite-app STATIC
     src/capture/LatencyProbe.h src/capture/LatencyProbe.cpp
     src/capture/KeepWarm.h src/capture/KeepWarm.cpp
     src/capture/NoteFooter.h src/capture/NoteFooter.cpp
+    src/capture/TagField.h src/capture/TagField.cpp
+    src/capture/NoteFooterBar.h src/capture/NoteFooterBar.cpp
     src/board/BoardModel.h src/board/BoardModel.cpp
     src/board/CardDelegate.h src/board/CardDelegate.cpp
     src/board/BoardWindow.h src/board/BoardWindow.cpp
     src/board/UndoLog.h src/board/UndoLog.cpp
     src/board/NoteOverlay.h src/board/NoteOverlay.cpp
     src/board/TabStrip.h src/board/TabStrip.cpp
+    src/board/FlowLayout.h src/board/FlowLayout.cpp
+    src/board/ChipBar.h src/board/ChipBar.cpp
     src/Theme.h src/Theme.cpp
     src/DragMover.h src/DragMover.cpp
 )
@@ -55,6 +59,8 @@ qt_add_executable(app-tests
     tests/tst_board_actions.cpp
     tests/tst_note_overlay.cpp
     tests/tst_theme.cpp
+    tests/tst_chip_bar.cpp
+    tests/tst_tag_field.cpp
     tests/tst_seed.cpp bench/Seed.h bench/Seed.cpp
 )
 # Reuses core's test registry and helpers.

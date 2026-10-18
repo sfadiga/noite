@@ -8,6 +8,8 @@
 #include <QImage>
 #include <QRandomGenerator>
 
+#include <optional>
+
 namespace {
 
 const QStringList kWords = {
@@ -44,8 +46,10 @@ void seedBoard(noite::Store& store, int count, QDate today, quint32 seed,
 {
     static constexpr noite::Color colors[] = {noite::Color::Red,   noite::Color::Orange, noite::Color::Yellow,
                                               noite::Color::Green, noite::Color::Blue,   noite::Color::Purple};
+    static const char* const tags[] = {"#trip", "#work", "#home", "#errand", "#idea"};
     QRandomGenerator rng(seed);
     const qint64 now = QDateTime(today, QTime(9, 0)).toMSecsSinceEpoch();
+    std::optional<noite::ScratchId> previous;
     for (int i = 0; i < count; ++i) {
         setNow(now - qint64(rng.bounded(120 * 24)) * 3'600'000);
         QString html;
@@ -54,15 +58,22 @@ void seedBoard(noite::Store& store, int count, QDate today, quint32 seed,
             html += "<p>" + sentence(rng).toHtmlEscaped() + "</p>";
         if (rng.bounded(100) < 10)
             html += "<p><img src=\"noite-att:" + store.putAttachment(randomPng(rng), "png") + "\"/></p>";
+        if (rng.bounded(100) < 30)
+            html += QStringLiteral("<p>%1</p>").arg(QLatin1String(tags[rng.bounded(5)]));
         const noite::ScratchId id = store.createScratch(html).id;
+        if (previous && rng.bounded(100) < 10)
+            store.bundleTogether(*previous, id);
+        previous = id;
         if (rng.bounded(100) < 30)
             store.setDue(id, today.addDays(rng.bounded(-10, 21)));
         if (rng.bounded(100) < 40)
             store.setColor(id, colors[rng.bounded(6)]);
         const int fate = rng.bounded(100);
-        if (fate < 10)
+        if (fate < 10) {
             store.markDone(id);
-        else if (fate < 15)
+        } else if (fate < 15) {
             store.trash(id);
+            previous.reset(); // trashed notes can't be bundled
+        }
     }
 }

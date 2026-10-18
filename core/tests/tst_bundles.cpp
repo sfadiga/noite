@@ -81,6 +81,53 @@ private slots:
         QVERIFY(!f->store->get(b.id).bundleId);
     }
 
+    // Undo needs the very bundle back: same id, name and creation time (M3b final review).
+    void recreateBundleRestoresIdNameAndTime()
+    {
+        auto f = fixture();
+        const Scratch a = f->store->createScratch(html({"a"}));
+        const Scratch b = f->store->createScratch(html({"b"}));
+        const BundleId id = f->store->bundleTogether(a.id, b.id);
+        f->store->renameBundle(id, "Trip");
+        const Bundle saved = f->store->listBundles().first();
+        f->store->moveToBundle(a.id, std::nullopt);
+        f->store->moveToBundle(b.id, std::nullopt);
+        QVERIFY(f->store->listBundles().isEmpty());
+        f->clock->advance(5000);
+
+        f->store->recreateBundle(saved);
+        f->store->moveToBundle(a.id, id);
+        const QList<Bundle> bundles = f->store->listBundles();
+        QCOMPARE(bundles.size(), 1);
+        QCOMPARE(bundles[0].id, saved.id);
+        QCOMPARE(bundles[0].name, QString("Trip"));
+        QCOMPARE(bundles[0].createdAt, saved.createdAt);
+        QCOMPARE(f->store->get(a.id).bundleId, std::optional<BundleId>(id));
+        f->store->recreateBundle(saved); // already there: no-op
+        QCOMPARE(f->store->listBundles().size(), 1);
+    }
+
+    // The board's "Unbundle": every member, any status, leaves; the bundle goes.
+    void dissolveBundleReleasesAllMembers()
+    {
+        auto f = fixture();
+        const Scratch a = f->store->createScratch(html({"a"}));
+        const Scratch b = f->store->createScratch(html({"b"}));
+        const Scratch c = f->store->createScratch(html({"c"}));
+        const BundleId id = f->store->bundleTogether(a.id, b.id);
+        f->store->moveToBundle(c.id, id);
+        f->store->markDone(c.id);
+        QStringList released = f->store->dissolveBundle(id);
+        released.sort();
+        QStringList expected = {a.id, b.id, c.id};
+        expected.sort();
+        QCOMPARE(released, expected);
+        for (const Scratch& s : {a, b, c})
+            QVERIFY(!f->store->get(s.id).bundleId);
+        QVERIFY(f->store->listBundles().isEmpty());
+        NOITE_EXPECT_ERROR(ErrorCode::NotFound, f->store->dissolveBundle(id));
+    }
+
     void trashedMemberKeepsBundleAlive()
     {
         auto f = fixture();

@@ -36,18 +36,25 @@ public:
     void markDoneAndClose(); // Ctrl+Enter
     void cycleColor();       // none -> red -> orange -> yellow -> green -> blue -> purple -> none
     void setDue(std::optional<QDate> due);
+    // Normalized manual tags (D10). Saved on the autosave debounce; before the note exists,
+    // applied right after its first save (a note with only tags is still discarded).
+    void setManualTags(const QStringList& tags);
 
     static std::optional<noite::Color> nextColor(std::optional<noite::Color> color);
 
     std::optional<noite::ScratchId> currentId() const { return id_; }
     std::optional<QDate> due() const { return due_; }
     std::optional<noite::Color> color() const { return color_; }
+    QStringList manualTags() const { return manualTags_; }
+    QStringList inlineTags() const { return inlineTags_; } // from #tags in the text, as last saved
+    QStringList knownTags() const;                         // every tag in use, for completion
 
 signals:
     void finished();
     void saved(noite::ScratchId id); // after each successful create or update
     void dueChanged(std::optional<QDate> due);
     void colorChanged(std::optional<noite::Color> color);
+    void tagsChanged(); // on begin/open and after each save
     void errorOccurred(QString message);
 
 private:
@@ -55,6 +62,7 @@ private:
     void onContentsChanged();
     void save();
     void report(const std::exception& error);
+    void loadTags(const noite::Scratch& scratch);
 
     noite::Store& store_;
     NoteEdit& editor_;
@@ -62,6 +70,9 @@ private:
     std::optional<noite::ScratchId> id_;
     std::optional<QDate> due_;
     std::optional<noite::Color> color_;
+    QStringList manualTags_;
+    QStringList inlineTags_;
     bool dirty_ = false;
+    bool tagsDirty_ = false;
     bool resetting_ = false;
 };

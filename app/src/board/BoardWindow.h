@@ -5,6 +5,7 @@
 #include <noite/model.h>
 
 #include <QDate>
+#include <QSet>
 #include <QTimer>
 #include <QWidget>
 
@@ -22,6 +23,7 @@ class QLabel;
 class QLineEdit;
 class QListView;
 class TabStrip;
+class ChipBar;
 
 // The board (D17): tabs Today · All · Completed · Trash, an as-you-type search over the
 // current tab (D19) and a grid of cards. Keys (D30): "/" focuses search; Esc clears a
@@ -37,6 +39,8 @@ public:
     struct ViewState {
         noite::Tab tab = noite::Tab::Today;
         QString search;
+        noite::BoardFilter filter;           // active chips
+        QSet<noite::BundleId> expanded;      // open stacks
     };
 
     BoardWindow(noite::Store& store, AttachmentStore& attachments, std::function<QDate()> today,
@@ -63,13 +67,26 @@ public:
     void openSelected();
     void openNew();
 
+    // Bundles (M3b): click/Enter on a stack toggles it; menus rename it or take a card out.
+    void toggleSelectedStack();
+    void renameSelectedBundle(const QString& name);
+    void removeSelectedFromBundle();
+    // "Unbundle" on a stack: every member leaves and the bundle goes. Undoable.
+    void unbundleSelected();
+    // A card dropped onto the card or stack at `targetRow`, or onto empty space (-1): bundles
+    // it, moves it into that bundle, or takes it out of its own. Undoable; no-op if nothing changes.
+    void dropCard(const noite::ScratchId& dragged, int targetRow);
+
+    // Empty while a stack is selected.
     std::optional<noite::ScratchId> selectedId() const;
+    std::optional<noite::BundleId> selectedStack() const;
     UndoLog& undoLog() { return undo_; }
     NoteOverlay& overlay() const { return *overlay_; }
     BoardModel& model() const { return *model_; }
     QListView* grid() const { return grid_; }
     QLineEdit* searchField() const { return search_; }
     TabStrip* tabStrip() const { return tabs_; }
+    ChipBar* chipBar() const { return chips_; }
     QString statusText() const;
     // "No notes" / "Nothing matches" while the grid is empty; empty otherwise.
     QString emptyText() const;
@@ -94,6 +111,13 @@ private:
     void pickDue();
     void onModelReset();
     void layoutEmptyLabel();
+    void escapeOnGrid();
+    void selectStack(const noite::BundleId& bundle);
+    QString bundleName(const noite::BundleId& bundle) const; // null if the bundle no longer exists
+    std::optional<noite::Bundle> bundleRecord(const noite::BundleId& bundle) const;
+    // Undo of leaving a bundle: back into `bundle` (re-created with its id, name and time if
+    // the action emptied it), or out of any bundle if it had none.
+    void rejoin(const noite::ScratchId& id, const std::optional<noite::Bundle>& bundle);
 
     noite::Store& store_;
     UndoLog undo_;
@@ -101,6 +125,7 @@ private:
     BoardModel* model_;
     CardDelegate* delegate_;
     TabStrip* tabs_;
+    ChipBar* chips_;
     QLineEdit* search_;
     QListView* grid_;
     QLabel* empty_;

@@ -147,10 +147,82 @@ QPixmap CardDelegate::thumbnail(const QString& attachmentId) const
     return pixmap;
 }
 
+QStringList CardDelegate::stackLines(const BoardRow& stack)
+{
+    QStringList lines = {stack.bundleName,
+                         stack.members.size() == 1 ? QStringLiteral("1 note")
+                                                   : QStringLiteral("%1 notes").arg(stack.members.size())};
+    for (qsizetype i = 0; i < std::min<qsizetype>(2, stack.members.size()); ++i)
+        lines << stack.members[i].title;
+    return lines;
+}
+
+void CardDelegate::paintStack(QPainter* painter, const QStyleOptionViewItem& option, const BoardRow& stack,
+                              QDate today) const
+{
+    const QPalette& palette = option.palette;
+    const bool selected = option.state & QStyle::State_Selected;
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing);
+    // Two cards peeking out behind the front one.
+    const QRectF front = QRectF(option.rect).adjusted(kMargin, kMargin + 8, -kMargin - 8, -kMargin);
+    for (int offset : {8, 4}) {
+        QPainterPath back;
+        back.addRoundedRect(front.translated(offset, -offset), kRadius, kRadius);
+        painter->fillPath(back, cardFill(std::nullopt, palette));
+        painter->setPen(QPen(cardBorder(palette), 1));
+        painter->drawPath(back);
+    }
+    QPainterPath shape;
+    shape.addRoundedRect(front, kRadius, kRadius);
+    painter->fillPath(shape, cardFill(stack.members.first().color, palette));
+    painter->setPen(QPen(selected ? palette.color(QPalette::Highlight) : cardBorder(palette), selected ? 2 : 1));
+    painter->drawPath(shape);
+
+    const QRect content = front.toRect().adjusted(kPadding, kPadding - 2, -kPadding, -kPadding + 2);
+    painter->setClipRect(content);
+    painter->setPen(palette.color(QPalette::Text));
+    const QStringList lines = stackLines(stack);
+    QFont titleFont = option.font;
+    titleFont.setBold(true);
+    const QFontMetrics titleMetrics(titleFont);
+    painter->setFont(titleFont);
+    const QString name = stack.expanded ? lines[0] + QStringLiteral("  ▾") : lines[0];
+    painter->drawText(QRect(content.left(), content.top(), content.width(), titleMetrics.height()),
+                      Qt::AlignLeft | Qt::AlignVCenter, elidedTitle(name, titleFont, content.width()));
+    painter->setFont(option.font);
+    const QFontMetrics metrics(option.font);
+    int y = content.top() + titleMetrics.height() + 4;
+    for (qsizetype i = 1; i < lines.size(); ++i) {
+        painter->drawText(QRect(content.left(), y, content.width(), metrics.height()), Qt::AlignLeft | Qt::AlignVCenter,
+                          metrics.elidedText(i == 1 ? lines[i] : QStringLiteral("· ") + lines[i], Qt::ElideRight,
+                                             content.width()));
+        y += metrics.lineSpacing();
+    }
+
+    // The age of the oldest member: how long the bundle's work has been waiting.
+    qint64 oldest = stack.members.first().createdAt;
+    for (const noite::ScratchSummary& m : stack.members)
+        oldest = std::min(oldest, m.createdAt);
+    QFont small = option.font;
+    small.setPointSizeF(option.font.pointSizeF() * 0.85);
+    painter->setFont(small);
+    const QFontMetrics smallMetrics(small);
+    painter->drawText(QRect(content.left(), content.bottom() - smallMetrics.height() + 1, content.width(),
+                            smallMetrics.height()),
+                      Qt::AlignRight | Qt::AlignVCenter, ageText(oldest, today, QDateTime::currentMSecsSinceEpoch()));
+    painter->restore();
+}
+
 void CardDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const
 {
     const auto* model = static_cast<const BoardModel*>(index.model());
-    const noite::ScratchSummary& s = model->summary(index.row());
+    const BoardRow& row = model->row(index.row());
+    if (row.kind == BoardRow::Kind::Stack) {
+        paintStack(painter, option, row, model->today());
+        return;
+    }
+    const noite::ScratchSummary& s = row.card;
     const QPalette& palette = option.palette;
     const bool selected = option.state & QStyle::State_Selected;
 
@@ -160,7 +232,13 @@ void CardDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, 
     QPainterPath shape;
     shape.addRoundedRect(card, kRadius, kRadius);
     painter->fillPath(shape, cardFill(s.color, palette));
-    painter->setPen(QPen(selected ? palette.color(QPalette::Highlight) : cardBorder(palette), selected ? 2 : 1));
+    if (row.inBundle) { // a member of the expanded stack before it
+        QColor accent = palette.color(QPalette::Highlight);
+        accent.setAlphaF(selected ? 1.0 : 0.6);
+        painter->setPen(QPen(accent, 3));
+    } else {
+        painter->setPen(QPen(selected ? palette.color(QPalette::Highlight) : cardBorder(palette), selected ? 2 : 1));
+    }
     painter->drawPath(shape);
 
     const QRect content = card.toRect().adjusted(kPadding, kPadding - 2, -kPadding, -kPadding + 2);

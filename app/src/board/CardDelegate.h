@@ -7,6 +7,7 @@
 #include <QStyledItemDelegate>
 
 struct AttachmentStore;
+struct BoardRow;
 
 // Paints a BoardModel row as a fixed-size card (D17): colour tint, bold title, a few lines
 // of preview, the first image as a thumbnail, a due/age badge and the tags. Tints come from
@@ -38,8 +39,12 @@ public:
     static int titleWidth();
     static QString elidedTitle(const QString& title, const QFont& font, int width);
 
+    // A stack's text: the bundle name, "N notes", then the first two members' titles.
+    static QStringList stackLines(const BoardRow& stack);
+
 private:
     QPixmap thumbnail(const QString& attachmentId) const;
+    void paintStack(QPainter* painter, const QStyleOptionViewItem& option, const BoardRow& stack, QDate today) const;
 
     AttachmentStore* attachments_;
     mutable QCache<QString, QPixmap> thumbnails_{200};

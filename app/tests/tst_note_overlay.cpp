@@ -6,6 +6,8 @@
 #include "board/BoardWindow.h"
 #include "board/NoteOverlay.h"
 #include "capture/CaptureController.h"
+#include "capture/NoteFooterBar.h"
+#include "capture/TagField.h"
 #include "editor/AttachmentStore.h"
 #include "editor/NoteEdit.h"
 
@@ -171,6 +173,20 @@ private slots:
         b.window->setTab(Tab::Today);
         b.openA();
         QVERIFY(!b.overlay().editor()->isReadOnly());
+    }
+
+    void overlayEditsTags()
+    {
+        Board b;
+        b.openA();
+        TagField* tags = b.overlay().footerBar()->tagField();
+        QVERIFY(tags->text().isEmpty());
+        QTest::keyClick(b.overlay().editor(), Qt::Key_T, Qt::ControlModifier);
+        QVERIFY(tags->hasFocus());
+        QTest::keyClicks(tags, "home");
+        QTest::keyClick(tags, Qt::Key_Escape);
+        QVERIFY(!b.overlay().isOpen());
+        QVERIFY(b.window->model().summary(b.window->model().rowOf(b.a)).tags.contains("home"));
     }
 
     void boardReloadsAfterClose()

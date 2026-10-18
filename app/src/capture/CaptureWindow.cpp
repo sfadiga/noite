@@ -3,12 +3,13 @@
 #include "DragMover.h"
 #include "capture/CaptureController.h"
 #include "capture/LatencyProbe.h"
-#include "capture/NoteFooter.h"
+#include "capture/NoteFooterBar.h"
+#include "capture/TagField.h"
 #include "editor/NoteEdit.h"
 
 #include <QGuiApplication>
 #include <QKeyEvent>
-#include <QLabel>
+
 #include <QScreen>
 #include <QVBoxLayout>
 #include <QtGui/qscreen_platform.h>
@@ -37,7 +38,7 @@ CaptureWindow::CaptureWindow(CaptureController& controller, NoteEdit* editor)
     : QWidget(nullptr, Qt::Tool | Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint)
     , controller_(controller)
     , editor_(editor)
-    , footer_(new QLabel(this))
+    , footer_(new NoteFooterBar(controller, this))
 {
     setWindowTitle("noite");
     resize(520, 420);
@@ -45,11 +46,11 @@ CaptureWindow::CaptureWindow(CaptureController& controller, NoteEdit* editor)
     layout->setContentsMargins(12, 12, 12, 8);
     layout->addWidget(editor_);
     layout->addWidget(footer_);
-    footer_->setVisible(false);
 
     new DragMover(this, this); // by the margins and footer
     editor_->installEventFilter(this);
     editor_->viewport()->installEventFilter(this);
+    footer_->tagField()->installEventFilter(this);
     connect(editor_, &NoteEdit::escapePressed, &controller_, &CaptureController::dismiss);
     connect(&controller_, &CaptureController::finished, this, [this] {
         open_ = false; // before hide(): hiding deactivates the window while it still reports visible
@@ -57,8 +58,6 @@ CaptureWindow::CaptureWindow(CaptureController& controller, NoteEdit* editor)
             probe_->dismissed(editor_->toPlainText());
         hide();
     });
-    connect(&controller_, &CaptureController::dueChanged, this, &CaptureWindow::updateFooter);
-    connect(&controller_, &CaptureController::colorChanged, this, &CaptureWindow::updateFooter);
 }
 
 void CaptureWindow::summon()
@@ -78,13 +77,7 @@ void CaptureWindow::summon()
 
 QString CaptureWindow::footerText() const
 {
-    return footer_->text();
-}
-
-void CaptureWindow::updateFooter()
-{
-    footer_->setText(noteFooterText(controller_.due(), controller_.color()));
-    footer_->setVisible(!footer_->text().isEmpty());
+    return footer_->infoText();
 }
 
 bool CaptureWindow::event(QEvent* event)
@@ -100,9 +93,18 @@ bool CaptureWindow::eventFilter(QObject* watched, QEvent* event)
 {
     if (probe_ && watched == editor_->viewport() && event->type() == QEvent::Paint && editor_->hasFocus())
         probe_->painted();
+    if (watched == footer_->tagField() && event->type() == QEvent::KeyPress
+        && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
+        controller_.dismiss(); // as Esc in the text: save and hide
+        return true;
+    }
     if (watched == editor_ && event->type() == QEvent::KeyPress) {
         const auto* key = static_cast<QKeyEvent*>(event);
         const auto mods = key->modifiers() & ~Qt::KeypadModifier;
+        if (key->key() == Qt::Key_T && mods == Qt::ControlModifier) {
+            footer_->focusTags();
+            return true;
+        }
         if ((key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) && mods == Qt::ControlModifier) {
             controller_.markDoneAndClose();
             return true;

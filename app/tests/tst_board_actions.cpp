@@ -3,12 +3,16 @@
 
 #include "board/BoardModel.h"
 #include "board/BoardWindow.h"
+#include "board/NoteOverlay.h"
 #include "board/UndoLog.h"
 #include "editor/AttachmentStore.h"
 
 #include <noite/store.h>
 
+#include <QApplication>
+#include <QDropEvent>
 #include <QListView>
+#include <QMimeData>
 #include <QTest>
 
 using namespace noite;
@@ -44,6 +48,19 @@ struct Board {
     void select(const ScratchId& id) { grid()->setCurrentIndex(window->model().index(window->model().rowOf(id))); }
     ScratchId current() { return window->model().summary(grid()->currentIndex().row()).id; }
     qsizetype count(Tab tab) { return store().list(tab, test::today()).size(); }
+    // Bundles B and C as "bravo" (alpha, [bravo], on the board).
+    BundleId bundleBC()
+    {
+        const BundleId bundle = store().bundleTogether(b, c);
+        window->reload();
+        return bundle;
+    }
+    void selectStack(const BundleId& bundle)
+    {
+        grid()->setCurrentIndex(window->model().index(window->model().rowOfStack(bundle)));
+    }
+    bool stackSelected() { return window->model().isStack(grid()->currentIndex().row()); }
+    std::optional<BundleId> bundleOf(const ScratchId& id) { return store().get(id).bundleId; }
 };
 
 } // namespace
@@ -194,6 +211,247 @@ private slots:
         log.push("x", [] {});
         log.clear();
         QCOMPARE(log.size(), 0);
+    }
+
+    // ---- M3b: stacks ----
+
+    void clickOrEnterTogglesStack()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.selectStack(bundle);
+        QTest::keyClick(t.grid(), Qt::Key_Return);
+        QVERIFY(t.window->model().isExpanded(bundle));
+        QVERIFY(t.stackSelected()); // the stack keeps the selection
+        QTest::keyClick(t.grid(), Qt::Key_Return);
+        QVERIFY(!t.window->model().isExpanded(bundle));
+        const QRect rect = t.grid()->visualRect(t.window->model().index(t.window->model().rowOfStack(bundle)));
+        QTest::mouseClick(t.grid()->viewport(), Qt::LeftButton, {}, rect.center());
+        QVERIFY(t.window->model().isExpanded(bundle));
+        QVERIFY(!t.window->overlay().isOpen()); // a stack opens in place, not in the editor
+    }
+
+    void escOnMemberCollapsesToStack()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.window->model().setExpanded(bundle, true);
+        t.select(t.c);
+        QTest::keyClick(t.grid(), Qt::Key_Escape);
+        QVERIFY(!t.window->model().isExpanded(bundle));
+        QVERIFY(t.stackSelected());
+        QVERIFY(t.window->isVisible());
+    }
+
+    void viewStateKeepsFilterAndExpanded()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.store().setColor(t.b, Color::Red);
+        BoardFilter red;
+        red.colors = {Color::Red};
+        t.window->model().setExpanded(bundle, true);
+        t.window->model().setFilter(red);
+        const BoardWindow::ViewState state = t.window->viewState();
+        QCOMPARE(state.filter, red);
+        QCOMPARE(state.expanded, QSet<BundleId>({bundle}));
+
+        BoardWindow other(t.store(), t.attachments, [] { return test::today(); });
+        other.restoreViewState(state);
+        QCOMPARE(other.model().filter(), red);
+        QVERIFY(other.model().isExpanded(bundle));
+    }
+
+    // C7.
+    void stackIgnoresCardActions()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.selectStack(bundle);
+        QTest::keyClick(t.grid(), Qt::Key_D);
+        QTest::keyClick(t.grid(), Qt::Key_Delete);
+        QTest::keyClick(t.grid(), Qt::Key_C, Qt::ControlModifier | Qt::ShiftModifier);
+        QCOMPARE(t.store().get(t.b).status, Status::Active);
+        QCOMPARE(t.store().get(t.c).status, Status::Active);
+        QCOMPARE(t.store().get(t.b).color, std::optional<Color>());
+        QCOMPARE(t.window->statusText(), QString("Open the bundle to act on its notes"));
+        QCOMPARE(t.window->undoLog().size(), 0);
+    }
+
+    void renameBundle()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.selectStack(bundle);
+        t.window->renameSelectedBundle("Trip");
+        QCOMPARE(t.store().listBundles().first().name, QString("Trip"));
+        QCOMPARE(t.window->model().row(t.window->model().rowOfStack(bundle)).bundleName, QString("Trip"));
+        QVERIFY(t.stackSelected());
+        t.window->renameSelectedBundle("   ");
+        QCOMPARE(t.store().listBundles().first().name, QString("Trip"));
+        QVERIFY(!t.window->statusText().isEmpty());
+    }
+
+    void removeFromBundleMenuAction()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.window->model().setExpanded(bundle, true);
+        t.select(t.c);
+        t.window->removeSelectedFromBundle();
+        QCOMPARE(t.bundleOf(t.c), std::optional<BundleId>());
+        QCOMPARE(t.window->statusText(), QString("Removed from bravo"));
+        QCOMPARE(t.current(), t.c);
+        QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(t.bundleOf(t.c), std::optional<BundleId>(bundle));
+    }
+
+    // ---- M3b: drag and drop ----
+
+    void dropCardOnCardBundles()
+    {
+        Board t;
+        t.window->dropCard(t.a, t.window->model().rowOf(t.c));
+        QVERIFY(t.bundleOf(t.a).has_value());
+        QCOMPARE(t.bundleOf(t.a), t.bundleOf(t.c));
+        QCOMPARE(t.window->statusText(), QString("Bundled into charlie"));
+        QCOMPARE(t.current(), t.a);
+        QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(t.bundleOf(t.a), std::optional<BundleId>());
+        QCOMPARE(t.bundleOf(t.c), std::optional<BundleId>());
+        QVERIFY(t.store().listBundles().isEmpty());
+    }
+
+    void dropCardOnStackMoves()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.window->dropCard(t.a, t.window->model().rowOfStack(bundle));
+        QCOMPARE(t.bundleOf(t.a), std::optional<BundleId>(bundle));
+        QCOMPARE(t.window->statusText(), QString("Moved to bravo"));
+        QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(t.bundleOf(t.a), std::optional<BundleId>());
+    }
+
+    void dropMemberOnEmptyLeaves()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.window->model().setExpanded(bundle, true);
+        t.window->dropCard(t.c, -1);
+        QCOMPARE(t.bundleOf(t.c), std::optional<BundleId>());
+        QCOMPARE(t.window->statusText(), QString("Removed from bravo"));
+        QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(t.bundleOf(t.c), std::optional<BundleId>(bundle));
+    }
+
+    // Review Focus 2.
+    void dropOnSelfOrOwnStackIsNoOp()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.window->dropCard(t.a, t.window->model().rowOf(t.a));
+        t.window->dropCard(t.b, t.window->model().rowOfStack(bundle));
+        t.window->dropCard(t.a, -1);
+        QCOMPARE(t.bundleOf(t.a), std::optional<BundleId>());
+        QCOMPARE(t.bundleOf(t.b), std::optional<BundleId>(bundle));
+        QVERIFY(t.window->statusText().isEmpty());
+        QCOMPARE(t.window->undoLog().size(), 0);
+    }
+
+    // Review Focus 5.
+    void removingLastMembersDeletesBundleAndUndoRestores()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.window->model().setExpanded(bundle, true);
+        t.window->dropCard(t.c, -1);
+        t.window->dropCard(t.b, -1);
+        QVERIFY(t.store().listBundles().isEmpty());
+        QCOMPARE(t.current(), t.b);
+        QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
+        // Final review I1: one undo already puts B back into the very same bundle.
+        QCOMPARE(t.bundleOf(t.b), std::optional<BundleId>(bundle));
+        QCOMPARE(t.store().listBundles().first().name, QString("bravo"));
+        QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(t.bundleOf(t.c), std::optional<BundleId>(bundle));
+    }
+
+    void undoRestoresOneMemberBundleAfterCardDrop()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.store().moveToBundle(t.c, std::nullopt); // bundle "bravo" = {b}
+        t.window->reload();
+        t.window->dropCard(t.b, t.window->model().rowOf(t.a)); // {a, b}; "bravo" emptied and deleted
+        QVERIFY(t.bundleOf(t.b) != std::optional<BundleId>(bundle));
+        QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(t.bundleOf(t.b), std::optional<BundleId>(bundle));
+        QCOMPARE(t.bundleOf(t.a), std::optional<BundleId>());
+        QCOMPARE(t.store().listBundles().size(), 1);
+        QCOMPARE(t.store().listBundles().first().name, QString("bravo"));
+    }
+
+    // The user's ask: break a bundle up in one go.
+    void unbundleStackReleasesAllAndUndoes()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.selectStack(bundle);
+        t.window->unbundleSelected();
+        QCOMPARE(t.bundleOf(t.b), std::optional<BundleId>());
+        QCOMPARE(t.bundleOf(t.c), std::optional<BundleId>());
+        QVERIFY(t.store().listBundles().isEmpty());
+        QCOMPARE(t.window->statusText(), QString("Unbundled bravo"));
+        QCOMPARE(t.window->model().rowCount(), 3);
+        QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(t.bundleOf(t.b), std::optional<BundleId>(bundle));
+        QCOMPARE(t.bundleOf(t.c), std::optional<BundleId>(bundle));
+        QCOMPARE(t.store().listBundles().first().name, QString("bravo"));
+    }
+
+    // Final review (minor 3, regraded): the board must not reset its model inside Qt's dropEvent.
+    void dropGoesThroughModelMime()
+    {
+        Board t;
+        BoardModel& model = t.window->model();
+        QMimeData* mime = model.mimeData({model.index(model.rowOf(t.a))});
+        QVERIFY(mime && mime->hasFormat(BoardModel::kMimeType));
+        QVERIFY(!model.dropMimeData(mime, Qt::MoveAction, -1, 0, model.index(model.rowOf(t.c))));
+        delete mime;
+        QVERIFY(!t.bundleOf(t.a).has_value()); // handled after the drop event returns
+        QTRY_VERIFY(t.bundleOf(t.a).has_value());
+        QCOMPARE(t.bundleOf(t.a), t.bundleOf(t.c));
+    }
+
+    // Final review C1: a drop near a card's edge is a drop onto that card, not "empty space".
+    void dropNearCardEdgeBundles()
+    {
+        Board t;
+        BoardModel& model = t.window->model();
+        QMimeData* mime = model.mimeData({model.index(model.rowOf(t.a))});
+        const QRect target = t.grid()->visualRect(model.index(model.rowOf(t.c)));
+        const QPoint at(target.left() + 1, target.center().y());
+        QDragEnterEvent enter(at, Qt::MoveAction, mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(t.grid()->viewport(), &enter);
+        QDragMoveEvent move(at, Qt::MoveAction, mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(t.grid()->viewport(), &move);
+        QDropEvent drop(at, Qt::MoveAction, mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(t.grid()->viewport(), &drop);
+        QTRY_VERIFY(t.bundleOf(t.a).has_value());
+        QCOMPARE(t.bundleOf(t.a), t.bundleOf(t.c));
+        delete mime;
+    }
+
+    void stacksAreNotDraggable()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        BoardModel& model = t.window->model();
+        const Qt::ItemFlags stack = model.flags(model.index(model.rowOfStack(bundle)));
+        QVERIFY(!(stack & Qt::ItemIsDragEnabled));
+        QVERIFY(stack & Qt::ItemIsDropEnabled);
+        QVERIFY(model.flags(model.index(model.rowOf(t.a))) & Qt::ItemIsDragEnabled);
     }
 };
 
