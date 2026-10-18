@@ -23,6 +23,7 @@ class QLabel;
 class QLineEdit;
 class QListView;
 class TabStrip;
+class ChipBar;
 
 // The board (D17): tabs Today · All · Completed · Trash, an as-you-type search over the
 // current tab (D19) and a grid of cards. Keys (D30): "/" focuses search; Esc clears a
@@ -83,6 +84,7 @@ public:
     QListView* grid() const { return grid_; }
     QLineEdit* searchField() const { return search_; }
     TabStrip* tabStrip() const { return tabs_; }
+    ChipBar* chipBar() const { return chips_; }
     QString statusText() const;
     // "No notes" / "Nothing matches" while the grid is empty; empty otherwise.
     QString emptyText() const;
@@ -123,6 +125,7 @@ private:
     BoardModel* model_;
     CardDelegate* delegate_;
     TabStrip* tabs_;
+    ChipBar* chips_;
     QLineEdit* search_;
     QListView* grid_;
     QLabel* empty_;

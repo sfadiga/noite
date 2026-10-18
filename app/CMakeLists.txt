@@ -21,6 +21,8 @@ add_library(noite-app STATIC
     src/board/UndoLog.h src/board/UndoLog.cpp
     src/board/NoteOverlay.h src/board/NoteOverlay.cpp
     src/board/TabStrip.h src/board/TabStrip.cpp
+    src/board/FlowLayout.h src/board/FlowLayout.cpp
+    src/board/ChipBar.h src/board/ChipBar.cpp
     src/Theme.h src/Theme.cpp
     src/DragMover.h src/DragMover.cpp
 )
@@ -55,6 +57,7 @@ qt_add_executable(app-tests
     tests/tst_board_actions.cpp
     tests/tst_note_overlay.cpp
     tests/tst_theme.cpp
+    tests/tst_chip_bar.cpp
     tests/tst_seed.cpp bench/Seed.h bench/Seed.cpp
 )
 # Reuses core's test registry and helpers.

@@ -3,6 +3,7 @@
 
 #include "board/BoardModel.h"
 #include "board/BoardWindow.h"
+#include "board/ChipBar.h"
 #include "editor/AttachmentStore.h"
 
 #include <noite/store.h>
@@ -175,6 +176,61 @@ private slots:
         b.show();
         QCOMPARE(b.window->grid()->currentIndex().row(), 0);
         QVERIFY(b.window->grid()->selectionModel()->isSelected(b.window->grid()->currentIndex()));
+    }
+
+    // ---- M3b: chips ----
+
+    void chipNarrowsCardsAndCounts()
+    {
+        Board b;
+        const QList<ScratchSummary> today = b.f->store->list(Tab::Today, test::today());
+        b.f->store->setColor(today[0].id, Color::Red);
+        b.f->store->setColor(today[1].id, Color::Red);
+        b.window->reload();
+        b.show();
+        QVERIFY(b.window->chipBar()->chip("color:red"));
+        QTest::mouseClick(b.window->chipBar()->chip("color:red"), Qt::LeftButton);
+        QCOMPARE(b.window->model().rowCount(), 2);
+        QCOMPARE(b.window->tabStrip()->countText(0), QString("2"));
+        QVERIFY(b.window->chipBar()->chip("color:red")->isChecked());
+    }
+
+    void escClearsSearchThenChipsThenCloses()
+    {
+        Board b;
+        const QList<ScratchSummary> today = b.f->store->list(Tab::Today, test::today());
+        b.f->store->setColor(today[0].id, Color::Red);
+        b.window->reload();
+        b.show();
+        QTest::mouseClick(b.window->chipBar()->chip("color:red"), Qt::LeftButton);
+        b.window->searchField()->setFocus();
+        QTest::keyClicks(b.window->searchField(), "milk");
+        QTest::keyClick(b.window->searchField(), Qt::Key_Escape);
+        QVERIFY(b.window->searchField()->text().isEmpty());
+        QVERIFY(!b.window->model().filter().isEmpty());
+        QTest::keyClick(b.window->grid(), Qt::Key_Escape);
+        QVERIFY(b.window->model().filter().isEmpty());
+        QVERIFY(b.window->isVisible());
+        QTest::keyClick(b.window->grid(), Qt::Key_Escape);
+        QVERIFY(!b.window->isVisible());
+    }
+
+    // Review Focus 4.
+    void activeChipWithNoMatchesStays()
+    {
+        Board b;
+        const ScratchId tagged = b.add("pack #trip");
+        b.window->reload();
+        b.show();
+        QTest::mouseClick(b.window->chipBar()->chip("tag:trip"), Qt::LeftButton);
+        QCOMPARE(b.window->model().rowCount(), 1);
+        b.f->store->updateContent(tagged, test::html({"pack"}));
+        b.window->reload();
+        QAbstractButton* chip = b.window->chipBar()->chip("tag:trip");
+        QVERIFY(chip);
+        QVERIFY(chip->isChecked());
+        QCOMPARE(chip->text(), QString("#trip 0"));
+        QCOMPARE(b.window->emptyText(), QString("Nothing matches"));
     }
 
     // Review Focus 2.

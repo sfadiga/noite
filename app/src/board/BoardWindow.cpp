@@ -1,6 +1,7 @@
 #include "board/BoardWindow.h"
 
 #include "board/BoardModel.h"
+#include "board/ChipBar.h"
 #include "board/CardDelegate.h"
 #include "Theme.h"
 #include "board/NoteOverlay.h"
@@ -32,6 +33,7 @@ BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std:
     , model_(new BoardModel(store, today, this))
     , delegate_(new CardDelegate(&attachments, this))
     , tabs_(new TabStrip(this))
+    , chips_(new ChipBar(this))
     , search_(new QLineEdit(this))
     , grid_(new QListView(this))
     , empty_(new QLabel(grid_->viewport()))
@@ -84,7 +86,12 @@ BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std:
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(12, 8, 12, 6);
     layout->addLayout(top);
+    layout->addWidget(chips_);
     layout->addWidget(grid_, 1);
+    connect(chips_, &ChipBar::filterChanged, this, [this](const noite::BoardFilter& filter) {
+        model_->setFilter(filter);
+        grid_->setFocus(Qt::OtherFocusReason);
+    });
     layout->addWidget(status_);
 
     searchDelay_.setSingleShot(true);
@@ -533,7 +540,7 @@ QString BoardWindow::emptyText() const
 {
     if (model_->rowCount() > 0)
         return {};
-    return model_->search().isEmpty() ? tr("No notes") : tr("Nothing matches");
+    return model_->search().isEmpty() && model_->filter().isEmpty() ? tr("No notes") : tr("Nothing matches");
 }
 
 void BoardWindow::onModelReset()
@@ -544,13 +551,15 @@ void BoardWindow::onModelReset()
     empty_->setVisible(model_->rowCount() == 0);
     layoutEmptyLabel();
     try {
-        tabs_->setCounts(store_.tabCounts(model_->today(), model_->search()));
+        tabs_->setCounts(store_.tabCounts(model_->today(), model_->search(), model_->filter()));
+        chips_->setFacets(store_.chipFacets(model_->tab(), model_->today(), model_->search(), model_->filter()),
+                          model_->filter());
     } catch (const std::exception& error) {
-        qWarning() << "board: counts:" << error.what(); // the cards still show; counts stay stale
+        qWarning() << "board: counts:" << error.what(); // the cards still show; counts and chips stay stale
     }
 }
 
-// Esc on the grid: collapse the bundle of a selected member, else close.
+// Esc on the grid: collapse the bundle of a selected member, else clear the chips, else close.
 void BoardWindow::escapeOnGrid()
 {
     const QModelIndex current = grid_->currentIndex();
@@ -562,6 +571,10 @@ void BoardWindow::escapeOnGrid()
             selectStack(bundle);
             return;
         }
+    }
+    if (!model_->filter().isEmpty()) {
+        model_->setFilter({});
+        return;
     }
     close();
 }
