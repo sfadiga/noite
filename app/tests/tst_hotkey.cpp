@@ -54,6 +54,20 @@ private slots:
             QVERIFY(combo && parseHotkey(*combo));
         }
     }
+
+    void comboFromNativeKeyIgnoresLayout()
+    {
+        const auto ctrlShift = Qt::ControlModifier | Qt::ShiftModifier;
+        QCOMPARE(comboFromNativeKey('7', ctrlShift), std::optional<QString>("Ctrl+Shift+7"));
+        QCOMPARE(comboFromNativeKey('K', Qt::ControlModifier | Qt::AltModifier), std::optional<QString>("Ctrl+Alt+K"));
+        QCOMPARE(comboFromNativeKey(VK_F5, Qt::ControlModifier), std::optional<QString>("Ctrl+F5"));
+        QCOMPARE(comboFromNativeKey(VK_F24, Qt::AltModifier), std::optional<QString>("Alt+F24"));
+        QCOMPARE(comboFromNativeKey(VK_SPACE, Qt::AltModifier | Qt::ShiftModifier), std::optional<QString>("Alt+Shift+Space"));
+        QVERIFY(!comboFromNativeKey('K', Qt::ShiftModifier));
+        QVERIFY(!comboFromNativeKey(VK_CONTROL, Qt::ControlModifier));
+        QVERIFY(!comboFromNativeKey(VK_ESCAPE, Qt::ControlModifier));
+        QVERIFY(!comboFromNativeKey(0, Qt::ControlModifier));
+    }
 };
 
 NOITE_TEST(HotkeyTest)

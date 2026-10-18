@@ -25,3 +25,7 @@ QString formatHotkey(Hotkey hotkey);
 // Win is never produced), or nothing if the press is not a valid hotkey: a modifier key alone,
 // a key parseHotkey does not know, or neither Ctrl nor Alt held.
 std::optional<QString> comboFromKey(int qtKey, Qt::KeyboardModifiers mods);
+
+// The same rules, from a Windows virtual-key code (QKeyEvent::nativeVirtualKey): independent of
+// the keyboard layout, so Ctrl+Shift+7 is "Ctrl+Shift+7" even where Qt reports a symbol key.
+std::optional<QString> comboFromNativeKey(quint32 vk, Qt::KeyboardModifiers mods);

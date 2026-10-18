@@ -84,18 +84,19 @@ QString formatHotkey(Hotkey hotkey)
     return text + QChar(char16_t(hotkey.vk));
 }
 
-std::optional<QString> comboFromKey(int qtKey, Qt::KeyboardModifiers mods)
-{
-    Hotkey hotkey;
-    if ((qtKey >= Qt::Key_A && qtKey <= Qt::Key_Z) || (qtKey >= Qt::Key_0 && qtKey <= Qt::Key_9))
-        hotkey.vk = unsigned(qtKey); // Qt's A-Z and 0-9 codes are the ASCII (and VK) codes
-    else if (qtKey >= Qt::Key_F1 && qtKey <= Qt::Key_F24)
-        hotkey.vk = unsigned(VK_F1 + qtKey - Qt::Key_F1);
-    else if (qtKey == Qt::Key_Space)
-        hotkey.vk = VK_SPACE;
-    else
-        return std::nullopt;
+namespace {
 
+bool isHotkeyVk(unsigned vk)
+{
+    return (vk >= 'A' && vk <= 'Z') || (vk >= '0' && vk <= '9') || (vk >= VK_F1 && vk <= VK_F24) || vk == VK_SPACE;
+}
+
+std::optional<QString> comboFromVk(unsigned vk, Qt::KeyboardModifiers mods)
+{
+    if (!isHotkeyVk(vk))
+        return std::nullopt;
+    Hotkey hotkey;
+    hotkey.vk = vk;
     if (!(mods & (Qt::ControlModifier | Qt::AltModifier)))
         return std::nullopt;
     if (mods & Qt::ControlModifier)
@@ -105,4 +106,25 @@ std::optional<QString> comboFromKey(int qtKey, Qt::KeyboardModifiers mods)
     if (mods & Qt::ShiftModifier)
         hotkey.modifiers |= MOD_SHIFT;
     return formatHotkey(hotkey);
+}
+
+} // namespace
+
+std::optional<QString> comboFromKey(int qtKey, Qt::KeyboardModifiers mods)
+{
+    unsigned vk = 0;
+    if ((qtKey >= Qt::Key_A && qtKey <= Qt::Key_Z) || (qtKey >= Qt::Key_0 && qtKey <= Qt::Key_9))
+        vk = unsigned(qtKey); // Qt's A-Z and 0-9 codes are the ASCII (and VK) codes
+    else if (qtKey >= Qt::Key_F1 && qtKey <= Qt::Key_F24)
+        vk = unsigned(VK_F1 + qtKey - Qt::Key_F1);
+    else if (qtKey == Qt::Key_Space)
+        vk = VK_SPACE;
+    else
+        return std::nullopt;
+    return comboFromVk(vk, mods);
+}
+
+std::optional<QString> comboFromNativeKey(quint32 vk, Qt::KeyboardModifiers mods)
+{
+    return comboFromVk(vk, mods);
 }
