@@ -12,6 +12,10 @@ namespace noite {
 
 enum class SyncProvider { GoogleDrive, OneDrive, Dropbox };
 
+// The localised names of Google Drive for Desktop's "my drive" folder, in display case
+// ("My Drive", "Meu Drive", ...). Shared drives and the like are not included.
+QStringList googleDriveFolderNames();
+
 // Which file-sync service, if any, owns `path` (the live database must never be synced, D13).
 std::optional<SyncProvider> syncProviderFor(const QString& path, const QStringList& oneDriveRoots,
                                             const QString& volumeLabel = {});

@@ -95,6 +95,14 @@ struct PurgeReport {
     int attachmentsDeleted{};
 };
 
+// When the background jobs last ran (M5); kept apart from Settings so saving settings
+// never overwrites it.
+struct JobState {
+    std::optional<QDate> lastPurgeDay, lastBackupDay, backupAlertDay;
+    std::optional<qint64> backupFailingSinceMs;
+    bool operator==(const JobState&) const = default;
+};
+
 struct Bundle {
     BundleId id;
     QString name;
