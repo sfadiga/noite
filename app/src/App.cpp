@@ -160,8 +160,11 @@ std::optional<int> App::start()
     startJobs();
     createTray();
 
-    registerHotkey(kCaptureHotkeyId, settings.captureHotkey);
-    registerHotkey(kBoardHotkeyId, settings.boardHotkey);
+    hotkeys_ = std::make_unique<HotkeyManager>(*host_);
+    if (hotkeys_->set(kCaptureHotkeyId, settings.captureHotkey) != HotkeyStatus::Ok)
+        emit hotkeyUnavailable(settings.captureHotkey);
+    if (hotkeys_->set(kBoardHotkeyId, settings.boardHotkey) != HotkeyStatus::Ok)
+        emit hotkeyUnavailable(settings.boardHotkey);
     return std::nullopt;
 }
 
@@ -247,13 +250,6 @@ void App::showReview()
     review_->raise();
     review_->activateWindow();
     SetForegroundWindow(reinterpret_cast<HWND>(review_->winId()));
-}
-
-void App::registerHotkey(int id, const QString& combo)
-{
-    const std::optional<Hotkey> hotkey = parseHotkey(combo);
-    if (!hotkey || !host_->registerHotkey(id, *hotkey))
-        emit hotkeyUnavailable(combo);
 }
 
 void App::showBoard()

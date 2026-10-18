@@ -1,6 +1,7 @@
 #pragma once
 
 #include "platform/Hotkey.h"
+#include "platform/HotkeyManager.h"
 
 #include <QObject>
 #include <QSet>
@@ -13,7 +14,7 @@ QString instanceKeyFor(const QString& dataRoot);
 // A Win32 message-only window. Global hotkeys are registered against it (not as thread
 // messages), so they still arrive while a modal loop such as a drag or a dialog is
 // running. A second noite launch finds it by instance key and asks it to open a capture.
-class NativeHost : public QObject {
+class NativeHost : public QObject, public HotkeyBackend {
     Q_OBJECT
 public:
     explicit NativeHost(const QString& instanceKey, QObject* parent = nullptr);
@@ -22,8 +23,8 @@ public:
     quintptr nativeHandle() const { return hwnd_; }
 
     // False if another program (or another host) already holds the combination.
-    bool registerHotkey(int id, Hotkey hotkey);
-    void unregisterHotkey(int id);
+    bool registerHotkey(int id, Hotkey hotkey) override;
+    void unregisterHotkey(int id) override;
 
     // Posts an activation request to the instance owning `instanceKey`; false if none runs.
     static bool activateRunningInstance(const QString& instanceKey);

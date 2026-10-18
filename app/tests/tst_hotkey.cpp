@@ -25,6 +25,26 @@ private slots:
             QVERIFY2(!parseHotkey(bad), bad);
         QVERIFY(!parseHotkey(QString::fromUtf8("Ctrl+Alt+Ä")));
     }
+
+    void comboFromKeyFormats()
+    {
+        QCOMPARE(comboFromKey(Qt::Key_J, Qt::ControlModifier | Qt::AltModifier), std::optional<QString>("Ctrl+Alt+J"));
+        QCOMPARE(comboFromKey(Qt::Key_F5, Qt::ControlModifier), std::optional<QString>("Ctrl+F5"));
+        QCOMPARE(comboFromKey(Qt::Key_F24, Qt::AltModifier), std::optional<QString>("Alt+F24"));
+        QCOMPARE(comboFromKey(Qt::Key_7, Qt::ControlModifier), std::optional<QString>("Ctrl+7"));
+        QCOMPARE(comboFromKey(Qt::Key_Space, Qt::AltModifier | Qt::ShiftModifier), std::optional<QString>("Alt+Shift+Space"));
+        QCOMPARE(comboFromKey(Qt::Key_J, Qt::ControlModifier | Qt::MetaModifier), std::optional<QString>("Ctrl+J"));
+        QVERIFY(!comboFromKey(Qt::Key_J, Qt::ShiftModifier));
+        QVERIFY(!comboFromKey(Qt::Key_J, Qt::NoModifier));
+        QVERIFY(!comboFromKey(Qt::Key_Escape, Qt::ControlModifier));
+        QVERIFY(!comboFromKey(Qt::Key_Control, Qt::ControlModifier));
+        QVERIFY(!comboFromKey(Qt::Key_J, Qt::MetaModifier));
+        for (const auto& [key, mods] : {std::pair{Qt::Key_A, Qt::ControlModifier}, std::pair{Qt::Key_F12, Qt::AltModifier},
+                                         std::pair{Qt::Key_Space, Qt::ControlModifier}}) {
+            const auto combo = comboFromKey(key, mods);
+            QVERIFY(combo && parseHotkey(*combo));
+        }
+    }
 };
 
 NOITE_TEST(HotkeyTest)

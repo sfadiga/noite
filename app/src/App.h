@@ -3,6 +3,7 @@
 #include "AppOptions.h"
 #include "board/BoardWindow.h"
 #include "platform/Autostart.h"
+#include "platform/HotkeyManager.h"
 #include "radar/ReviewWindow.h"
 
 #include <QObject>
@@ -32,8 +33,8 @@ class StoreAttachments;
 class App : public QObject {
     Q_OBJECT
 public:
-    static constexpr int kCaptureHotkeyId = 1;
-    static constexpr int kBoardHotkeyId = 2;
+    static constexpr int kCaptureHotkeyId = HotkeyManager::kCaptureId;
+    static constexpr int kBoardHotkeyId = HotkeyManager::kBoardId;
 
     // `autostart`: where "Start with Windows" is written (main passes the Run key). Without
     // one, autostart is not managed, so tests never touch the real registry.
@@ -48,6 +49,8 @@ public:
 
     noite::Store* store() const { return store_.get(); }
     NativeHost* host() const { return host_.get(); }
+    // The two global hotkeys; null before start().
+    HotkeyManager* hotkeys() const { return hotkeys_.get(); }
     CaptureWindow* captureWindow() const { return window_.get(); }
     // Opens the board (creating it, back on the tab and search it was closed with) and brings
     // it to the front.
@@ -75,7 +78,6 @@ signals:
 
 private:
     void createTray();
-    void registerHotkey(int id, const QString& combo);
     void updateAutostart(bool enabled);
     void startJobs();
 
@@ -91,6 +93,7 @@ private:
     LogSession log_;
     std::unique_ptr<noite::Store> store_;
     std::unique_ptr<NativeHost> host_;
+    std::unique_ptr<HotkeyManager> hotkeys_;
     std::unique_ptr<StoreAttachments> attachments_;
     std::unique_ptr<CaptureController> controller_;
     std::unique_ptr<CaptureWindow> window_;

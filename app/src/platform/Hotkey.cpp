@@ -65,3 +65,29 @@ std::optional<Hotkey> parseHotkey(const QString& text)
         return std::nullopt;
     return hotkey;
 }
+
+std::optional<QString> comboFromKey(int qtKey, Qt::KeyboardModifiers mods)
+{
+    QString key;
+    if (qtKey >= Qt::Key_A && qtKey <= Qt::Key_Z)
+        key = QChar(qtKey);
+    else if (qtKey >= Qt::Key_0 && qtKey <= Qt::Key_9)
+        key = QChar(qtKey);
+    else if (qtKey >= Qt::Key_F1 && qtKey <= Qt::Key_F24)
+        key = QStringLiteral("F%1").arg(qtKey - Qt::Key_F1 + 1);
+    else if (qtKey == Qt::Key_Space)
+        key = QStringLiteral("Space");
+    else
+        return std::nullopt;
+
+    if (!(mods & (Qt::ControlModifier | Qt::AltModifier)))
+        return std::nullopt;
+    QString combo;
+    if (mods & Qt::ControlModifier)
+        combo += QStringLiteral("Ctrl+");
+    if (mods & Qt::AltModifier)
+        combo += QStringLiteral("Alt+");
+    if (mods & Qt::ShiftModifier)
+        combo += QStringLiteral("Shift+");
+    return combo + key;
+}
