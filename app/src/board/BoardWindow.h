@@ -70,6 +70,9 @@ public:
     void toggleSelectedStack();
     void renameSelectedBundle(const QString& name);
     void removeSelectedFromBundle();
+    // A card dropped onto the card or stack at `targetRow`, or onto empty space (-1): bundles
+    // it, moves it into that bundle, or takes it out of its own. Undoable; no-op if nothing changes.
+    void dropCard(const noite::ScratchId& dragged, int targetRow);
 
     // Empty while a stack is selected.
     std::optional<noite::ScratchId> selectedId() const;
@@ -107,6 +110,8 @@ private:
     void escapeOnGrid();
     void selectStack(const noite::BundleId& bundle);
     QString bundleName(const noite::BundleId& bundle) const; // null if the bundle no longer exists
+    // Another visible member of `bundle`, to rebuild it around if it empties.
+    std::optional<noite::ScratchId> partnerIn(const noite::BundleId& bundle, const noite::ScratchId& excluding) const;
     // Undo of leaving a bundle: back into `bundle`, or, if it emptied and was deleted, a new
     // bundle around `partner` (a former member) named `name`.
     void rejoin(const noite::ScratchId& id, const std::optional<noite::BundleId>& bundle, const QString& name,

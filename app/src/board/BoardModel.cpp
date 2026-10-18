@@ -4,6 +4,7 @@
 
 #include <QDebug>
 #include <QHash>
+#include <QMimeData>
 
 BoardModel::BoardModel(noite::Store& store, std::function<QDate()> today, QObject* parent)
     : QAbstractListModel(parent)
@@ -126,6 +127,50 @@ int BoardModel::rowOfStack(const noite::BundleId& bundle) const
 int BoardModel::rowCount(const QModelIndex& parent) const
 {
     return parent.isValid() ? 0 : int(rows_.size());
+}
+
+Qt::ItemFlags BoardModel::flags(const QModelIndex& index) const
+{
+    if (!index.isValid())
+        return Qt::ItemIsDropEnabled; // empty space: out of a bundle
+    Qt::ItemFlags f = Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsDropEnabled;
+    if (!isStack(index.row()))
+        f |= Qt::ItemIsDragEnabled;
+    return f;
+}
+
+QStringList BoardModel::mimeTypes() const
+{
+    return {QString::fromLatin1(kMimeType)};
+}
+
+QMimeData* BoardModel::mimeData(const QModelIndexList& indexes) const
+{
+    if (indexes.isEmpty() || !indexes.first().isValid() || isStack(indexes.first().row()))
+        return nullptr;
+    auto* mime = new QMimeData;
+    mime->setData(QString::fromLatin1(kMimeType), summary(indexes.first().row()).id.toUtf8());
+    return mime;
+}
+
+Qt::DropActions BoardModel::supportedDropActions() const
+{
+    return Qt::MoveAction;
+}
+
+bool BoardModel::canDropMimeData(const QMimeData* data, Qt::DropAction, int, int, const QModelIndex&) const
+{
+    return data && data->hasFormat(QString::fromLatin1(kMimeType));
+}
+
+bool BoardModel::dropMimeData(const QMimeData* data, Qt::DropAction action, int row, int column,
+                              const QModelIndex& parent)
+{
+    if (!canDropMimeData(data, action, row, column, parent))
+        return false;
+    const noite::ScratchId dragged = QString::fromUtf8(data->data(QString::fromLatin1(kMimeType)));
+    emit dropRequested(dragged, parent.isValid() ? parent.row() : -1);
+    return false; // the store changes and the board reloads; the view moves nothing
 }
 
 QVariant BoardModel::data(const QModelIndex& index, int role) const

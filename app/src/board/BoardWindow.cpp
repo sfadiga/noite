@@ -57,6 +57,12 @@ BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std:
     grid_->setFrameShape(QFrame::NoFrame);
     grid_->setModel(model_);
     grid_->setItemDelegate(delegate_);
+    grid_->setDragEnabled(true);
+    grid_->setDragDropMode(QAbstractItemView::DragDrop);
+    grid_->setDefaultDropAction(Qt::MoveAction);
+    grid_->setDropIndicatorShown(true);
+    grid_->viewport()->setAcceptDrops(true);
+    connect(model_, &BoardModel::dropRequested, this, &BoardWindow::dropCard);
     grid_->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(grid_, &QWidget::customContextMenuRequested, this, &BoardWindow::showContextMenu);
     connect(grid_, &QAbstractItemView::clicked, this, &BoardWindow::openSelected);
@@ -224,6 +230,57 @@ void BoardWindow::rejoin(const ScratchId& id, const std::optional<noite::BundleI
     store_.renameBundle(rebuilt, name);
 }
 
+std::optional<ScratchId> BoardWindow::partnerIn(const noite::BundleId& bundle, const ScratchId& excluding) const
+{
+    if (const int stackRow = model_->rowOfStack(bundle); stackRow >= 0)
+        for (const ScratchSummary& m : model_->row(stackRow).members)
+            if (m.id != excluding)
+                return m.id;
+    return std::nullopt;
+}
+
+void BoardWindow::dropCard(const ScratchId& dragged, int targetRow)
+{
+    const int fallback = grid_->currentIndex().row();
+    try {
+        const std::optional<noite::BundleId> prev = store_.get(dragged).bundleId;
+        const QString prevName = prev ? bundleName(*prev) : QString();
+        const std::optional<ScratchId> prevPartner = prev ? partnerIn(*prev, dragged) : std::nullopt;
+        auto undoPrev = [this, dragged, prev, prevName, prevPartner] { rejoin(dragged, prev, prevName, prevPartner); };
+
+        if (targetRow < 0) { // empty space: out of its bundle
+            if (!prev)
+                return;
+            store_.moveToBundle(dragged, std::nullopt);
+            pushUndo(tr("Remove from bundle"), dragged, undoPrev);
+            showStatus(tr("Removed from %1").arg(prevName));
+        } else if (model_->isStack(targetRow)) {
+            const noite::BundleId bundle = model_->row(targetRow).bundleId;
+            if (prev == bundle)
+                return;
+            store_.moveToBundle(dragged, bundle);
+            pushUndo(tr("Move to bundle"), dragged, undoPrev);
+            showStatus(tr("Moved to %1").arg(bundleName(bundle)));
+        } else {
+            const ScratchSummary target = model_->row(targetRow).card;
+            if (target.id == dragged || (prev && target.bundleId == prev))
+                return;
+            const bool targetHadBundle = target.bundleId.has_value();
+            const noite::BundleId bundle = store_.bundleTogether(target.id, dragged);
+            pushUndo(tr("Bundle"), dragged, [this, undoPrev, targetHadBundle, targetId = target.id] {
+                undoPrev();
+                if (!targetHadBundle)
+                    store_.moveToBundle(targetId, std::nullopt); // the bundle the drop created goes too
+            });
+            showStatus(tr("Bundled into %1").arg(bundleName(bundle)));
+        }
+    } catch (const std::exception& error) {
+        qWarning() << "board:" << error.what();
+        showStatus(QString::fromUtf8(error.what()));
+    }
+    reloadSelecting(dragged, fallback);
+}
+
 void BoardWindow::removeSelectedFromBundle()
 {
     act([this](const ScratchSummary& s) -> std::optional<ScratchId> {
@@ -232,11 +289,7 @@ void BoardWindow::removeSelectedFromBundle()
         const ScratchId id = s.id;
         const noite::BundleId bundle = *s.bundleId;
         const QString name = bundleName(bundle);
-        std::optional<ScratchId> partner;
-        if (const int stackRow = model_->rowOfStack(bundle); stackRow >= 0)
-            for (const ScratchSummary& m : model_->row(stackRow).members)
-                if (m.id != id && !partner)
-                    partner = m.id;
+        const std::optional<ScratchId> partner = partnerIn(bundle, id);
         store_.moveToBundle(id, std::nullopt);
         pushUndo(tr("Remove from bundle"), id, [this, id, bundle, name, partner] { rejoin(id, bundle, name, partner); });
         showStatus(tr("Removed from %1").arg(name));

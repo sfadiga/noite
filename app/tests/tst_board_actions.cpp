@@ -10,6 +10,7 @@
 #include <noite/store.h>
 
 #include <QListView>
+#include <QMimeData>
 #include <QTest>
 
 using namespace noite;
@@ -301,6 +302,99 @@ private slots:
         QCOMPARE(t.current(), t.c);
         QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
         QCOMPARE(t.bundleOf(t.c), std::optional<BundleId>(bundle));
+    }
+
+    // ---- M3b: drag and drop ----
+
+    void dropCardOnCardBundles()
+    {
+        Board t;
+        t.window->dropCard(t.a, t.window->model().rowOf(t.c));
+        QVERIFY(t.bundleOf(t.a).has_value());
+        QCOMPARE(t.bundleOf(t.a), t.bundleOf(t.c));
+        QCOMPARE(t.window->statusText(), QString("Bundled into charlie"));
+        QCOMPARE(t.current(), t.a);
+        QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(t.bundleOf(t.a), std::optional<BundleId>());
+        QCOMPARE(t.bundleOf(t.c), std::optional<BundleId>());
+        QVERIFY(t.store().listBundles().isEmpty());
+    }
+
+    void dropCardOnStackMoves()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.window->dropCard(t.a, t.window->model().rowOfStack(bundle));
+        QCOMPARE(t.bundleOf(t.a), std::optional<BundleId>(bundle));
+        QCOMPARE(t.window->statusText(), QString("Moved to bravo"));
+        QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(t.bundleOf(t.a), std::optional<BundleId>());
+    }
+
+    void dropMemberOnEmptyLeaves()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.window->model().setExpanded(bundle, true);
+        t.window->dropCard(t.c, -1);
+        QCOMPARE(t.bundleOf(t.c), std::optional<BundleId>());
+        QCOMPARE(t.window->statusText(), QString("Removed from bravo"));
+        QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(t.bundleOf(t.c), std::optional<BundleId>(bundle));
+    }
+
+    // Review Focus 2.
+    void dropOnSelfOrOwnStackIsNoOp()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.window->dropCard(t.a, t.window->model().rowOf(t.a));
+        t.window->dropCard(t.b, t.window->model().rowOfStack(bundle));
+        t.window->dropCard(t.a, -1);
+        QCOMPARE(t.bundleOf(t.a), std::optional<BundleId>());
+        QCOMPARE(t.bundleOf(t.b), std::optional<BundleId>(bundle));
+        QVERIFY(t.window->statusText().isEmpty());
+        QCOMPARE(t.window->undoLog().size(), 0);
+    }
+
+    // Review Focus 5.
+    void removingLastMembersDeletesBundleAndUndoRestores()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.window->model().setExpanded(bundle, true);
+        t.window->dropCard(t.c, -1);
+        t.window->dropCard(t.b, -1);
+        QVERIFY(t.store().listBundles().isEmpty());
+        QCOMPARE(t.current(), t.b);
+        QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
+        QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
+        QVERIFY(t.bundleOf(t.b).has_value());
+        QCOMPARE(t.bundleOf(t.b), t.bundleOf(t.c));
+        QCOMPARE(t.store().listBundles().first().name, QString("bravo"));
+    }
+
+    void dropGoesThroughModelMime()
+    {
+        Board t;
+        BoardModel& model = t.window->model();
+        QMimeData* mime = model.mimeData({model.index(model.rowOf(t.a))});
+        QVERIFY(mime && mime->hasFormat(BoardModel::kMimeType));
+        QVERIFY(!model.dropMimeData(mime, Qt::MoveAction, -1, 0, model.index(model.rowOf(t.c))));
+        delete mime;
+        QCOMPARE(t.bundleOf(t.a), t.bundleOf(t.c));
+        QVERIFY(t.bundleOf(t.a).has_value());
+    }
+
+    void stacksAreNotDraggable()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        BoardModel& model = t.window->model();
+        const Qt::ItemFlags stack = model.flags(model.index(model.rowOfStack(bundle)));
+        QVERIFY(!(stack & Qt::ItemIsDragEnabled));
+        QVERIFY(stack & Qt::ItemIsDropEnabled);
+        QVERIFY(model.flags(model.index(model.rowOf(t.a))) & Qt::ItemIsDragEnabled);
     }
 };
 

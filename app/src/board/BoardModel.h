@@ -56,8 +56,22 @@ public:
     int rowCount(const QModelIndex& parent = {}) const override;
     QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
 
+    // Drag and drop (M3b): cards drag; cards, stacks and empty space take drops. A drop is
+    // only reported (dropRequested); the board makes the store calls, so rows never move here.
+    static constexpr const char* kMimeType = "application/x-noite-scratch";
+    Qt::ItemFlags flags(const QModelIndex& index) const override;
+    QStringList mimeTypes() const override;
+    QMimeData* mimeData(const QModelIndexList& indexes) const override;
+    Qt::DropActions supportedDropActions() const override;
+    bool canDropMimeData(const QMimeData* data, Qt::DropAction action, int row, int column,
+                         const QModelIndex& parent) const override;
+    bool dropMimeData(const QMimeData* data, Qt::DropAction action, int row, int column,
+                      const QModelIndex& parent) override;
+
 signals:
     void errorOccurred(QString message);
+    // `targetRow` is the card or stack dropped onto; -1 for empty space.
+    void dropRequested(noite::ScratchId dragged, int targetRow);
 
 private:
     noite::Store& store_;
