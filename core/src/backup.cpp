@@ -93,8 +93,8 @@ Result run(const Job& job, const std::atomic<bool>* cancel)
     QFile::remove(tmp);
     try {
         detail::Db db = detail::Db::open(job.dbPath, true);
-        if (cancel)
-            sqlite3_progress_handler(db.handle(), 1000, &cancelled, const_cast<std::atomic<bool>*>(cancel));
+        if (cancel) // small interval: the data is mostly blob rows, each only a few VM ops
+            sqlite3_progress_handler(db.handle(), 16,&cancelled, const_cast<std::atomic<bool>*>(cancel));
         try {
             detail::vacuumInto(db, tmp);
         } catch (const Error&) {

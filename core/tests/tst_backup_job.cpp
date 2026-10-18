@@ -7,6 +7,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QRandomGenerator>
 
 #include <atomic>
 #include <thread>
@@ -126,12 +127,27 @@ private slots:
     }
 
     // The progress handler must stop a VACUUM INTO that is already running.
+    void cancelDuringVacuumStopsIt_data()
+    {
+        QTest::addColumn<bool>("blobs");
+        QTest::newRow("rows") << false;
+        QTest::newRow("blobs") << true;
+    }
+
     void cancelDuringVacuumStopsIt()
     {
+        QFETCH(bool, blobs);
         auto f = fixture();
-        // The handler counts VDBE ops, not bytes, so the copy needs many rows (not big blobs).
-        f->store->db().exec("CREATE TABLE junk(a, b); WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n "
-                            "WHERE i < 400000) INSERT INTO junk SELECT i, hex(randomblob(16)) FROM n");
+        if (blobs) { // realistic: a few dozen ~1 MB attachments, few VM ops each
+            for (int i = 0; i < 30; ++i) {
+                QByteArray bytes(1'000'000, 0);
+                QRandomGenerator::global()->fillRange(reinterpret_cast<quint32*>(bytes.data()), bytes.size() / 4);
+                f->store->putAttachment(bytes, "bin");
+            }
+        } else {
+            f->store->db().exec("CREATE TABLE junk(a, b); WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n "
+                                "WHERE i < 400000) INSERT INTO junk SELECT i, hex(randomblob(16)) FROM n");
+        }
         QTemporaryDir dest;
         const QString snaps = snapshotsDir(*f->store, dest.path());
         std::atomic<bool> cancel{false};
