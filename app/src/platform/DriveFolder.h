@@ -14,7 +14,8 @@ struct DriveVolume {
 };
 
 // Google Drive for Desktop mounts a volume labelled "Google Drive": its "my drive" folder
-// (first of googleDriveFolderNames() that exists), else the volume root. `/` separators.
+// (first of googleDriveFolderNames() that exists); nullopt when there is none (the caller then
+// opens the folder picker). `/` separators.
 std::optional<QString> suggestedDriveFolder(const QList<DriveVolume>& volumes,
                                             const std::function<bool(const QString&)>& dirExists);
 

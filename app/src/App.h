@@ -108,5 +108,4 @@ private:
     std::unique_ptr<JobScheduler> jobs_;
     QAction* backupAction_ = nullptr;
     std::function<std::optional<QString>()> askFolder_;
-
 };

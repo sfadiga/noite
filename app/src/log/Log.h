@@ -27,6 +27,7 @@ private:
     qint64 m_maxBytes;
     int m_files;
     QFile m_file;
+    qint64 m_retryAtSize = 0; // after a failed rotation: don't try again before the file is this big
 };
 
 QString formatLine(QtMsgType type, const QDateTime& when, const QString& thread, const QString& message);

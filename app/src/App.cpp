@@ -85,7 +85,7 @@ std::optional<int> App::start()
     if (options_.crashHandler)
         crash::install(dir->logsDir());
     qInfo().noquote() << QString::fromUtf8("noite started · data %1 · Qt %2 · Windows %3")
-                             .arg(root, QString::fromLatin1(qVersion()), QSysInfo::productVersion());
+                             .arg(root, QString::fromLatin1(qVersion()), QSysInfo::kernelVersion());
 
     store_ = noite::Store::open(std::move(*dir), std::make_shared<noite::SystemClock>());
     clearOpenFolder(defaultOpenFolder()); // chip files opened last session (A5)
@@ -199,7 +199,10 @@ void App::backUpNow()
     try {
         noite::Settings settings = store_->settings();
         if (!settings.backupDir) {
+            // The dialog is modal but the tray menu is not: a second click must not stack another.
+            backupAction_->setEnabled(false);
             const std::optional<QString> folder = askFolder_();
+            backupAction_->setEnabled(!jobs_->isBusy());
             if (!folder)
                 return;
             settings.backupDir = *folder;

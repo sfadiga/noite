@@ -37,18 +37,33 @@ bool LogFile::openCurrent()
 
 void LogFile::rotate()
 {
+    const qint64 size = m_file.size();
     m_file.close();
-    // Every failure is ignored: the live file then grows past the limit until the next try.
+    // The live file moves aside first: if it cannot be renamed (held open by another program) the
+    // older files are left alone and the next try waits until it has grown by another maxBytes.
+    const QString aside = nameOf(0) + ".rot";
+    QFile::remove(aside);
+    if (!QFile::rename(nameOf(0), aside)) {
+        m_retryAtSize = size + m_maxBytes;
+        openCurrent();
+        return;
+    }
     QFile::remove(nameOf(m_files - 1));
-    for (int i = m_files - 2; i >= 0; --i)
+    for (int i = m_files - 2; i >= 1; --i)
         QFile::rename(nameOf(i), nameOf(i + 1));
+    m_retryAtSize = 0;
+    if (!QFile::rename(aside, nameOf(1))) {
+        QFile::rename(aside, nameOf(0)); // keep the lines we have
+        m_retryAtSize = size + m_maxBytes;
+    }
     openCurrent();
 }
 
 void LogFile::write(const QString& line)
 {
     const QByteArray bytes = line.toUtf8() + "\r\n";
-    if (m_file.isOpen() && m_file.size() > 0 && m_file.size() + bytes.size() > m_maxBytes)
+    if (m_file.isOpen() && m_file.size() > 0 && m_file.size() + bytes.size() > m_maxBytes
+        && m_file.size() >= m_retryAtSize)
         rotate();
     if (!m_file.isOpen() && !openCurrent())
         return;
@@ -99,7 +114,7 @@ struct State {
 
 State& state()
 {
-    static State s;
+    static State& s = *new State; // leaked: a message logged during static destruction must find a live mutex
     return s;
 }
 

@@ -23,11 +23,11 @@ private slots:
         QCOMPARE(folder, std::optional<QString>("G:/My Drive"));
     }
 
-    void fallsBackToRoot()
+    void noKnownFolderIsNoSuggestion()
     {
         const QList<DriveVolume> volumes{{"G:/", "Google Drive"}};
         const auto folder = suggestedDriveFolder(volumes, [](const QString&) { return false; });
-        QCOMPARE(folder, std::optional<QString>("G:/"));
+        QVERIFY(!folder);
     }
 
     void noDriveVolume()

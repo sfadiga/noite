@@ -19,7 +19,9 @@
 #include <noite/store.h>
 
 #include <QAction>
+#include <QDir>
 #include <QLineEdit>
+#include <QRandomGenerator>
 #include <QSignalSpy>
 #include <QTest>
 
@@ -415,6 +417,7 @@ private slots:
         QCOMPARE(app.boardWindow()->model().rowCount(), 0);
     }
 
+    // Quitting while the snapshot copy is under way leaves no .tmp and no half-written .db.
     void quitDuringBackupIsClean()
     {
         QTemporaryDir tmp;
@@ -422,12 +425,44 @@ private slots:
         prepare(tmp.filePath("data"), "Ctrl+Alt+Shift+F9");
         auto app = std::make_unique<App>(AppOptions{tmp.filePath("data")});
         QVERIFY(!app->start());
+        for (int i = 0; i < 30; ++i) {
+            QByteArray bytes(1'000'000, 0);
+            QRandomGenerator::global()->fillRange(reinterpret_cast<quint32*>(bytes.data()), bytes.size() / 4);
+            app->store()->putAttachment(bytes, "bin");
+        }
         Settings settings = app->store()->settings();
         settings.backupDir = dest.path();
         app->store()->saveSettings(settings);
+        const QString snaps = dest.path() + "/noite-backups/" + app->store()->installId() + "/snapshots";
         app->backUpNow();
+        QTRY_VERIFY(!QDir(snaps).entryList({"*.tmp"}, QDir::Files).isEmpty()); // the copy is under way
         app.reset();
-        QVERIFY(QDir(dest.path()).entryList({"*.tmp"}).isEmpty());
+        QVERIFY(QDir(snaps).entryList({"*.tmp"}, QDir::Files).isEmpty());
+        const QStringList dbs = QDir(snaps).entryList({"*.db"}, QDir::Files);
+        QVERIFY(dbs.size() <= 1);
+        for (const QString& db : dbs) {
+            QVERIFY_THROWS_NO_EXCEPTION(backup::verify(snaps + "/" + db));
+        }
+    }
+
+    void backupActionDisabledWhileAskingForAFolder()
+    {
+        QTemporaryDir tmp;
+        prepare(tmp.filePath("data"), "Ctrl+Alt+Shift+F9");
+        App app(AppOptions{tmp.filePath("data")});
+        QVERIFY(!app.start());
+        int asked = 0;
+        bool enabledWhileAsking = true;
+        app.setBackupFolderAsker([&]() -> std::optional<QString> {
+            ++asked;
+            enabledWhileAsking = app.backupAction()->isEnabled();
+            return std::nullopt;
+        });
+        QVERIFY(app.backupAction()->isEnabled());
+        app.backUpNow();
+        QCOMPARE(asked, 1);
+        QVERIFY(!enabledWhileAsking);
+        QVERIFY(app.backupAction()->isEnabled());
     }
 };
 

@@ -2,6 +2,7 @@
 
 #include "log/Log.h"
 
+#include <QDebug>
 #include <QDir>
 #include <QFileInfo>
 #include <QStringList>
@@ -333,6 +334,10 @@ void pruneDumps(const QString& logsDir, int keep)
 
 void install(const QString& logsDir)
 {
+    if (IsDebuggerPresent()) {
+        qInfo() << "crash handler not installed: a debugger is attached";
+        return; // the debugger gets the exception
+    }
     QDir().mkpath(logsDir);
     pruneDumps(logsDir);
     QString log = applog::currentLogPath();
@@ -342,7 +347,9 @@ void install(const QString& logsDir)
     copyPath(g_dumpDir, QDir::toNativeSeparators(QDir(logsDir).absolutePath()) + '\\');
 
     // Nothing may open a window: the report replaces Windows Error Reporting and the CRT's boxes.
-    SetErrorMode(GetErrorMode() | SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+    // SEM_NOGPFAULTERRORBOX stays off: the error mode is inherited by child processes, and the
+    // unhandled-exception filter terminates the process before WER would be reached.
+    SetErrorMode(GetErrorMode() | SEM_FAILCRITICALERRORS);
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
     _set_error_mode(_OUT_TO_STDERR); // a failed C assert() prints instead of opening a box
 #ifdef _DEBUG

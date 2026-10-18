@@ -20,7 +20,6 @@ std::optional<QString> suggestedDriveFolder(const QList<DriveVolume>& volumes,
             if (dirExists(candidate))
                 return candidate;
         }
-        return root;
     }
     return std::nullopt;
 }

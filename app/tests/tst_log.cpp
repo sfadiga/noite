@@ -9,6 +9,8 @@
 #include <QTest>
 #include <QThread>
 
+#include <windows.h>
+
 using namespace applog;
 
 namespace {
@@ -119,6 +121,38 @@ private slots:
                 log.write(numbered(i));
         }
         QCOMPARE(readLines(QDir(dir.path()).filePath("noite.log")).last(), numbered(9));
+    }
+
+    // noite.log held open without FILE_SHARE_DELETE (a viewer, an AV scan) cannot be renamed; the
+    // older files must survive and logging must continue.
+    void rotationBlockedKeepsHistory()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QDir d(dir.path());
+        for (int i = 1; i <= 6; ++i) {
+            QFile seed(d.filePath(QString("noite.%1.log").arg(i)));
+            QVERIFY(seed.open(QIODevice::WriteOnly));
+            seed.write(QByteArray("seed ") + QByteArray::number(i));
+        }
+        {
+            QFile live(d.filePath("noite.log"));
+            QVERIFY(live.open(QIODevice::WriteOnly));
+        }
+        HANDLE holder = CreateFileW(reinterpret_cast<LPCWSTR>(QDir::toNativeSeparators(d.filePath("noite.log")).utf16()),
+                                    GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+                                    FILE_ATTRIBUTE_NORMAL, nullptr);
+        QVERIFY(holder != INVALID_HANDLE_VALUE);
+        {
+            LogFile log(dir.path(), 100, 7);
+            QVERIFY(log.isOpen());
+            for (int i = 0; i < 40; ++i)
+                log.write(numbered(i));
+        }
+        CloseHandle(holder);
+        for (int i = 1; i <= 6; ++i)
+            QCOMPARE(readLines(d.filePath(QString("noite.%1.log").arg(i))), QStringList(QString("seed %1").arg(i)));
+        QCOMPARE(readLines(d.filePath("noite.log")).last(), numbered(39));
     }
 
     void bufferedLinesComeFirst()
