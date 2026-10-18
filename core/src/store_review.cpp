@@ -40,6 +40,12 @@ void Store::touch(const ScratchId& id)
     detail::touch(db(), id, nowMs());
 }
 
+void Store::setModifiedAt(const ScratchId& id, qint64 ms)
+{
+    requireStatus(db(), id);
+    detail::touch(db(), id, ms);
+}
+
 std::optional<QDate> Store::lastReviewDay() const
 {
     Stmt s = db().prepare("SELECT value FROM settings WHERE key = 'last_review_day'");

@@ -80,6 +80,19 @@ private slots:
         QCOMPARE(f->store->get(stale).modifiedAt, t0());
     }
 
+    // Undo of Keep puts the stale clock back where it was.
+    void setModifiedAtRestoresStaleClock()
+    {
+        auto f = fixture();
+        const QString stale = noteFrom(*f, "stale", 20 * kDayMs);
+        const qint64 before = f->store->get(stale).modifiedAt;
+        f->store->touch(stale);
+        f->store->setModifiedAt(stale, before);
+        QCOMPARE(f->store->get(stale).modifiedAt, before);
+        QCOMPARE(f->store->reviewQueue(today(), 7).size(), 1);
+        NOITE_EXPECT_ERROR(ErrorCode::NotFound, f->store->setModifiedAt("missing", before));
+    }
+
     void touchRejectsTrashedAndMissing()
     {
         auto f = fixture();

@@ -28,6 +28,7 @@ add_library(noite-app STATIC
     src/Theme.h src/Theme.cpp
     src/DragMover.h src/DragMover.cpp
     src/radar/ReviewScheduler.h src/radar/ReviewScheduler.cpp
+    src/radar/ReviewWindow.h src/radar/ReviewWindow.cpp
     src/platform/Autostart.h src/platform/Autostart.cpp
 )
 target_include_directories(noite-app PUBLIC src)
@@ -65,6 +66,7 @@ qt_add_executable(app-tests
     tests/tst_tag_field.cpp
     tests/tst_review_scheduler.cpp
     tests/tst_autostart.cpp
+    tests/tst_review_window.cpp
     tests/tst_seed.cpp bench/Seed.h bench/Seed.cpp
 )
 # Reuses core's test registry and helpers.

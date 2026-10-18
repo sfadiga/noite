@@ -87,6 +87,8 @@ public:
     QList<ReviewItem> reviewQueue(QDate today, int staleDays) const;
     // "Keep": modified_at = now, which resets the stale clock. NotFound; trashed notes rejected.
     void touch(const ScratchId& id);
+    // Undo of touch only: puts modified_at back. NotFound for an unknown id.
+    void setModifiedAt(const ScratchId& id, qint64 ms);
     // The day the review was last shown; kept apart from Settings so saving settings never
     // overwrites it.
     std::optional<QDate> lastReviewDay() const;
