@@ -8,6 +8,7 @@
 #include <QObject>
 #include <QPointer>
 
+#include <functional>
 #include <memory>
 #include <optional>
 
@@ -16,6 +17,8 @@ class Store;
 }
 class CaptureController;
 class CaptureWindow;
+class BackupRunner;
+class JobScheduler;
 class KeepWarm;
 class LatencyProbe;
 class NativeHost;
@@ -55,16 +58,26 @@ public:
     ReviewWindow* reviewWindow() const { return review_; } // null while closed
     ReviewScheduler* scheduler() const { return scheduler_.get(); }
     QAction* autostartAction() const { return autostartAction_; }
+    // Background jobs (M5): the trash purge and the backups.
+    JobScheduler* jobs() const { return jobs_.get(); }
+    QAction* backupAction() const { return backupAction_; }
+    // Tray "Back up now". Without a backup folder it asks for one first (the Drive dialog).
+    void backUpNow();
+    // Replaces the folder dialog; tests only.
+    void setBackupFolderAsker(std::function<std::optional<QString>()> asker) { askFolder_ = std::move(asker); }
 
 signals:
     // A hotkey (capture or board) could not be registered (another program holds it). noite
     // keeps running; the tray still opens a capture and the board.
     void hotkeyUnavailable(QString combo);
+    // A job result shown in the tray (there is no tray offscreen, so tests listen here).
+    void toastShown(QString title, QString text);
 
 private:
     void createTray();
     void registerHotkey(int id, const QString& combo);
     void updateAutostart(bool enabled);
+    void startJobs();
 
     AppOptions options_;
     std::unique_ptr<noite::Store> store_;
@@ -82,4 +95,9 @@ private:
     QPointer<ReviewWindow> review_; // deletes itself on close
     QAction* autostartAction_ = nullptr;
     QString dataRoot_;
+    std::unique_ptr<BackupRunner> runner_;
+    std::unique_ptr<JobScheduler> jobs_;
+    QAction* backupAction_ = nullptr;
+    std::function<std::optional<QString>()> askFolder_;
+    bool logInstalled_ = false; // this App opened the log, so it closes it
 };

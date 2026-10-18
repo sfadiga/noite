@@ -7,6 +7,7 @@
 struct AppOptions {
     QString dataDir;
     bool dataFromCommandLine = false; // --data was given (not the portable folder's own data)
+    bool crashHandler = false;        // install the crash handler at start (main only; tests leave it off)
 };
 
 // Reads "--data <dir>" or "--data=<dir>" (used by tests and development).

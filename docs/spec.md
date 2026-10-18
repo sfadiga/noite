@@ -59,11 +59,14 @@ noite\
 
 - Periodic **consistent snapshot** of the database (`VACUUM INTO`), written to a user-chosen folder. Attachments live in the database, so each snapshot is one self-contained `.db` file (and each carries every attachment). The live database is never placed in a sync folder.
 - Defaults: daily, keep last 14. If Google Drive for Desktop is installed, its folder is suggested in setup. No Google sign-in.
-- "Back up now" is available from the tray.
+- Google Drive is used through Drive for Desktop's mounted folder (`G:\Meu Drive` etc.), like any local folder. Until the setup wizard exists, the first "Back up now" with no folder set offers the detected Drive folder in one click, else a folder picker; the choice is saved. Scheduled backups stay off until a folder is chosen.
+- Each backup is snapshot, verify, prune: a snapshot that fails verification is deleted and the run counts as failed.
+- Schedule: daily = once per local calendar day; weekly = 7 days after the last successful backup. Missed runs catch up at the next check (30 s after start, hourly, and on resume).
+- "Back up now" is available from the tray and always toasts the result. Scheduled backups are silent, unless they have been failing for 3 days: then a toast, at most once a day.
 
 ### Attachment cleanup (D22)
 
-When the trash purge runs, it scans every remaining note for attachment references and deletes only attachment rows no note references and that weren't pasted within the last day (mark-and-sweep), then returns the freed space to the filesystem (incremental auto-vacuum). No per-attachment usage counters.
+The trash purge runs once a day, at the first check. When it runs, it scans every remaining note for attachment references and deletes only attachment rows no note references and that weren't pasted within the last day (mark-and-sweep), then returns the freed space to the filesystem (incremental auto-vacuum). No per-attachment usage counters.
 
 ### Updates & schema migrations (D26)
 
@@ -73,7 +76,7 @@ When the trash purge runs, it scans every remaining note for attachment referenc
 
 ### Logs (D29)
 
-Rotating logs in `data\logs\` (7 files × 1 MB). Crashes logged with a stack trace. No telemetry. Settings has "Open logs folder".
+Rotating logs in `data\logs\noite.log` (7 files × 1 MB). One line per message: `yyyy-MM-dd HH:mm:ss.zzz L [thread] message`, with L one of D/I/W/C/F; debug lines are dropped in release builds. Startup and quit are logged (`noite started · data <dir> · Qt <ver> · Windows <ver>`, `noite quit`). A crash appends a `CRASH` line and a `module+offset` stack trace to the log and writes a minidump `crash-YYYYMMDD-HHMMSS.dmp` next to it (newest 3 kept), then the process ends without a dialog. Release builds produce PDBs, which are not shipped; the release workflow keeps them as CI artifacts so a dump can be read later in Visual Studio. No telemetry. Settings has "Open logs folder".
 
 ## 4. Data model
 
@@ -187,7 +190,7 @@ Shown on first run. Every step except step 2 can be skipped.
 ## 8. Settings & tray (D25)
 
 - Every wizard setting is editable later in a Settings window; the wizard can be re-run from Settings.
-- Tray menu: New scratch · Open board · Morning review · Start with Windows (checkable) · Settings · Back up now · Quit. Left-click opens the board.
+- Tray menu: New scratch · Open board · Morning review · Start with Windows (checkable) · Back up now (reads "Backing up…" and is disabled while a backup runs) · Quit; Settings joins it with the Settings window (M6). Left-click opens the board.
 
 ## 9. Testing & CI (D28)
 
