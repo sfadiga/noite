@@ -7,6 +7,7 @@ add_library(noite-app STATIC
     src/editor/MarkdownShortcuts.h src/editor/MarkdownShortcuts.cpp
     src/editor/NoteEdit.h src/editor/NoteEdit.cpp
     src/editor/AttachmentStore.h src/editor/AttachmentStore.cpp
+    src/editor/OpenFolder.h src/editor/OpenFolder.cpp
     src/editor/PasteCleaner.h src/editor/PasteCleaner.cpp
     src/editor/DateTokens.h src/editor/DateTokens.cpp
     src/capture/CaptureController.h src/capture/CaptureController.cpp

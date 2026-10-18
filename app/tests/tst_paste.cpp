@@ -2,12 +2,17 @@
 #include "registry.h"
 
 #include "editor/NoteEdit.h"
+#include "editor/OpenFolder.h"
 
 #include <noite/store.h>
 
 #include <QBuffer>
+#include <QDateTime>
+#include <QDesktopServices>
+#include <QDir>
 #include <QFile>
 #include <QMimeData>
+#include <QTemporaryDir>
 #include <QTest>
 #include <QTextBlock>
 #include <QTextDocument>
@@ -44,6 +49,12 @@ QStringList imageNames(QTextDocument* doc)
     return names;
 }
 
+// A well-formed attachment id that nothing stores.
+QString fakeId()
+{
+    return QString(64, 'a') + ".pdf";
+}
+
 QByteArray encoded(const QColor& color, const char* format)
 {
     QImage img(8, 8, QImage::Format_RGB32);
@@ -59,6 +70,13 @@ QByteArray encoded(const QColor& color, const char* format)
 
 class PasteTest : public QObject {
     Q_OBJECT
+
+public slots:
+    // Stands in for the shell when a test Ctrl+clicks a chip.
+    void handleUrl(const QUrl& url) { opened_ = url; }
+
+private:
+    QUrl opened_;
 
     std::unique_ptr<FakeAttachments> store;
     std::unique_ptr<NoteEdit> edit;
@@ -104,9 +122,7 @@ private slots:
         paste(mime);
         QCOMPARE(store->ids().size(), 1);
         QVERIFY(store->ids()[0].endsWith(".jpg"));
-        QFile stored(store->pathFor(store->ids()[0]));
-        QVERIFY(stored.open(QIODevice::ReadOnly));
-        QCOMPARE(stored.readAll(), jpeg);
+        QCOMPARE(store->bytes(store->ids()[0]), jpeg);
     }
 
     void reloadedNoteShowsImage()
@@ -116,6 +132,14 @@ private slots:
         const QImage img = doc()->resource(QTextDocument::ImageResource, QUrl("noite-att:" + id)).value<QImage>();
         QVERIFY(!img.isNull());
         QCOMPARE(img.pixelColor(0, 0), QColor(Qt::green));
+    }
+
+    // Review Focus 1: a reference whose bytes aren't stored shows as a broken image, no throw.
+    void missingBlobGivesNullImage()
+    {
+        edit->setHtml("<p><img src=\"noite-att:" + fakeId() + "\"/></p>");
+        const QVariant res = doc()->resource(QTextDocument::ImageResource, QUrl("noite-att:" + fakeId()));
+        QVERIFY(res.value<QImage>().isNull());
     }
 
     void htmlPasteStripsColoursFontsSizes()
@@ -195,6 +219,112 @@ private slots:
         QCOMPARE(chip.charFormat().anchorHref(), "noite-att:" + store->ids()[0]);
     }
 
+    void chipOpensUnderItsName()
+    {
+        QTemporaryDir tmp;
+        edit->setOpenFolder(tmp.path());
+        const QString pdf = store->put("pdf bytes", "pdf");
+        const QFileInfo opened(edit->openTargetFor(pdf, "Report Q3.pdf").toLocalFile());
+        QCOMPARE(opened.fileName(), QString("Report Q3.pdf"));
+        QCOMPARE(opened.absolutePath(), tmp.path() + "/" + pdf.left(12));
+    }
+
+    // Final review I2: the launched file's type comes from what was stored, never from the
+    // chip's free text; untyped (.bin) attachments open their folder.
+    void chipKeepsTheStoredExtension()
+    {
+        QTemporaryDir tmp;
+        edit->setOpenFolder(tmp.path());
+        const QString pdf = store->put("pdf bytes", "pdf");
+        QCOMPARE(QFileInfo(edit->openTargetFor(pdf, "report").toLocalFile()).fileName(), QString("report.pdf"));
+        QCOMPARE(QFileInfo(edit->openTargetFor(pdf, "run.exe").toLocalFile()).fileName(), QString("run.exe.pdf"));
+        QCOMPARE(QFileInfo(edit->openTargetFor(pdf, "x.settingcontent-ms").toLocalFile()).fileName(),
+                 QString("x.settingcontent-ms.pdf"));
+        QCOMPARE(QFileInfo(edit->openTargetFor(pdf, "Report.PDF").toLocalFile()).fileName(), QString("Report.PDF"));
+        const QString bin = store->put("untyped", "bin");
+        QVERIFY(QFileInfo(edit->openTargetFor(bin, "x.library-ms").toLocalFile()).isDir());
+    }
+
+    // Final review I1: startup only removes the folders noite wrote, whatever the open
+    // folder turns out to be (GetTempPath can fall back to the profile or Windows folder).
+    void clearOpenFolderOnlyRemovesChipFolders()
+    {
+        QVERIFY(defaultOpenFolder().endsWith("/noite-open"));
+        QTemporaryDir tmp;
+        QVERIFY(QDir().mkpath(tmp.filePath("abcdef012345")));
+        QFile chip(tmp.filePath("abcdef012345/r.pdf"));
+        QVERIFY(chip.open(QIODevice::WriteOnly));
+        chip.close();
+        QVERIFY(QDir().mkpath(tmp.filePath("data/logs")));
+        QVERIFY(QDir().mkpath(tmp.filePath("ABCDEF999999"))); // not ours: ids are lowercase hex
+        QFile other(tmp.filePath("notes.txt"));
+        QVERIFY(other.open(QIODevice::WriteOnly));
+        other.close();
+        clearOpenFolder(tmp.path());
+        QVERIFY(!QFileInfo::exists(tmp.filePath("abcdef012345")));
+        QVERIFY(QFileInfo::exists(tmp.filePath("data/logs")));
+        QVERIFY(QFileInfo::exists(tmp.filePath("ABCDEF999999")));
+        QVERIFY(QFileInfo::exists(tmp.filePath("notes.txt")));
+    }
+
+    // Review Focus 2.
+    void chipNameIsSanitised()
+    {
+        const QString id = fakeId();
+        QCOMPARE(safeFileName("a:b?.pdf", id), QString("a_b_.pdf"));
+        QCOMPARE(safeFileName("  ", id), id);
+        QCOMPARE(safeFileName("..", id), id);
+        QCOMPARE(safeFileName("report. ", id), QString("report"));
+        for (const QString& name : {QString("..\\x.pdf"), QString("../../x.pdf"), QString("a<b>c|d*e\"f"),
+                                    QString("tab\there"), QString("C:\\Windows\\x.dll")}) {
+            const QString safe = safeFileName(name, id);
+            QVERIFY2(!safe.isEmpty() && safe != "." && safe != "..", qPrintable(safe));
+            for (QChar c : safe)
+                QVERIFY2(!QString("<>:\"/\\|?*").contains(c) && c.unicode() >= 0x20, qPrintable(safe));
+            QVERIFY2(!safe.endsWith('.') && !safe.endsWith(' '), qPrintable(safe));
+        }
+    }
+
+    // Review Focus 5: a PDF still open in its viewer must not be rewritten.
+    void openTargetReusesExistingFile()
+    {
+        QTemporaryDir tmp;
+        edit->setOpenFolder(tmp.path());
+        const QString pdf = store->put("pdf bytes", "pdf");
+        const QString first = edit->openTargetFor(pdf, "r.pdf").toLocalFile();
+        QFile held(first);
+        QVERIFY(held.open(QIODevice::ReadOnly)); // the viewer has it open
+        const QDateTime written = QFileInfo(first).lastModified();
+        QCOMPARE(edit->openTargetFor(pdf, "r.pdf").toLocalFile(), first);
+        QCOMPARE(QFileInfo(first).lastModified(), written);
+    }
+
+    void ctrlClickPassesChipText()
+    {
+        QTemporaryDir tmp;
+        edit->setOpenFolder(tmp.filePath("open"));
+        const QString path = tmp.filePath("notes v2.pdf");
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("%PDF-1.7 chip");
+        file.close();
+        QMimeData mime;
+        mime.setUrls({QUrl::fromLocalFile(path)});
+        paste(mime);
+
+        edit->resize(400, 200);
+        edit->show();
+        QVERIFY(QTest::qWaitForWindowExposed(edit.get()));
+        QTextCursor cursor(doc());
+        cursor.setPosition(fragmentContaining(doc(), "notes v2.pdf").position() + 3);
+        const QPoint at = edit->cursorRect(cursor).center();
+        opened_.clear();
+        QDesktopServices::setUrlHandler("file", this, "handleUrl");
+        QTest::mouseClick(edit->viewport(), Qt::LeftButton, Qt::ControlModifier, at);
+        QDesktopServices::unsetUrlHandler("file");
+        QCOMPARE(QFileInfo(opened_.toLocalFile()).fileName(), QString("notes v2.pdf"));
+    }
+
     void oversizedFileNotAttached()
     {
         QTemporaryDir tmp;
@@ -217,13 +347,27 @@ private slots:
         QVERIFY(!NoteEdit::isSafeLink(QUrl("file:///C:/x.exe")));
     }
 
-    // Opening an attached program would run it: show its folder instead.
-    void attachmentsOpenSafely()
+    // A5: the bytes are written to the open folder to be opened there. Opening an attached
+    // program would run it: show its folder instead.
+    void openTargetWritesTempFile()
     {
-        const QString pdf = store->put("pdf", "pdf");
-        const QString exe = store->put("exe", "exe");
-        QCOMPARE(edit->openTargetFor(pdf), QUrl::fromLocalFile(store->pathFor(pdf)));
-        QCOMPARE(edit->openTargetFor(exe), QUrl::fromLocalFile(QFileInfo(store->pathFor(exe)).absolutePath()));
+        QTemporaryDir tmp;
+        edit->setOpenFolder(tmp.path());
+        const QString pdf = store->put("pdf bytes", "pdf");
+        const QString exe = store->put("exe bytes", "exe");
+
+        const QString file = edit->openTargetFor(pdf).toLocalFile();
+        QVERIFY2(file.startsWith(tmp.path() + "/"), qPrintable(file));
+        QFile written(file);
+        QVERIFY(written.open(QIODevice::ReadOnly));
+        QCOMPARE(written.readAll(), QByteArray("pdf bytes"));
+
+        const QString folder = edit->openTargetFor(exe).toLocalFile();
+        QVERIFY(QFileInfo(folder).isDir());
+        QVERIFY(folder.startsWith(tmp.path() + "/"));
+        QCOMPARE(QDir(folder).entryList(QDir::Files).size(), 1);
+
+        QVERIFY(!edit->openTargetFor(fakeId()).isValid()); // not stored: nothing to open
     }
 };
 

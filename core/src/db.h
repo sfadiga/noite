@@ -3,6 +3,7 @@
 // Thin RAII layer over the SQLite C API. Every SQLite error is thrown as
 // noite::Error(ErrorCode::Database). Internal to noite-core.
 
+#include <QByteArray>
 #include <QString>
 
 #include <optional>
@@ -24,6 +25,7 @@ public:
     Stmt& bind(int index, int value) { return bind(index, qint64(value)); }
     Stmt& bind(int index, const QString& value);
     Stmt& bind(int index, std::nullopt_t);
+    Stmt& bindBlob(int index, const QByteArray& value);
     template <typename T>
     Stmt& bind(int index, const std::optional<T>& value)
     {
@@ -36,6 +38,7 @@ public:
 
     qint64 int64(int column) const;
     QString text(int column) const;
+    QByteArray blob(int column) const;
     bool isNull(int column) const;
     std::optional<qint64> optInt64(int column) const;
     std::optional<QString> optText(int column) const;

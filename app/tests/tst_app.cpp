@@ -7,6 +7,7 @@
 #include "board/BoardWindow.h"
 #include "capture/CaptureWindow.h"
 #include "editor/NoteEdit.h"
+#include "editor/OpenFolder.h"
 #include "platform/Hotkey.h"
 #include "platform/NativeHost.h"
 
@@ -50,6 +51,21 @@ private slots:
     {
         QCOMPARE(resolveDataDir(AppOptions{}, "C:/apps/noite"), QString("C:/apps/noite/data"));
         QCOMPARE(resolveDataDir(AppOptions{"D:/elsewhere/data"}, "C:/apps/noite"), QString("D:/elsewhere/data"));
+    }
+
+    // A5: files opened from chips last one session.
+    void startupClearsOpenFolder()
+    {
+        const QString stale = defaultOpenFolder() + "/abcdef012345/x.txt";
+        QVERIFY(QDir().mkpath(QFileInfo(stale).absolutePath()));
+        QFile file(stale);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.close();
+        QTemporaryDir tmp;
+        prepare(tmp.filePath("data"), "Ctrl+Alt+Shift+F9");
+        App app(AppOptions{tmp.filePath("data")});
+        QVERIFY(!app.start());
+        QVERIFY(!QFile::exists(stale));
     }
 
     // Review Focus 5.

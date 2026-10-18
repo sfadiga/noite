@@ -1,7 +1,12 @@
 #include "helpers.h"
 #include "registry.h"
 
+#include "db.h"
+#include "migrate.h"
+
 #include <noite/store.h>
+
+#include <QDir>
 
 #include <sqlite3.h>
 
@@ -34,8 +39,59 @@ private slots:
     void openCreatesLatestSchema()
     {
         auto f = fixture();
-        QCOMPARE(f->store->schemaVersion(), 1);
+        QCOMPARE(f->store->schemaVersion(), 2);
         QCOMPARE(f->store->dataDir().root(), f->root());
+    }
+
+    void autoVacuumIsIncremental()
+    {
+        auto f = fixture();
+        f->store.reset();
+        QCOMPARE(rawQuery(f->root() + "/noite.db", "PRAGMA auto_vacuum"), QString("2"));
+        f->store = Store::open(DataDir::acquire(f->root()), f->clock);
+        f->store.reset();
+        QCOMPARE(rawQuery(f->root() + "/noite.db", "PRAGMA auto_vacuum"), QString("2"));
+    }
+
+    void v1DatabaseOpensAsV2()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        QVERIFY(QDir().mkpath(root));
+        {
+            detail::Db db = detail::Db::open(root + "/noite.db");
+            detail::migrate(db, {detail::kMigrations[0]}, root + "/migration-backups", 1000);
+            db.exec("INSERT INTO scratches(id, content, plain_text, title, created_at, modified_at, status) "
+                    "VALUES ('s1', '<p>old</p>', 'old', 'old', 1, 1, 'active')");
+        }
+        auto store = Store::open(DataDir::acquire(root), std::make_shared<FixedClock>(t0()));
+        QCOMPARE(store->schemaVersion(), 2);
+        QCOMPARE(store->list(Tab::All, today()).size(), 1);
+        QCOMPARE(QDir(root + "/migration-backups").entryList({"noite-v1-*.db"}, QDir::Files).size(), 1);
+        store.reset();
+        QCOMPARE(rawQuery(root + "/noite.db", "PRAGMA auto_vacuum"), QString("2"));
+    }
+
+    void emptyAttachmentsFolderRemoved()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        QVERIFY(QDir().mkpath(root + "/attachments"));
+        auto store = Store::open(DataDir::acquire(root), std::make_shared<FixedClock>(t0()));
+        QVERIFY(!QDir(root + "/attachments").exists());
+    }
+
+    void nonEmptyAttachmentsFolderKept()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        QVERIFY(QDir().mkpath(root + "/attachments"));
+        QFile file(root + "/attachments/x.png");
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("x");
+        file.close();
+        auto store = Store::open(DataDir::acquire(root), std::make_shared<FixedClock>(t0()));
+        QVERIFY(QFile::exists(root + "/attachments/x.png"));
     }
 
     void dbUsesWal()

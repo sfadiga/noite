@@ -2,27 +2,31 @@
 
 #include "editor/AttachmentStore.h"
 
-#include <QCryptographicHash>
-#include <QDir>
-#include <QFile>
-#include <QTemporaryDir>
+#include <noite/error.h>
 
-// In-memory-ish AttachmentStore for editor tests: same id scheme as noite-core.
+#include <QCryptographicHash>
+#include <QHash>
+
+// In-memory AttachmentStore for editor tests: same id scheme as noite-core.
 class FakeAttachments final : public AttachmentStore {
 public:
     QString put(const QByteArray& bytes, const QString& ext) override
     {
         const QString id = QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex())
             + "." + ext.toLower();
-        QFile file(dir.filePath(id));
-        if (file.open(QIODevice::WriteOnly))
-            file.write(bytes);
+        stored.insert(id, bytes);
         return id;
     }
 
-    QString pathFor(const QString& id) const override { return dir.filePath(id); }
+    QByteArray bytes(const QString& id) const override
+    {
+        const auto it = stored.find(id);
+        if (it == stored.end())
+            throw noite::Error(noite::ErrorCode::AttachmentMissing, "attachment not found: " + id);
+        return *it;
+    }
 
-    QStringList ids() const { return QDir(dir.path()).entryList(QDir::Files); }
+    QStringList ids() const { return stored.keys(); }
 
-    QTemporaryDir dir;
+    QHash<QString, QByteArray> stored;
 };

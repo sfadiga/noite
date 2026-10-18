@@ -40,6 +40,16 @@ private slots:
         QVERIFY(snapshots(tmp.filePath("snap")).isEmpty());
     }
 
+    void v2AddsAttachmentsTable()
+    {
+        QTemporaryDir tmp;
+        Db db = Db::open(tmp.filePath("noite.db"));
+        migrate(db, kMigrations, tmp.filePath("snap"), 1000);
+        QCOMPARE(kLatest, 2);
+        QCOMPARE(db.userVersion(), 2);
+        QCOMPARE(tableCount(db, "attachments"), 1);
+    }
+
     void upgradeSnapshotsOldVersionFirst()
     {
         QTemporaryDir tmp;

@@ -18,7 +18,7 @@ private slots:
         QTemporaryDir tmp;
         const QString root = tmp.filePath("data");
         const DataDir dir = DataDir::acquire(root);
-        QVERIFY(QDir(dir.attachmentsDir()).exists());
+        QVERIFY(!QDir(root + "/attachments").exists());
         QVERIFY(QDir(dir.logsDir()).exists());
         QVERIFY(QDir(dir.migrationBackupsDir()).exists());
         QCOMPARE(dir.dbPath(), root + "/noite.db");
@@ -33,7 +33,7 @@ private slots:
             NOITE_EXPECT_ERROR(ErrorCode::AlreadyRunning, DataDir::acquire(tmp.path()));
         }
         const DataDir again = DataDir::acquire(tmp.path());
-        QVERIFY(QDir(again.attachmentsDir()).exists());
+        QVERIFY(!QDir(tmp.filePath("attachments")).exists());
     }
 
     void differentRootsCoexist()

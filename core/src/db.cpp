@@ -48,6 +48,13 @@ Stmt& Stmt::bind(int index, const QString& value)
     return *this;
 }
 
+Stmt& Stmt::bindBlob(int index, const QByteArray& value)
+{
+    if (sqlite3_bind_blob64(stmt_, index, value.constData(), sqlite3_uint64(value.size()), SQLITE_TRANSIENT) != SQLITE_OK)
+        throwDb(db_, "bind");
+    return *this;
+}
+
 Stmt& Stmt::bind(int index, std::nullopt_t)
 {
     if (sqlite3_bind_null(stmt_, index) != SQLITE_OK)
@@ -82,6 +89,12 @@ QString Stmt::text(int column) const
     return QString::fromUtf8(data, sqlite3_column_bytes(stmt_, column));
 }
 
+QByteArray Stmt::blob(int column) const
+{
+    const auto* data = static_cast<const char*>(sqlite3_column_blob(stmt_, column));
+    return QByteArray(data, sqlite3_column_bytes(stmt_, column));
+}
+
 bool Stmt::isNull(int column) const
 {
     return sqlite3_column_type(stmt_, column) == SQLITE_NULL;
@@ -113,7 +126,10 @@ Db Db::open(const QString& path, bool readOnly)
         throwDb(raw, "open " + path);
     sqlite3_busy_timeout(raw, 5000);
     if (!readOnly)
-        db.exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;");
+        // journal_size_limit: a pasted 25 MB attachment would otherwise leave the WAL that big
+        // for the life of the process (it is reset, not truncated, after checkpoints).
+        db.exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON; "
+                "PRAGMA journal_size_limit=4194304;");
     return db;
 }
 

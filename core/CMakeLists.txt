@@ -1,7 +1,8 @@
 # Schema SQL stays a real .sql file; CMake embeds it as a raw string literal.
 file(READ src/schema_v1.sql NOITE_SCHEMA_V1)
+file(READ src/schema_v2.sql NOITE_SCHEMA_V2)
 configure_file(src/schema.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/noite_schema.h @ONLY)
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS src/schema_v1.sql src/schema.h.in)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS src/schema_v1.sql src/schema_v2.sql src/schema.h.in)
 
 add_library(noite-core STATIC
     include/noite/error.h src/error.cpp
@@ -18,7 +19,7 @@ add_library(noite-core STATIC
     include/noite/settings.h src/settings.cpp
     include/noite/backup.h src/backup.cpp
     src/db.h src/db.cpp
-    src/migrate.h src/migrate.cpp src/schema_v1.sql
+    src/migrate.h src/migrate.cpp src/schema_v1.sql src/schema_v2.sql
 )
 target_include_directories(noite-core
     PUBLIC include

@@ -6,7 +6,10 @@
 #include <noite/error.h>
 #include <noite/store.h>
 
+#include <QDebug>
+#include <QDir>
 #include <QFileInfo>
+#include <QSaveFile>
 
 #include <QBuffer>
 #include <QClipboard>
@@ -185,30 +188,67 @@ void NoteEdit::insertFromMimeData(const QMimeData* source)
     QTextEdit::insertFromMimeData(source);
 }
 
-QUrl NoteEdit::openTargetFor(const QString& attachmentId) const
+QUrl NoteEdit::openTargetFor(const QString& attachmentId, const QString& name) const
 {
     if (!attachments_)
         return {};
-    QString path;
+    QByteArray bytes;
     try {
-        path = attachments_->pathFor(attachmentId);
-    } catch (const noite::Error&) {
+        bytes = attachments_->bytes(attachmentId);
+    } catch (const noite::Error& error) {
+        qWarning() << "open attachment:" << error.what();
         return {};
     }
+    const QString dir = openFolder_ + "/" + attachmentId.left(12);
+    // The file's type always comes from the stored id (1-8 alphanumerics, or "bin"), never
+    // from the chip's free text: "run.exe" over PDF bytes is written as "run.exe.pdf".
+    const QString ext = QFileInfo(attachmentId).suffix().toLower();
+    QString fileName = safeFileName(name, attachmentId);
+    if (QFileInfo(fileName).suffix().toLower() != ext)
+        fileName += "." + ext;
+    const QString path = dir + "/" + fileName;
+    if (QFileInfo(path).size() != bytes.size() || !QFileInfo::exists(path)) {
+        QSaveFile file(path);
+        if (!QDir().mkpath(dir) || !file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size()
+            || !file.commit()) {
+            qWarning() << "open attachment: cannot write" << path << file.errorString();
+            return {};
+        }
+    }
+    // Programs and scripts would run, and an untyped (.bin) file may be anything: show the
+    // folder instead.
     static const QStringList runnable = {"exe", "bat", "cmd", "com", "msi", "ps1", "vbs", "vbe", "js", "jse", "wsf",
-                                         "scr", "lnk", "url", "hta", "jar", "reg", "cpl", "msc", "pif", "appref-ms"};
-    const QFileInfo info(path);
-    if (runnable.contains(info.suffix().toLower()))
-        return QUrl::fromLocalFile(info.absolutePath());
+                                         "scr", "lnk", "url", "hta", "jar", "reg", "cpl", "msc", "pif", "appref-ms",
+                                         "bin"};
+    if (runnable.contains(ext))
+        return QUrl::fromLocalFile(dir);
     return QUrl::fromLocalFile(path);
+}
+
+QString NoteEdit::anchorTextAt(const QPoint& pos, const QString& href) const
+{
+    const QTextCursor cursor = cursorForPosition(pos);
+    for (auto it = cursor.block().begin(); !it.atEnd(); ++it) {
+        const QTextFragment fragment = it.fragment();
+        if (fragment.isValid() && fragment.charFormat().anchorHref() == href
+            && fragment.contains(cursor.position()))
+            return fragment.text();
+    }
+    // The click can land just past the chip's last character.
+    for (auto it = cursor.block().begin(); !it.atEnd(); ++it) {
+        if (it.fragment().isValid() && it.fragment().charFormat().anchorHref() == href)
+            return it.fragment().text();
+    }
+    return {};
 }
 
 QVariant NoteEdit::loadResource(int type, const QUrl& name)
 {
     if (type == QTextDocument::ImageResource && name.scheme() == "noite-att" && attachments_) {
         try {
-            return QImage(attachments_->pathFor(name.path()));
-        } catch (const noite::Error&) {
+            return QImage::fromData(attachments_->bytes(name.path()));
+        } catch (const noite::Error& error) {
+            qWarning() << "image:" << error.what();
             return {};
         }
     }
@@ -290,7 +330,7 @@ void NoteEdit::mousePressEvent(QMouseEvent* event)
             if (!href.isEmpty()) {
                 const QUrl url(href);
                 if (url.scheme() == "noite-att") {
-                    if (const QUrl target = openTargetFor(url.path()); target.isValid())
+                    if (const QUrl target = openTargetFor(url.path(), anchorTextAt(pos, href)); target.isValid())
                         QDesktopServices::openUrl(target);
                 } else if (isSafeLink(url)) {
                     QDesktopServices::openUrl(url);

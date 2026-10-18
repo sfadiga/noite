@@ -7,30 +7,12 @@
 #include <noite/error.h>
 
 #include <QCryptographicHash>
-#include <QDateTime>
-#include <QDir>
-#include <QTimeZone>
-#include <QFileInfo>
 #include <QRegularExpression>
-#include <QSaveFile>
 #include <QSet>
 
 namespace noite {
 
 using namespace detail;
-
-namespace {
-
-// The purge's grace period runs on file mtimes, so writes and re-pastes stamp the mtime
-// from the store's clock.
-void stampMtime(const QString& path, qint64 ms)
-{
-    QFile file(path);
-    if (file.open(QIODevice::ReadWrite))
-        file.setFileTime(QDateTime::fromMSecsSinceEpoch(ms, QTimeZone::UTC), QFileDevice::FileModificationTime);
-}
-
-} // namespace
 
 QString Store::putAttachment(const QByteArray& bytes, const QString& ext)
 {
@@ -44,23 +26,28 @@ QString Store::putAttachment(const QByteArray& bytes, const QString& ext)
         suffix = "bin";
     const QString id = QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex()) + "." + suffix;
 
-    const QString path = attachmentPath(id);
-    if (!QFileInfo::exists(path)) {
-        QSaveFile file(path); // writes a temp file, renamed into place on commit()
-        if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit())
-            throw Error(ErrorCode::Io, "cannot write attachment " + path + ": " + file.errorString());
-    }
+    Transaction tx(db());
+    Stmt insert = db().prepare("INSERT OR IGNORE INTO attachments(id, data, size, touched_at) VALUES (?, ?, ?, ?)");
+    insert.bind(1, id).bindBlob(2, bytes).bind(3, qint64(bytes.size())).bind(4, nowMs());
+    insert.step();
     // A re-paste of existing bytes restarts the grace period too: the note that will
     // reference it may not be saved yet.
-    stampMtime(path, nowMs());
+    Stmt touch = db().prepare("UPDATE attachments SET touched_at = ? WHERE id = ?");
+    touch.bind(1, nowMs()).bind(2, id);
+    touch.step();
+    tx.commit();
     return id;
 }
 
-QString Store::attachmentPath(const QString& id) const
+QByteArray Store::attachmentBytes(const QString& id) const
 {
     if (!content::isValidAttachmentId(id))
         throw Error(ErrorCode::InvalidAttachmentId, "invalid attachment id: " + id);
-    return dataDir().attachmentsDir() + "/" + id;
+    Stmt s = db().prepare("SELECT data FROM attachments WHERE id = ?");
+    s.bind(1, id);
+    if (!s.step())
+        throw Error(ErrorCode::AttachmentMissing, "attachment not found: " + id);
+    return s.blob(0);
 }
 
 PurgeReport Store::purgeTrash(int retentionDays)
@@ -70,24 +57,21 @@ PurgeReport Store::purgeTrash(int retentionDays)
     const qint64 now = nowMs();
     PurgeReport report;
 
-    {
-        Transaction tx(db());
-        Stmt expired = db().prepare("SELECT id FROM scratches WHERE status = 'trashed' AND trashed_at <= ?");
-        expired.bind(1, now - retentionDays * kDayMs);
-        QStringList ids;
-        while (expired.step())
-            ids << expired.text(0);
-        for (const QString& id : ids) {
-            for (const char* sql : {"DELETE FROM scratch_fts WHERE id = ?", "DELETE FROM scratches WHERE id = ?"}) {
-                Stmt del = db().prepare(sql);
-                del.bind(1, id);
-                del.step();
-            }
+    Transaction tx(db());
+    Stmt expired = db().prepare("SELECT id FROM scratches WHERE status = 'trashed' AND trashed_at <= ?");
+    expired.bind(1, now - retentionDays * kDayMs);
+    QStringList ids;
+    while (expired.step())
+        ids << expired.text(0);
+    for (const QString& id : ids) {
+        for (const char* sql : {"DELETE FROM scratch_fts WHERE id = ?", "DELETE FROM scratches WHERE id = ?"}) {
+            Stmt del = db().prepare(sql);
+            del.bind(1, id);
+            del.step();
         }
-        report.scratchesDeleted = int(ids.size());
-        deleteEmptyBundles(db());
-        tx.commit();
     }
+    report.scratchesDeleted = int(ids.size());
+    deleteEmptyBundles(db());
 
     // Mark: every attachment any remaining scratch references (any status).
     QSet<QString> referenced;
@@ -96,17 +80,25 @@ PurgeReport Store::purgeTrash(int retentionDays)
         for (const QString& id : content::attachmentRefs(all.text(0)))
             referenced.insert(id);
 
-    // Sweep: unreferenced attachments and leftover temp files, if older than the grace period.
-    const QDir dir(dataDir().attachmentsDir());
-    for (const QFileInfo& file : dir.entryInfoList(QDir::Files)) {
-        if (file.lastModified().toMSecsSinceEpoch() > now - kAttachmentGraceMs)
-            continue;
-        const bool isAttachment = content::isValidAttachmentId(file.fileName());
-        if (isAttachment && referenced.contains(file.fileName()))
-            continue;
-        if (QFile::remove(file.absoluteFilePath()) && isAttachment)
-            ++report.attachmentsDeleted;
+    // Sweep: unreferenced rows past the grace period.
+    Stmt candidates = db().prepare("SELECT id FROM attachments WHERE touched_at <= ?");
+    candidates.bind(1, now - kAttachmentGraceMs);
+    QStringList sweep;
+    while (candidates.step())
+        if (const QString id = candidates.text(0); !referenced.contains(id))
+            sweep << id;
+    for (const QString& id : sweep) {
+        Stmt del = db().prepare("DELETE FROM attachments WHERE id = ?");
+        del.bind(1, id);
+        del.step();
     }
+    report.attachmentsDeleted = int(sweep.size());
+    tx.commit();
+
+    // Give the space back on disk now: the vacuum's moved pages land in the WAL, so
+    // checkpoint and truncate it too.
+    if (!sweep.isEmpty())
+        db().exec("PRAGMA incremental_vacuum; PRAGMA wal_checkpoint(TRUNCATE);");
     return report;
 }
 

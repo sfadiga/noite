@@ -61,7 +61,7 @@ std::optional<SyncProvider> syncProviderFor(const QString& path, const QStringLi
 DataDir DataDir::acquire(const QString& root)
 {
     const QString clean = QDir::cleanPath(QFileInfo(root).absoluteFilePath());
-    for (const QString& sub : {QString(), QString("/attachments"), QString("/logs"), QString("/migration-backups")})
+    for (const QString& sub : {QString(), QString("/logs"), QString("/migration-backups")})
         if (!QDir().mkpath(clean + sub))
             throw Error(ErrorCode::Io, "cannot create " + clean + sub);
 

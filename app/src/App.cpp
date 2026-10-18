@@ -6,6 +6,7 @@
 #include "capture/LatencyProbe.h"
 #include "editor/AttachmentStore.h"
 #include "editor/NoteEdit.h"
+#include "editor/OpenFolder.h"
 #include "platform/Hotkey.h"
 #include "platform/NativeHost.h"
 
@@ -53,6 +54,7 @@ std::optional<int> App::start()
     }
 
     store_ = noite::Store::open(std::move(*dir), std::make_shared<noite::SystemClock>());
+    clearOpenFolder(defaultOpenFolder()); // chip files opened last session (A5)
     host_ = std::make_unique<NativeHost>(instanceKeyFor(root));
 
     auto* editor = new NoteEdit; // owned by the window

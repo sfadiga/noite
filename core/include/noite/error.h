@@ -15,6 +15,7 @@ enum class ErrorCode {
     InvalidTag,
     AttachmentTooLarge,
     InvalidAttachmentId,
+    AttachmentMissing,
     InvalidSetting,
     BackupDirMissing,
     BackupInvalid,
