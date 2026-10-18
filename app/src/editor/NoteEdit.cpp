@@ -188,7 +188,7 @@ void NoteEdit::insertFromMimeData(const QMimeData* source)
     QTextEdit::insertFromMimeData(source);
 }
 
-QUrl NoteEdit::openTargetFor(const QString& attachmentId) const
+QUrl NoteEdit::openTargetFor(const QString& attachmentId, const QString& name) const
 {
     if (!attachments_)
         return {};
@@ -200,18 +200,40 @@ QUrl NoteEdit::openTargetFor(const QString& attachmentId) const
         return {};
     }
     const QString dir = openFolder_ + "/" + attachmentId.left(12);
-    const QString path = dir + "/" + attachmentId;
-    QSaveFile file(path);
-    if (!QDir().mkpath(dir) || !file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
-        qWarning() << "open attachment: cannot write" << path << file.errorString();
-        return {};
+    const QString path = dir + "/" + safeFileName(name, attachmentId);
+    if (QFileInfo(path).size() != bytes.size() || !QFileInfo::exists(path)) {
+        QSaveFile file(path);
+        if (!QDir().mkpath(dir) || !file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size()
+            || !file.commit()) {
+            qWarning() << "open attachment: cannot write" << path << file.errorString();
+            return {};
+        }
     }
+    // Both the stored id's extension and the written name's count: the chip's text is just
+    // text, so "report.pdf" bytes shown as "run.exe" must not be launched either.
     static const QStringList runnable = {"exe", "bat", "cmd", "com", "msi", "ps1", "vbs", "vbe", "js", "jse", "wsf",
                                          "scr", "lnk", "url", "hta", "jar", "reg", "cpl", "msc", "pif", "appref-ms"};
-    const QFileInfo info(path);
-    if (runnable.contains(info.suffix().toLower()))
-        return QUrl::fromLocalFile(info.absolutePath());
+    if (runnable.contains(QFileInfo(attachmentId).suffix().toLower())
+        || runnable.contains(QFileInfo(path).suffix().toLower()))
+        return QUrl::fromLocalFile(dir);
     return QUrl::fromLocalFile(path);
+}
+
+QString NoteEdit::anchorTextAt(const QPoint& pos, const QString& href) const
+{
+    const QTextCursor cursor = cursorForPosition(pos);
+    for (auto it = cursor.block().begin(); !it.atEnd(); ++it) {
+        const QTextFragment fragment = it.fragment();
+        if (fragment.isValid() && fragment.charFormat().anchorHref() == href
+            && fragment.contains(cursor.position()))
+            return fragment.text();
+    }
+    // The click can land just past the chip's last character.
+    for (auto it = cursor.block().begin(); !it.atEnd(); ++it) {
+        if (it.fragment().isValid() && it.fragment().charFormat().anchorHref() == href)
+            return it.fragment().text();
+    }
+    return {};
 }
 
 QVariant NoteEdit::loadResource(int type, const QUrl& name)
@@ -302,7 +324,7 @@ void NoteEdit::mousePressEvent(QMouseEvent* event)
             if (!href.isEmpty()) {
                 const QUrl url(href);
                 if (url.scheme() == "noite-att") {
-                    if (const QUrl target = openTargetFor(url.path()); target.isValid())
+                    if (const QUrl target = openTargetFor(url.path(), anchorTextAt(pos, href)); target.isValid())
                         QDesktopServices::openUrl(target);
                 } else if (isSafeLink(url)) {
                     QDesktopServices::openUrl(url);

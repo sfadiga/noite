@@ -2,10 +2,13 @@
 #include "registry.h"
 
 #include "editor/NoteEdit.h"
+#include "editor/OpenFolder.h"
 
 #include <noite/store.h>
 
 #include <QBuffer>
+#include <QDateTime>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFile>
 #include <QMimeData>
@@ -67,6 +70,13 @@ QByteArray encoded(const QColor& color, const char* format)
 
 class PasteTest : public QObject {
     Q_OBJECT
+
+public slots:
+    // Stands in for the shell when a test Ctrl+clicks a chip.
+    void handleUrl(const QUrl& url) { opened_ = url; }
+
+private:
+    QUrl opened_;
 
     std::unique_ptr<FakeAttachments> store;
     std::unique_ptr<NoteEdit> edit;
@@ -207,6 +217,76 @@ private slots:
         QCOMPARE(store->ids().size(), 1);
         const QTextFragment chip = fragmentContaining(doc(), "report.pdf");
         QCOMPARE(chip.charFormat().anchorHref(), "noite-att:" + store->ids()[0]);
+    }
+
+    void chipOpensUnderItsName()
+    {
+        QTemporaryDir tmp;
+        edit->setOpenFolder(tmp.path());
+        const QString pdf = store->put("pdf bytes", "pdf");
+        const QFileInfo opened(edit->openTargetFor(pdf, "Report Q3.pdf").toLocalFile());
+        QCOMPARE(opened.fileName(), QString("Report Q3.pdf"));
+        QCOMPARE(opened.absolutePath(), tmp.path() + "/" + pdf.left(12));
+        // A chip renamed to a program name opens its folder, never the file.
+        QVERIFY(QFileInfo(edit->openTargetFor(pdf, "run.exe").toLocalFile()).isDir());
+    }
+
+    // Review Focus 2.
+    void chipNameIsSanitised()
+    {
+        const QString id = fakeId();
+        QCOMPARE(safeFileName("a:b?.pdf", id), QString("a_b_.pdf"));
+        QCOMPARE(safeFileName("  ", id), id);
+        QCOMPARE(safeFileName("..", id), id);
+        QCOMPARE(safeFileName("report. ", id), QString("report"));
+        for (const QString& name : {QString("..\\x.pdf"), QString("../../x.pdf"), QString("a<b>c|d*e\"f"),
+                                    QString("tab\there"), QString("C:\\Windows\\x.dll")}) {
+            const QString safe = safeFileName(name, id);
+            QVERIFY2(!safe.isEmpty() && safe != "." && safe != "..", qPrintable(safe));
+            for (QChar c : safe)
+                QVERIFY2(!QString("<>:\"/\\|?*").contains(c) && c.unicode() >= 0x20, qPrintable(safe));
+            QVERIFY2(!safe.endsWith('.') && !safe.endsWith(' '), qPrintable(safe));
+        }
+    }
+
+    // Review Focus 5: a PDF still open in its viewer must not be rewritten.
+    void openTargetReusesExistingFile()
+    {
+        QTemporaryDir tmp;
+        edit->setOpenFolder(tmp.path());
+        const QString pdf = store->put("pdf bytes", "pdf");
+        const QString first = edit->openTargetFor(pdf, "r.pdf").toLocalFile();
+        QFile held(first);
+        QVERIFY(held.open(QIODevice::ReadOnly)); // the viewer has it open
+        const QDateTime written = QFileInfo(first).lastModified();
+        QCOMPARE(edit->openTargetFor(pdf, "r.pdf").toLocalFile(), first);
+        QCOMPARE(QFileInfo(first).lastModified(), written);
+    }
+
+    void ctrlClickPassesChipText()
+    {
+        QTemporaryDir tmp;
+        edit->setOpenFolder(tmp.filePath("open"));
+        const QString path = tmp.filePath("notes v2.pdf");
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("%PDF-1.7 chip");
+        file.close();
+        QMimeData mime;
+        mime.setUrls({QUrl::fromLocalFile(path)});
+        paste(mime);
+
+        edit->resize(400, 200);
+        edit->show();
+        QVERIFY(QTest::qWaitForWindowExposed(edit.get()));
+        QTextCursor cursor(doc());
+        cursor.setPosition(fragmentContaining(doc(), "notes v2.pdf").position() + 3);
+        const QPoint at = edit->cursorRect(cursor).center();
+        opened_.clear();
+        QDesktopServices::setUrlHandler("file", this, "handleUrl");
+        QTest::mouseClick(edit->viewport(), Qt::LeftButton, Qt::ControlModifier, at);
+        QDesktopServices::unsetUrlHandler("file");
+        QCOMPARE(QFileInfo(opened_.toLocalFile()).fileName(), QString("notes v2.pdf"));
     }
 
     void oversizedFileNotAttached()

@@ -1,9 +1,9 @@
 #pragma once
 
 #include "editor/AttachmentStore.h"
+#include "editor/OpenFolder.h"
 
 #include <QDate>
-#include <QDir>
 #include <QTextEdit>
 #include <QUrl>
 
@@ -23,10 +23,11 @@ public:
     void setAttachmentStore(AttachmentStore* store) { attachments_ = store; }
 
     // What Ctrl+click on a noite-att link opens. The bytes are written to
-    // <open folder>/<first 12 hex of the id>/<id> and that file is returned, or for programs
-    // and scripts (which would run) the folder that holds it. Empty if the bytes can't be
-    // read or written.
-    QUrl openTargetFor(const QString& attachmentId) const;
+    // <open folder>/<first 12 hex of the id>/<safeFileName(name, id)> (a file of the same
+    // size already there is reused, as it may be open in a viewer) and that file is returned,
+    // or for programs and scripts (which would run) the folder that holds it. Empty if the
+    // bytes can't be read or written.
+    QUrl openTargetFor(const QString& attachmentId, const QString& name = {}) const;
     // Where openTargetFor writes; defaults to %TEMP%\noite (A5).
     void setOpenFolder(const QString& dir) { openFolder_ = dir; }
 
@@ -61,10 +62,12 @@ protected:
 
 private:
     bool toggleCheckboxAt(const QPoint& pos);
+    // The text of the link `href` under `pos` (a file chip's name).
+    QString anchorTextAt(const QPoint& pos, const QString& href) const;
     // Copied files become links ("chips") to their attachment; too-large ones become text.
     void insertFileChips(const QStringList& files);
 
     MarkdownShortcuts* shortcuts_;
     AttachmentStore* attachments_ = nullptr;
-    QString openFolder_ = QDir::tempPath() + "/noite";
+    QString openFolder_ = defaultOpenFolder();
 };

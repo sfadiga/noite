@@ -47,9 +47,9 @@ noite\
   noite.exe
   Qt6*.dll, VC runtime DLLs, platforms\, styles\, imageformats\   (target ≈ 35 MB total)
   data\
-    noite.db           SQLite database
-    attachments\       content-addressed files (name = hash of contents)
+    noite.db           SQLite database, attachments included (one file holds all the data)
     logs\              rotating logs
+    migration-backups\ pre-migration database copies
 ```
 
 - Nothing is installed; no registry writes, **except** the optional "Start with Windows" entry. When enabled, every launch rewrites that entry with the current exe path, so moving the folder (or a USB drive letter changing) doesn't break it. (D4)
@@ -57,13 +57,13 @@ noite\
 
 ### Backup (D13)
 
-- Periodic **consistent snapshot** of the database (SQLite backup API / `VACUUM INTO`) plus attachments, written to a user-chosen folder. The live database is never placed in a sync folder.
+- Periodic **consistent snapshot** of the database (`VACUUM INTO`), written to a user-chosen folder. Attachments live in the database, so each snapshot is one self-contained `.db` file (and each carries every attachment). The live database is never placed in a sync folder.
 - Defaults: daily, keep last 14. If Google Drive for Desktop is installed, its folder is suggested in setup. No Google sign-in.
 - "Back up now" is available from the tray.
 
 ### Attachment cleanup (D22)
 
-When the trash purge runs, it scans every remaining note for attachment references and deletes only attachments no note references (mark-and-sweep). No per-file usage counters.
+When the trash purge runs, it scans every remaining note for attachment references and deletes only attachment rows no note references and that weren't pasted within the last day (mark-and-sweep), then returns the freed space to the filesystem (incremental auto-vacuum). No per-attachment usage counters.
 
 ### Updates & schema migrations (D26)
 
@@ -82,7 +82,7 @@ Rotating logs in `data\logs\` (7 files × 1 MB). Crashes logged with a stack tra
 | Field | Source |
 |---|---|
 | `id` | generated |
-| `content` | **Qt rich-text HTML** (`QTextDocument::toHtml`), the canonical format. Images and files are referenced as `noite-att:<hash>.<ext>` and loaded from `attachments\`. There is no `//`: with an authority, QUrl parses the hash as a hostname, rejects it, and every image ends up sharing one key. Markdown is export-only: `toMarkdown()` loses bold and tables. (D7) |
+| `content` | **Qt rich-text HTML** (`QTextDocument::toHtml`), the canonical format. Images and files are referenced as `noite-att:<hash>.<ext>` and stored in the database's `attachments` table. There is no `//`: with an authority, QUrl parses the hash as a hostname, rejects it, and every image ends up sharing one key. Markdown is export-only: `toMarkdown()` loses bold and tables. (D7) |
 | `title` | derived from the first line of text, truncated to 60 chars; no AI. (D10) |
 | `created_at`, `modified_at` | automatic (D10) |
 | `due_date` | optional (D9) |
@@ -142,7 +142,7 @@ Attachments are shared, not duplicated (safe because of D22).
 | Clipboard content | Result |
 |---|---|
 | Image | inline image (stored as attachment) |
-| Copied file(s) | copied into `attachments\`, shown as a clickable file chip; max 25 MB each |
+| Copied file(s) | stored in the database, shown as a clickable file chip; max 25 MB each. Ctrl+click writes it to `%TEMP%\noite\` under the chip's name and opens it (programs open their folder instead); that folder is emptied at startup |
 | Rich HTML (browser, Word) | converted to the editor's supported formatting |
 | Spreadsheet cells | simple table |
 | Anything else | plain text |
