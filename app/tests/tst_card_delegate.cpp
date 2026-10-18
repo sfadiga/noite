@@ -161,6 +161,32 @@ private slots:
         paintAll(model, delegate);
     }
 
+    void paintsStacksWithoutCrashing()
+    {
+        auto f = test::fixture();
+        const ScratchId b = f->store->createScratch(test::html({"b"})).id;
+        const ScratchId c = f->store->createScratch(test::html({"c"})).id;
+        const BundleId bundle = f->store->bundleTogether(b, c);
+        BoardModel model(*f->store, [] { return test::today(); });
+        model.reload();
+        CardDelegate delegate(nullptr);
+        paintAll(model, delegate); // collapsed stack
+        model.setExpanded(bundle, true);
+        QCOMPARE(model.rowCount(), 3);
+        paintAll(model, delegate); // expanded stack plus in-bundle cards
+    }
+
+    void stackLinesNameCountTitles()
+    {
+        auto f = test::fixture();
+        const ScratchId b = f->store->createScratch(test::html({"b"})).id;
+        const ScratchId c = f->store->createScratch(test::html({"c"})).id;
+        f->store->bundleTogether(b, c);
+        BoardModel model(*f->store, [] { return test::today(); });
+        model.reload();
+        QCOMPARE(CardDelegate::stackLines(model.row(0)), QStringList({"b", "2 notes", "b", "c"}));
+    }
+
     // Review Focus 5.
     void paintsHostileText()
     {
