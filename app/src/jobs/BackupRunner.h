@@ -26,7 +26,8 @@ public:
     virtual void cancelAndWait() = 0;
 
 signals:
-    // Both are delivered on the thread the runner lives on.
+    // Exactly one per accepted start(), delivered on the runner's own thread (every receiver runs there).
+    // A run abandoned by cancelAndWait() delivers nothing.
     void finished(noite::backup::Result result);
     void failed(noite::ErrorCode code, QString message);
 };
@@ -39,14 +40,14 @@ public:
     ~ThreadBackupRunner() override;
 
     void start(const noite::backup::Job& job) override;
-    bool busy() const override { return m_busy.load(); }
+    // True from start() until the outcome has been delivered; main thread only.
+    bool busy() const override { return m_busy; }
     void cancelAndWait() override;
 
 private:
-    void run(const noite::backup::Job& job);
-
     QThread m_thread;
     std::unique_ptr<QObject> m_worker; // lives on m_thread
     std::atomic<bool> m_cancel{false};
-    std::atomic<bool> m_busy{false};
+    bool m_busy = false;       // runner's thread only
+    quint64 m_generation = 0;  // bumped by cancelAndWait; tags each run so a stale outcome is dropped
 };

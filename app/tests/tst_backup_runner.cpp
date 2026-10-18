@@ -30,6 +30,16 @@ QStringList entries(const QString& dir, const QString& filter)
     return QDir(dir).entryList({filter}, QDir::Files, QDir::Name);
 }
 
+// Enough blob data that the snapshot copy takes a while, like core's cancelDuringVacuumStopsIt.
+void seedBlobs(Store& store)
+{
+    for (int i = 0; i < 30; ++i) {
+        QByteArray bytes(1'000'000, 0);
+        QRandomGenerator::global()->fillRange(reinterpret_cast<quint32*>(bytes.data()), bytes.size() / 4);
+        store.putAttachment(bytes, "bin");
+    }
+}
+
 } // namespace
 
 class BackupRunnerTest : public QObject {
@@ -73,12 +83,14 @@ private slots:
         QTemporaryDir dest;
         ThreadBackupRunner runner;
         QSignalSpy spy(&runner, &BackupRunner::finished);
+        QSignalSpy failures(&runner, &BackupRunner::failed);
 
         runner.start(jobFor(*f->store, dest.path()));
         runner.start(jobFor(*f->store, dest.path()));
         QVERIFY(spy.wait(10'000));
         QTest::qWait(300);
         QCOMPARE(spy.count(), 1);
+        QCOMPARE(failures.count(), 0);
     }
 
     void runsAgainAfterFinishing()
@@ -117,28 +129,57 @@ private slots:
     void cancelAndWaitIsPrompt()
     {
         auto f = test::fixture();
-        for (int i = 0; i < 4; ++i) {
-            QByteArray bytes(5 * 1024 * 1024, 0);
-            QRandomGenerator::global()->fillRange(reinterpret_cast<quint32*>(bytes.data()), bytes.size() / 4);
-            f->store->putAttachment(bytes, "bin");
-        }
+        seedBlobs(*f->store);
         QTemporaryDir dest;
-        {
-            ThreadBackupRunner runner;
-            runner.start(jobFor(*f->store, dest.path()));
-            QElapsedTimer timer;
-            timer.start();
-            runner.cancelAndWait();
-            QVERIFY2(timer.elapsed() < 2000, qPrintable(QString::number(timer.elapsed())));
-            QVERIFY(!runner.busy());
-        }
         const QString snaps = snapshotsDir(*f->store, dest.path());
+        ThreadBackupRunner runner;
+        int delivered = 0;
+        connect(&runner, &BackupRunner::finished, this, [&] { ++delivered; });
+        connect(&runner, &BackupRunner::failed, this, [&] { ++delivered; });
+
+        runner.start(jobFor(*f->store, dest.path()));
+        QTRY_VERIFY(!entries(snaps, "*.tmp").isEmpty()); // the copy is under way
+        QElapsedTimer timer;
+        timer.start();
+        runner.cancelAndWait();
+        QVERIFY2(timer.elapsed() < 2000, qPrintable(QString::number(timer.elapsed())));
+        QVERIFY(!runner.busy());
+        QTest::qWait(200);
+        QCOMPARE(delivered, 0);
         const QStringList dbs = entries(snaps, "*.db");
-        QVERIFY(dbs.size() <= 1);
         for (const QString& db : dbs) {
-            backup::verify(snaps + "/" + db);
+            QVERIFY_THROWS_NO_EXCEPTION(backup::verify(snaps + "/" + db));
         }
+        QVERIFY(dbs.size() <= 1);
         QVERIFY(entries(snaps, "*.tmp").isEmpty());
+    }
+
+    // An outcome from before cancelAndWait must never be attributed to the next run.
+    void cancelledRunDeliversNothingAndRunnerRestarts()
+    {
+        auto f = test::fixture();
+        seedBlobs(*f->store);
+        QTemporaryDir dest;
+        const QString snaps = snapshotsDir(*f->store, dest.path());
+        ThreadBackupRunner runner;
+        int failures = 0;
+        connect(&runner, &BackupRunner::failed, this, [&] { ++failures; });
+        QSignalSpy finished(&runner, &BackupRunner::finished);
+
+        runner.start(jobFor(*f->store, dest.path()));
+        QTRY_VERIFY(!entries(snaps, "*.tmp").isEmpty());
+        runner.cancelAndWait();
+        QTest::qWait(200);
+        QCOMPARE(failures, 0);
+        QCOMPARE(finished.count(), 0);
+
+        f->clock->advance(1000);
+        runner.start(jobFor(*f->store, dest.path()));
+        QVERIFY(runner.busy());
+        QVERIFY(finished.wait(20'000));
+        QCOMPARE(finished.count(), 1);
+        QCOMPARE(failures, 0);
+        QVERIFY(!runner.busy());
     }
 };
 
