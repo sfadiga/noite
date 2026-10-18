@@ -64,9 +64,15 @@ public:
     // Today: active, overdue -> due today -> undated (oldest first). All: Today's order, then
     // upcoming by due date. Completed: newest done first. Trash: newest trashed first.
     // `search` is matched as accent-insensitive word prefixes; blank means no filter.
-    QList<ScratchSummary> list(Tab tab, QDate today, const QString& search = {}) const;
-    // The size of list(tab, today, search) for every tab, in one query.
-    TabCounts tabCounts(QDate today, const QString& search = {}) const;
+    // `filter` applies the chips (D18): OR within a kind, AND across kinds.
+    QList<ScratchSummary> list(Tab tab, QDate today, const QString& search = {}, const BoardFilter& filter = {}) const;
+    // The size of list(tab, today, search, filter) for every tab, in one query.
+    TabCounts tabCounts(QDate today, const QString& search = {}, const BoardFilter& filter = {}) const;
+    // The chips to show for `tab`: each kind counted under the search and the *other* kinds'
+    // chips, zero counts dropped, active chips always kept (C6).
+    ChipFacets chipFacets(Tab tab, QDate today, const QString& search, const BoardFilter& filter) const;
+    // Every tag in use, inline or manual, alphabetical.
+    QStringList listTags() const;
     ReviewCounts reviewCounts(QDate today) const;
 
     // ---- Attachments and purge (store_attachments.cpp, D13, D22; in the database, A1) ----

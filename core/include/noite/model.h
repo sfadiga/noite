@@ -2,10 +2,12 @@
 
 #include <QDate>
 #include <QList>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 
 #include <optional>
+#include <utility>
 
 namespace noite {
 
@@ -49,6 +51,24 @@ struct ScratchSummary {
 };
 
 // The start-of-day notification's numbers (D16). `open` = all active scratches.
+// Filter chips (D18, M3b C1): OR within a kind, AND across kinds; empty = no filter.
+enum class DateChip { Overdue, DueToday, NoDate };
+
+struct BoardFilter {
+    QSet<Color> colors;
+    QSet<DateChip> dates;
+    QStringList tags; // matched lowercase
+    bool isEmpty() const { return colors.isEmpty() && dates.isEmpty() && tags.isEmpty(); }
+    bool operator==(const BoardFilter&) const = default;
+};
+
+// The chips worth showing for a tab, with how many notes each would show (C6).
+struct ChipFacets {
+    QList<std::pair<Color, int>> colors;    // swatch order
+    QList<std::pair<DateChip, int>> dates;  // Overdue, DueToday, NoDate
+    QList<std::pair<QString, int>> tags;    // alphabetical
+};
+
 // How many notes each board tab holds; indexed by Tab.
 struct TabCounts {
     int counts[4]{};

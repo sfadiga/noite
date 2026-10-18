@@ -44,6 +44,44 @@ struct Board {
     }
 };
 
+// For chip filters: colours, tags and dates across tabs (M3b).
+struct Chips {
+    std::unique_ptr<Fixture> f = fixture();
+    QString red1, blue1, red2, plain, doneRed;
+
+    QString make(const QString& text, std::optional<Color> color, std::optional<QDate> due = std::nullopt)
+    {
+        const QString id = f->store->createScratch(html({text})).id;
+        if (color)
+            f->store->setColor(id, color);
+        if (due)
+            f->store->setDue(id, due);
+        f->clock->advance(60'000);
+        return id;
+    }
+
+    Chips()
+    {
+        red1 = make("red one #trip", Color::Red, QDate(2026, 10, 14));  // overdue
+        blue1 = make("blue one #trip", Color::Blue, QDate(2026, 10, 15)); // due today
+        red2 = make("red two zebra #work", Color::Red);
+        plain = make("plain", std::nullopt);
+        doneRed = make("done red #trip", Color::Red);
+        f->store->markDone(doneRed);
+    }
+    QStringList today(const BoardFilter& filter, const QString& search = {})
+    {
+        return ids(f->store->list(Tab::Today, test::today(), search, filter));
+    }
+};
+
+BoardFilter colors(std::initializer_list<Color> c)
+{
+    BoardFilter f;
+    f.colors = QSet<Color>(c);
+    return f;
+}
+
 } // namespace
 
 class BoardTest : public QObject {
@@ -126,6 +164,83 @@ private slots:
         QCOMPARE(c.of(Tab::Trash), 0);
         const TabCounts none = b.f->store->tabCounts(today(), "\"(");
         QCOMPARE(none.of(Tab::All), 0);
+    }
+
+    void filterOrWithinKindAndAcrossKinds()
+    {
+        Chips c;
+        QCOMPARE(c.today(colors({Color::Red})), QStringList({c.red1, c.red2}));
+        QCOMPARE(c.today(colors({Color::Red, Color::Blue})), QStringList({c.red1, c.blue1, c.red2}));
+        BoardFilter redTrip = colors({Color::Red});
+        redTrip.tags = {"trip"};
+        QCOMPARE(c.today(redTrip), QStringList({c.red1}));
+        BoardFilter undated;
+        undated.dates = {DateChip::NoDate};
+        QCOMPARE(c.today(undated), QStringList({c.red2, c.plain}));
+        BoardFilter datedTrip;
+        datedTrip.dates = {DateChip::Overdue, DateChip::DueToday};
+        datedTrip.tags = {"trip"};
+        QCOMPARE(c.today(datedTrip), QStringList({c.red1, c.blue1}));
+        QVERIFY(BoardFilter().isEmpty());
+        QVERIFY(!redTrip.isEmpty());
+    }
+
+    void filterCombinesWithSearch()
+    {
+        Chips c;
+        QCOMPARE(c.today(colors({Color::Red}), "zebra"), QStringList({c.red2}));
+        QCOMPARE(c.today(colors({Color::Blue}), "zebra"), QStringList());
+    }
+
+    void tabCountsFollowFilter()
+    {
+        Chips c;
+        const BoardFilter red = colors({Color::Red});
+        const TabCounts counts = c.f->store->tabCounts(today(), {}, red);
+        for (Tab tab : {Tab::Today, Tab::All, Tab::Completed, Tab::Trash})
+            QCOMPARE(counts.of(tab), int(c.f->store->list(tab, today(), {}, red).size()));
+        QCOMPARE(counts.of(Tab::Today), 2);
+        QCOMPARE(counts.of(Tab::All), 2);
+        QCOMPARE(counts.of(Tab::Completed), 1);
+        QCOMPARE(counts.of(Tab::Trash), 0);
+    }
+
+    // C6: a kind's chips ignore that kind's own selection; other kinds narrow them.
+    void facetsFollowOtherKinds()
+    {
+        Chips c;
+        const ChipFacets facets = c.f->store->chipFacets(Tab::Today, today(), {}, colors({Color::Red}));
+        using ColorCount = std::pair<Color, int>;
+        using DateCount = std::pair<DateChip, int>;
+        using TagCount = std::pair<QString, int>;
+        QCOMPARE(facets.colors, QList<ColorCount>({{Color::Red, 2}, {Color::Blue, 1}}));
+        QCOMPARE(facets.tags, QList<TagCount>({{"trip", 1}, {"work", 1}}));
+        QCOMPARE(facets.dates, QList<DateCount>({{DateChip::Overdue, 1}, {DateChip::NoDate, 1}}));
+    }
+
+    void facetsKeepActiveZeroChips()
+    {
+        Chips c;
+        BoardFilter gone;
+        gone.tags = {"gone"};
+        const ChipFacets facets = c.f->store->chipFacets(Tab::Today, today(), {}, gone);
+        QVERIFY(facets.tags.contains(std::pair<QString, int>("gone", 0)));
+        QVERIFY(c.today(gone).isEmpty());
+    }
+
+    void listTagsIncludesInlineAndManual()
+    {
+        Chips c;
+        c.f->store->setManualTags(c.plain, {"Errand"});
+        QCOMPARE(c.f->store->listTags(), QStringList({"errand", "trip", "work"}));
+    }
+
+    void filterIgnoresTagCase()
+    {
+        Chips c;
+        BoardFilter upper;
+        upper.tags = {"TRIP"};
+        QCOMPARE(c.today(upper), QStringList({c.red1, c.blue1}));
     }
 
     void reviewCountsMatchFixture()
