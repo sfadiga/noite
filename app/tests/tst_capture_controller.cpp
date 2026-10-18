@@ -241,6 +241,56 @@ private slots:
         QVERIFY(!c.controller.currentId());
         QVERIFY(c.edit.toPlainText().isEmpty());
     }
+
+    // ---- M3b: manual tags ----
+
+    void tagsBeforeFirstSaveApplyAfterIt()
+    {
+        Capture c;
+        c.controller.begin();
+        c.controller.setManualTags({"trip"});
+        QTest::keyClicks(&c.edit, "pack bags");
+        c.controller.flush();
+        QVERIFY(c.controller.currentId());
+        QCOMPARE(c.store().get(*c.controller.currentId()).manualTags, QStringList({"trip"}));
+        QCOMPARE(c.controller.manualTags(), QStringList({"trip"}));
+    }
+
+    void tagChangeOnExistingNoteIsSaved()
+    {
+        Capture c;
+        c.controller.begin();
+        QTest::keyClicks(&c.edit, "pack");
+        c.controller.flush();
+        c.controller.setManualTags({"home"});
+        c.controller.flush();
+        QCOMPARE(c.store().get(*c.controller.currentId()).manualTags, QStringList({"home"}));
+    }
+
+    void tagOnlyNoteIsDiscarded()
+    {
+        Capture c;
+        c.controller.begin();
+        c.controller.setManualTags({"trip"});
+        c.controller.dismiss();
+        QCOMPARE(c.count(Tab::All), 0);
+    }
+
+    void openLoadsManualAndInlineTags()
+    {
+        Capture c;
+        const ScratchId id = c.store().createScratch(test::html({"x #work"})).id;
+        c.store().setManualTags(id, {"trip"});
+        QSignalSpy spy(&c.controller, &CaptureController::tagsChanged);
+        c.controller.open(id);
+        QVERIFY(spy.size() >= 1);
+        QCOMPARE(c.controller.manualTags(), QStringList({"trip"}));
+        QCOMPARE(c.controller.inlineTags(), QStringList({"work"}));
+        QCOMPARE(c.controller.knownTags(), QStringList({"trip", "work"}));
+        c.controller.begin();
+        QVERIFY(c.controller.manualTags().isEmpty());
+        QVERIFY(c.controller.inlineTags().isEmpty());
+    }
 };
 
 NOITE_TEST(CaptureControllerTest)

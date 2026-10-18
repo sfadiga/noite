@@ -3,6 +3,8 @@
 #include "widget_helpers.h"
 
 #include "capture/CaptureController.h"
+#include "capture/NoteFooterBar.h"
+#include "capture/TagField.h"
 #include "capture/CaptureWindow.h"
 #include "capture/LatencyProbe.h"
 #include "editor/AttachmentStore.h"
@@ -142,6 +144,36 @@ private slots:
 
         test::drag(w.edit->viewport(), QPoint(20, 20), QPoint(40, 40)); // selects text instead
         QCOMPARE(w.window.pos(), start + QPoint(50, 30));
+    }
+
+    void ctrlTFocusesTagFieldAndSaves()
+    {
+        Window w;
+        w.window.summon();
+        QTest::keyClicks(w.edit, "note");
+        QTest::keyClick(w.edit, Qt::Key_T, Qt::ControlModifier);
+        TagField* tags = w.window.footerBar()->tagField();
+        QCOMPARE(w.window.focusWidget(), tags); // offscreen, the Tool window is never active
+        QTest::keyClicks(tags, "#Trip");
+        QTest::keyClick(tags, Qt::Key_Escape);
+        QVERIFY(!w.window.isVisible());
+        const QList<ScratchSummary> all = w.f->store->list(Tab::All, QDate(2026, 10, 15));
+        QCOMPARE(all.size(), 1);
+        QCOMPARE(w.f->store->get(all[0].id).manualTags, QStringList({"trip"}));
+    }
+
+    void invalidTagShowsErrorAndSavesNone()
+    {
+        Window w;
+        w.window.summon();
+        QTest::keyClicks(w.edit, "x");
+        QTest::keyClick(w.edit, Qt::Key_T, Qt::ControlModifier);
+        QTest::keyClicks(w.window.footerBar()->tagField(), "#1abc");
+        QCOMPARE(w.window.footerBar()->errorText(), QString("Invalid tag: 1abc"));
+        QTest::keyClick(w.window.footerBar()->tagField(), Qt::Key_Escape);
+        const QList<ScratchSummary> all = w.f->store->list(Tab::All, QDate(2026, 10, 15));
+        QCOMPARE(all.size(), 1);
+        QVERIFY(w.f->store->get(all[0].id).manualTags.isEmpty());
     }
 
     void summonAfterDismissStartsBlank()

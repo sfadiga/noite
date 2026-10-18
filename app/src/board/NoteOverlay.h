@@ -15,7 +15,7 @@ class Store;
 struct AttachmentStore;
 class NoteEdit;
 class QFrame;
-class QLabel;
+class NoteFooterBar;
 
 // Edits a note on top of the board (B2): a dimmed backdrop over the whole board with the
 // editor in a centred panel. It is the capture editor and controller, so autosave, @dates
@@ -36,7 +36,8 @@ public:
     NoteEdit* editor() const { return editor_; }
     QWidget* panel() const;
     CaptureController& controller() { return controller_; }
-    QString footerText() const;
+    QString footerText() const; // due date and colour
+    NoteFooterBar* footerBar() const { return footer_; }
 
 signals:
     // The note's id; empty if it was discarded or never created.
@@ -50,11 +51,10 @@ protected:
 private:
     void present();
     void layoutPanel();
-    void updateFooter();
 
     QFrame* panel_;
     NoteEdit* editor_;
-    QLabel* footer_;
+    NoteFooterBar* footer_ = nullptr; // made after controller_, which it shows
     CaptureController controller_;
     bool open_ = false;
 };

@@ -1,12 +1,13 @@
 #include "board/NoteOverlay.h"
 
 #include "DragMover.h"
-#include "capture/NoteFooter.h"
+#include "capture/NoteFooterBar.h"
+#include "capture/TagField.h"
 #include "editor/NoteEdit.h"
 
 #include <QFrame>
 #include <QKeyEvent>
-#include <QLabel>
+
 #include <QPainter>
 #include <QVBoxLayout>
 
@@ -20,7 +21,6 @@ NoteOverlay::NoteOverlay(noite::Store& store, AttachmentStore& attachments, std:
     : QWidget(board)
     , panel_(new QFrame(this))
     , editor_(new NoteEdit(panel_))
-    , footer_(new QLabel(panel_))
     , controller_(store, *editor_, std::move(today))
 {
     editor_->setAttachmentStore(&attachments);
@@ -30,27 +30,27 @@ NoteOverlay::NoteOverlay(noite::Store& store, AttachmentStore& attachments, std:
     auto* layout = new QVBoxLayout(panel_);
     layout->setContentsMargins(12, 12, 12, 8);
     layout->addWidget(editor_);
+    footer_ = new NoteFooterBar(controller_, panel_); // after the controller it shows
     layout->addWidget(footer_);
-    footer_->setVisible(false);
     hide();
 
     new DragMover(panel_, panel_); // by its frame and footer; re-centred on every open
     board->installEventFilter(this);
     editor_->installEventFilter(this);
+    footer_->tagField()->installEventFilter(this);
     connect(editor_, &NoteEdit::escapePressed, &controller_, &CaptureController::dismiss);
     connect(&controller_, &CaptureController::finished, this, [this] {
         open_ = false;
         hide();
         emit closed(controller_.currentId());
     });
-    connect(&controller_, &CaptureController::dueChanged, this, &NoteOverlay::updateFooter);
-    connect(&controller_, &CaptureController::colorChanged, this, &NoteOverlay::updateFooter);
 }
 
 void NoteOverlay::openNote(const noite::ScratchId& id, bool readOnly)
 {
     controller_.open(id);
     editor_->setReadOnly(readOnly);
+    footer_->setReadOnly(readOnly);
     present();
 }
 
@@ -58,6 +58,7 @@ void NoteOverlay::openBlank()
 {
     controller_.begin();
     editor_->setReadOnly(false);
+    footer_->setReadOnly(false);
     present();
 }
 
@@ -74,7 +75,7 @@ QWidget* NoteOverlay::panel() const
 
 QString NoteOverlay::footerText() const
 {
-    return footer_->text();
+    return footer_->infoText();
 }
 
 void NoteOverlay::present()
@@ -91,12 +92,6 @@ void NoteOverlay::layoutPanel()
 {
     const QSize size = kPanelSize.boundedTo(rect().size() - QSize(40, 40));
     panel_->setGeometry(QRect(rect().center() - QPoint(size.width() / 2, size.height() / 2), size));
-}
-
-void NoteOverlay::updateFooter()
-{
-    footer_->setText(noteFooterText(controller_.due(), controller_.color()));
-    footer_->setVisible(!footer_->text().isEmpty());
 }
 
 void NoteOverlay::paintEvent(QPaintEvent*)
@@ -118,9 +113,18 @@ bool NoteOverlay::eventFilter(QObject* watched, QEvent* event)
         setGeometry(parentWidget()->rect());
         layoutPanel();
     }
+    if (watched == footer_->tagField() && event->type() == QEvent::KeyPress
+        && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
+        controller_.dismiss(); // as Esc in the text: save and close
+        return true;
+    }
     if (watched == editor_ && event->type() == QEvent::KeyPress && !editor_->isReadOnly()) {
         const auto* key = static_cast<QKeyEvent*>(event);
         const auto mods = key->modifiers() & ~Qt::KeypadModifier;
+        if (key->key() == Qt::Key_T && mods == Qt::ControlModifier) {
+            footer_->focusTags();
+            return true;
+        }
         if ((key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) && mods == Qt::ControlModifier) {
             controller_.markDoneAndClose();
             return true;

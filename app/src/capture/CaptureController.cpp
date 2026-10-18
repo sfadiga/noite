@@ -30,10 +30,13 @@ void CaptureController::reset()
     id_.reset();
     due_.reset();
     color_.reset();
+    manualTags_.clear();
+    inlineTags_.clear();
     resetting_ = true;
     editor_.clear();
     resetting_ = false;
     dirty_ = false;
+    tagsDirty_ = false;
 }
 
 void CaptureController::begin()
@@ -41,6 +44,36 @@ void CaptureController::begin()
     reset();
     emit dueChanged(due_);
     emit colorChanged(color_);
+    emit tagsChanged();
+}
+
+void CaptureController::loadTags(const noite::Scratch& scratch)
+{
+    manualTags_ = scratch.manualTags;
+    inlineTags_.clear();
+    for (const QString& tag : scratch.tags)
+        if (!scratch.manualTags.contains(tag))
+            inlineTags_ << tag;
+}
+
+void CaptureController::setManualTags(const QStringList& tags)
+{
+    if (tags == manualTags_)
+        return;
+    manualTags_ = tags;
+    tagsDirty_ = true;
+    if (id_)
+        autosave_.start();
+}
+
+QStringList CaptureController::knownTags() const
+{
+    try {
+        return store_.listTags();
+    } catch (const std::exception& error) {
+        qWarning() << "capture: tags:" << error.what();
+        return {};
+    }
 }
 
 void CaptureController::open(const noite::ScratchId& id)
@@ -51,6 +84,7 @@ void CaptureController::open(const noite::ScratchId& id)
         id_ = scratch.id;
         due_ = scratch.due;
         color_ = scratch.color;
+        loadTags(scratch);
         resetting_ = true;
         editor_.setHtml(scratch.html);
         editor_.moveCursor(QTextCursor::End);
@@ -60,6 +94,7 @@ void CaptureController::open(const noite::ScratchId& id)
     }
     emit dueChanged(due_);
     emit colorChanged(color_);
+    emit tagsChanged();
 }
 
 void CaptureController::onContentsChanged()
@@ -78,13 +113,13 @@ void CaptureController::flush()
 
 void CaptureController::save()
 {
-    if (!dirty_)
+    if (!dirty_ && !tagsDirty_)
         return;
     const QString html = editor_.toHtml();
     try {
         if (!id_) {
             if (noite::content::isEmpty(html)) {
-                dirty_ = false;
+                dirty_ = false; // pending tags wait for text
                 return;
             }
             id_ = store_.createScratch(html).id;
@@ -92,10 +127,18 @@ void CaptureController::save()
                 store_.setDue(*id_, due_);
             if (color_)
                 store_.setColor(*id_, color_);
+            if (!manualTags_.isEmpty())
+                store_.setManualTags(*id_, manualTags_);
         } else {
-            store_.updateContent(*id_, html);
+            if (dirty_)
+                store_.updateContent(*id_, html);
+            if (tagsDirty_)
+                store_.setManualTags(*id_, manualTags_);
         }
         dirty_ = false;
+        tagsDirty_ = false;
+        loadTags(store_.get(*id_));
+        emit tagsChanged();
         emit saved(*id_);
     } catch (const std::exception& error) {
         report(error);

@@ -5,7 +5,7 @@
 class CaptureController;
 class LatencyProbe;
 class NoteEdit;
-class QLabel;
+class NoteFooterBar;
 
 // The frameless, always-on-top capture window (D6). Created at startup and kept hidden;
 // summon() opens a blank note centred on the monitor of the foreground window, or just
@@ -19,7 +19,8 @@ public:
 
     void summon();
     NoteEdit* editor() const { return editor_; }
-    QString footerText() const;
+    QString footerText() const; // due date and colour
+    NoteFooterBar* footerBar() const { return footer_; }
 
     // Optional (harness runs only): told when the editor first paints with focus and when
     // the capture closes.
@@ -30,11 +31,10 @@ protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
-    void updateFooter();
 
     CaptureController& controller_;
     NoteEdit* editor_;
-    QLabel* footer_;
+    NoteFooterBar* footer_;
     LatencyProbe* probe_ = nullptr;
     bool open_ = false; // a capture is in progress (summoned and not yet finished)
 };
