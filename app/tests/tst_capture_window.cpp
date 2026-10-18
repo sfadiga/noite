@@ -1,5 +1,6 @@
 #include "helpers.h"
 #include "registry.h"
+#include "widget_helpers.h"
 
 #include "capture/CaptureController.h"
 #include "capture/CaptureWindow.h"
@@ -127,6 +128,20 @@ private slots:
         QFile csv(tmp.filePath("trials.csv"));
         QVERIFY(csv.open(QIODevice::ReadOnly | QIODevice::Text));
         QVERIFY(QString::fromUtf8(csv.readAll()).contains(",\"hello\""));
+    }
+
+    // Dragging the frame moves the window, so text behind it can be read.
+    void dragOnFrameMovesWindow()
+    {
+        Window w;
+        w.window.summon();
+        const QPoint start = w.window.pos();
+        test::drag(&w.window, QPoint(4, 4), QPoint(50, 30));
+        QCOMPARE(w.window.pos(), start + QPoint(50, 30));
+        QVERIFY(w.window.isVisible());
+
+        test::drag(w.edit->viewport(), QPoint(20, 20), QPoint(40, 40)); // selects text instead
+        QCOMPARE(w.window.pos(), start + QPoint(50, 30));
     }
 
     void summonAfterDismissStartsBlank()

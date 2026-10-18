@@ -39,3 +39,7 @@ Record pass/fail and a one-line note for any failure. Every failure becomes an a
 | B7 | Many notes | `build\Release\board-bench.exe` (2,000 notes: prints timings, flashes the board), then a real folder with as many notes as you have | Bench prints PASS; the real board scrolls smoothly |
 | B8 | Display scale | 150% scaling | Cards crisp, nothing clipped |
 | B9 | Reopen keeps place | Pick the Completed tab and a search, close the board, reopen it | Same tab and search |
+| B10 | Tabs and counts | Look at the tab row; type a search; mark a card done | Four equal caps buttons; counts match the cards and follow the search and the action |
+| B11 | Age on cards | Look at old, new and dated cards | Each active card shows its age (`3h`, `12d`), after the due label if any |
+| B12 | Plain cards in dark mode | Dark mode, a card with no colour | Its edges are visible |
+| B13 | Drag the popups | Drag the capture window by its margin or footer; open a card on the board and drag its panel | Both move; dragging inside the text selects text; each re-centres when reopened |

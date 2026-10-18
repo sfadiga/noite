@@ -20,6 +20,9 @@ add_library(noite-app STATIC
     src/board/BoardWindow.h src/board/BoardWindow.cpp
     src/board/UndoLog.h src/board/UndoLog.cpp
     src/board/NoteOverlay.h src/board/NoteOverlay.cpp
+    src/board/TabStrip.h src/board/TabStrip.cpp
+    src/Theme.h src/Theme.cpp
+    src/DragMover.h src/DragMover.cpp
 )
 target_include_directories(noite-app PUBLIC src)
 target_link_libraries(noite-app PUBLIC noite-core Qt6::Widgets user32)
@@ -38,7 +41,7 @@ qt_add_executable(app-tests
     tests/tst_smoke.cpp
     tests/tst_hotkey.cpp
     tests/tst_native_host.cpp
-    tests/tst_editor.cpp tests/fake_attachments.h
+    tests/tst_editor.cpp tests/fake_attachments.h tests/widget_helpers.h
     tests/tst_paste.cpp
     tests/tst_dates.cpp
     tests/tst_capture_controller.cpp
@@ -51,6 +54,7 @@ qt_add_executable(app-tests
     tests/tst_board_window.cpp
     tests/tst_board_actions.cpp
     tests/tst_note_overlay.cpp
+    tests/tst_theme.cpp
     tests/tst_seed.cpp bench/Seed.h bench/Seed.cpp
 )
 # Reuses core's test registry and helpers.

@@ -106,6 +106,25 @@ QList<ScratchSummary> Store::list(Tab tab, QDate today, const QString& search) c
     return out;
 }
 
+TabCounts Store::tabCounts(QDate today, const QString& search) const
+{
+    const std::optional<QString> match = ftsQuery(search);
+    QString sql = "SELECT coalesce(sum(status = 'active' AND (due_date IS NULL OR due_date <= ?1)), 0), "
+                  "coalesce(sum(status = 'active'), 0), coalesce(sum(status = 'done'), 0), "
+                  "coalesce(sum(status = 'trashed'), 0) FROM scratches";
+    if (match)
+        sql += " WHERE id IN (SELECT id FROM scratch_fts WHERE scratch_fts MATCH ?2)";
+    Stmt s = db().prepare(sql);
+    s.bind(1, today.toString(Qt::ISODate));
+    if (match)
+        s.bind(2, *match);
+    s.step();
+    TabCounts out;
+    for (int i = 0; i < 4; ++i)
+        out.counts[i] = int(s.int64(i));
+    return out;
+}
+
 ReviewCounts Store::reviewCounts(QDate today) const
 {
     Stmt s = db().prepare("SELECT coalesce(sum(due_date < ?1), 0), coalesce(sum(due_date = ?1), 0), count(*) "

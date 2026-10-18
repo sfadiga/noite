@@ -104,6 +104,30 @@ private slots:
         QCOMPARE(ids(b.f->store->list(Tab::All, today(), "   ")), ids(b.f->store->list(Tab::All, today())));
     }
 
+    void tabCountsMatchLists()
+    {
+        Board b;
+        const TabCounts c = b.f->store->tabCounts(today());
+        for (Tab tab : {Tab::Today, Tab::All, Tab::Completed, Tab::Trash})
+            QCOMPARE(c.of(tab), int(b.f->store->list(tab, today()).size()));
+        QCOMPARE(c.of(Tab::Today), 5);
+        QCOMPARE(c.of(Tab::All), 6);
+        QCOMPARE(c.of(Tab::Completed), 1);
+        QCOMPARE(c.of(Tab::Trash), 1);
+    }
+
+    void tabCountsFollowSearch()
+    {
+        Board b;
+        const TabCounts c = b.f->store->tabCounts(today(), "undated");
+        QCOMPARE(c.of(Tab::Today), 2);
+        QCOMPARE(c.of(Tab::All), 2);
+        QCOMPARE(c.of(Tab::Completed), 0);
+        QCOMPARE(c.of(Tab::Trash), 0);
+        const TabCounts none = b.f->store->tabCounts(today(), "\"(");
+        QCOMPARE(none.of(Tab::All), 0);
+    }
+
     void reviewCountsMatchFixture()
     {
         Board b;

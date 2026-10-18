@@ -80,15 +80,31 @@ private slots:
     void badgeTexts()
     {
         const QDate today = test::today();
-        QCOMPARE(CardDelegate::badgeText(active(QDate(2026, 10, 14)), today), QString("overdue"));
-        QCOMPARE(CardDelegate::badgeText(active(QDate(2026, 10, 15)), today), QString("today"));
-        QCOMPARE(CardDelegate::badgeText(active(QDate(2026, 10, 20)), today),
-                 QLocale().toString(QDate(2026, 10, 20), "d MMM"));
-        QCOMPARE(CardDelegate::badgeText(active(std::nullopt, test::t0() - 12 * kDayMs), today), QString("12d"));
-        QCOMPARE(CardDelegate::badgeText(active(std::nullopt), today), QString());
-        ScratchSummary done = active(QDate(2026, 10, 1));
+        const qint64 now = test::t0();
+        const qint64 old = now - 12 * kDayMs;
+        QCOMPARE(CardDelegate::badgeText(active(QDate(2026, 10, 14), old), today, now), QString("overdue · 12d"));
+        QCOMPARE(CardDelegate::badgeText(active(QDate(2026, 10, 15), old), today, now), QString("today · 12d"));
+        QCOMPARE(CardDelegate::badgeText(active(QDate(2026, 10, 20), old), today, now),
+                 QLocale().toString(QDate(2026, 10, 20), "d MMM") + " · 12d");
+        QCOMPARE(CardDelegate::badgeText(active(std::nullopt, old), today, now), QString("12d"));
+        ScratchSummary done = active(QDate(2026, 10, 1), old);
         done.status = Status::Done;
-        QCOMPARE(CardDelegate::badgeText(done, today), QString());
+        QCOMPARE(CardDelegate::badgeText(done, today, now), QString());
+    }
+
+    // Every active card says how long it has been on the board (hours on its first day).
+    void ageTexts()
+    {
+        const QDate today = test::today();
+        const qint64 now = test::t0();
+        const qint64 hourMs = 3'600'000;
+        QCOMPARE(CardDelegate::ageText(now, today, now), QString("now"));
+        QCOMPARE(CardDelegate::ageText(now - 59 * 60'000, today, now), QString("now"));
+        QCOMPARE(CardDelegate::ageText(now - 3 * hourMs, today, now), QString("3h"));
+        QCOMPARE(CardDelegate::ageText(now + hourMs, today, now), QString("now")); // clock skew
+        QCOMPARE(CardDelegate::ageText(now - kDayMs, today, now), QString("1d"));
+        QCOMPARE(CardDelegate::ageText(now - 40 * kDayMs, today, now), QString("40d"));
+        QCOMPARE(CardDelegate::badgeText(active(std::nullopt, now - 3 * hourMs), today, now), QString("3h"));
     }
 
     void sizeHintIsFixed()
@@ -109,6 +125,20 @@ private slots:
         }
         QVERIFY(!CardDelegate::tint(std::nullopt, false).isValid());
         QVERIFY(!CardDelegate::tint(std::nullopt, true).isValid());
+    }
+
+    // An uncoloured card stands out from the grid's background (Base) in both themes.
+    void plainCardsHaveVisibleEdges()
+    {
+        for (const QPalette& palette : {QPalette(), darkPalette()}) {
+            const int base = palette.color(QPalette::Base).lightness();
+            const int fill = CardDelegate::cardFill(std::nullopt, palette).lightness();
+            const int border = CardDelegate::cardBorder(palette).lightness();
+            QVERIFY2(std::abs(fill - base) >= 8, qPrintable(QString("fill %1 base %2").arg(fill).arg(base)));
+            QVERIFY2(std::abs(border - base) >= 40, qPrintable(QString("border %1 base %2").arg(border).arg(base)));
+        }
+        QCOMPARE(CardDelegate::cardFill(Color::Blue, darkPalette()), CardDelegate::tint(Color::Blue, true));
+        QCOMPARE(CardDelegate::cardFill(Color::Blue, QPalette()), CardDelegate::tint(Color::Blue, false));
     }
 
     void paintsCardsWithoutCrashing()

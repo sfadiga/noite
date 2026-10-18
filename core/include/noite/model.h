@@ -49,6 +49,12 @@ struct ScratchSummary {
 };
 
 // The start-of-day notification's numbers (D16). `open` = all active scratches.
+// How many notes each board tab holds; indexed by Tab.
+struct TabCounts {
+    int counts[4]{};
+    int of(Tab tab) const { return counts[int(tab)]; }
+};
+
 struct ReviewCounts {
     int overdue{};
     int dueToday{};

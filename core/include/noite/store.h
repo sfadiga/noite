@@ -65,6 +65,8 @@ public:
     // upcoming by due date. Completed: newest done first. Trash: newest trashed first.
     // `search` is matched as accent-insensitive word prefixes; blank means no filter.
     QList<ScratchSummary> list(Tab tab, QDate today, const QString& search = {}) const;
+    // The size of list(tab, today, search) for every tab, in one query.
+    TabCounts tabCounts(QDate today, const QString& search = {}) const;
     ReviewCounts reviewCounts(QDate today) const;
 
     // ---- Attachments and purge (store_attachments.cpp, D13, D22; in the database, A1) ----
