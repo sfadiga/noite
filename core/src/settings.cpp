@@ -25,6 +25,7 @@ QJsonObject toJson(const Settings& s)
     o["backupKeep"] = s.backupKeep;
     o["startWithWindows"] = s.startWithWindows;
     o["setupCompleted"] = s.setupCompleted;
+    o["staleDays"] = s.staleDays;
     return o;
 }
 
@@ -47,6 +48,8 @@ Settings fromJson(const QJsonObject& o)
         s.backupKeep = o["backupKeep"].toInt();
     if (o.contains("startWithWindows"))
         s.startWithWindows = o["startWithWindows"].toBool();
+    if (o.contains("staleDays"))
+        s.staleDays = o["staleDays"].toInt();
     if (o.contains("setupCompleted"))
         s.setupCompleted = o["setupCompleted"].toBool();
     return s;
@@ -60,6 +63,8 @@ void validate(const Settings& s)
         throw Error(ErrorCode::InvalidSetting, "trash retention must be 1-365 days");
     if (s.backupKeep < 1)
         throw Error(ErrorCode::InvalidSetting, "backups to keep must be at least 1");
+    if (s.staleDays < 1 || s.staleDays > 90)
+        throw Error(ErrorCode::InvalidSetting, "stale after must be 1-90 days");
 }
 
 Settings Store::settings() const

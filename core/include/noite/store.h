@@ -81,6 +81,17 @@ public:
     QStringList listTags() const;
     ReviewCounts reviewCounts(QDate today) const;
 
+    // ---- Morning review (store_review.cpp, D31-D34, M4) ----
+    // Active notes needing a decision: overdue (most overdue first), due today (oldest
+    // first), then stale = undated and untouched for `staleDays` days (longest first).
+    QList<ReviewItem> reviewQueue(QDate today, int staleDays) const;
+    // "Keep": modified_at = now, which resets the stale clock. NotFound; trashed notes rejected.
+    void touch(const ScratchId& id);
+    // The day the review was last shown; kept apart from Settings so saving settings never
+    // overwrites it.
+    std::optional<QDate> lastReviewDay() const;
+    void setLastReviewDay(QDate day);
+
     // ---- Attachments and purge (store_attachments.cpp, D13, D22; in the database, A1) ----
     // Stores bytes under <sha256>.<ext> (ext lowercased; "bin" unless 1-8 alphanumerics),
     // deduplicated; a re-put restarts its grace period. Returns the id. Throws AttachmentTooLarge.

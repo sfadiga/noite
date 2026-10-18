@@ -123,6 +123,10 @@ void bindBoard(Stmt& s, const QString& sql, QDate today, const std::optional<QSt
         s.bind(3 + i, binds[i]);
 }
 
+} // namespace
+
+namespace detail {
+
 QHash<QString, QStringList> allTags(Db& db)
 {
     QHash<QString, QStringList> tags;
@@ -132,14 +136,33 @@ QHash<QString, QStringList> allTags(Db& db)
     return tags;
 }
 
-} // namespace
+ScratchSummary summaryFromRow(const Stmt& s, const QHash<QString, QStringList>& tags)
+{
+    ScratchSummary sum;
+    sum.id = s.text(0);
+    sum.title = s.text(1);
+    sum.preview = content::preview(s.text(2));
+    sum.firstImage = s.optText(3);
+    if (const auto color = s.optText(4))
+        sum.color = parseColor(*color);
+    if (const auto due = s.optText(5))
+        sum.due = QDate::fromString(*due, Qt::ISODate);
+    sum.bundleId = s.optText(6);
+    sum.status = parseStatus(s.text(7)).value();
+    sum.createdAt = s.int64(8);
+    sum.doneAt = s.optInt64(9);
+    sum.trashedAt = s.optInt64(10);
+    sum.tags = tags.value(sum.id);
+    return sum;
+}
+
+} // namespace detail
 
 QList<ScratchSummary> Store::list(Tab tab, QDate today, const QString& search, const BoardFilter& filter) const
 {
     const std::optional<QString> match = ftsQuery(search);
     QStringList binds;
-    const QString sql = "SELECT id, title, plain_text, first_image, color, due_date, bundle_id, status, created_at, "
-                        "done_at, trashed_at FROM scratches WHERE "
+    const QString sql = QString("SELECT %1 FROM scratches WHERE ").arg(kSummaryColumns)
         + tabWhere(tab) + (match ? kFtsClause : "") + filterWhere(filter, std::nullopt, binds) + " ORDER BY "
         + tabOrder(tab);
     Stmt s = db().prepare(sql);
@@ -147,24 +170,8 @@ QList<ScratchSummary> Store::list(Tab tab, QDate today, const QString& search, c
 
     const QHash<QString, QStringList> tags = allTags(db());
     QList<ScratchSummary> out;
-    while (s.step()) {
-        ScratchSummary sum;
-        sum.id = s.text(0);
-        sum.title = s.text(1);
-        sum.preview = content::preview(s.text(2));
-        sum.firstImage = s.optText(3);
-        if (const auto color = s.optText(4))
-            sum.color = parseColor(*color);
-        if (const auto due = s.optText(5))
-            sum.due = QDate::fromString(*due, Qt::ISODate);
-        sum.bundleId = s.optText(6);
-        sum.status = parseStatus(s.text(7)).value();
-        sum.createdAt = s.int64(8);
-        sum.doneAt = s.optInt64(9);
-        sum.trashedAt = s.optInt64(10);
-        sum.tags = tags.value(sum.id);
-        out.append(sum);
-    }
+    while (s.step())
+        out.append(summaryFromRow(s, tags));
     return out;
 }
 

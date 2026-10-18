@@ -21,11 +21,12 @@ struct Settings {
     int backupKeep = 14;
     bool startWithWindows = true;
     bool setupCompleted = false;
+    int staleDays = 7; // undated notes untouched this long come back in the review (D33)
 
     bool operator==(const Settings&) const = default;
 };
 
-// Throws InvalidSetting: retention must be 1-365 days, backupKeep at least 1.
+// Throws InvalidSetting: retention must be 1-365 days, backupKeep at least 1, staleDays 1-90.
 // Hotkey strings are validated by the app (it registers them), not here.
 void validate(const Settings& settings);
 
