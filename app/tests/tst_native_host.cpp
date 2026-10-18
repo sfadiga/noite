@@ -21,6 +21,25 @@ class NativeHostTest : public QObject {
     Q_OBJECT
 
 private slots:
+    // M4: the review checks again when the session unlocks or the PC resumes.
+    void sessionEventsAreSignalled()
+    {
+        NativeHost host(uniqueKey());
+        const auto hwnd = reinterpret_cast<HWND>(host.nativeHandle());
+        QSignalSpy locked(&host, &NativeHost::sessionLocked);
+        QSignalSpy unlocked(&host, &NativeHost::sessionUnlocked);
+        QSignalSpy resumed(&host, &NativeHost::resumed);
+        QVERIFY(host.isUnlocked());
+        SendMessageW(hwnd, WM_WTSSESSION_CHANGE, WTS_SESSION_LOCK, 0);
+        QCOMPARE(locked.count(), 1);
+        QVERIFY(!host.isUnlocked());
+        SendMessageW(hwnd, WM_WTSSESSION_CHANGE, WTS_SESSION_UNLOCK, 0);
+        QCOMPARE(unlocked.count(), 1);
+        QVERIFY(host.isUnlocked());
+        SendMessageW(hwnd, WM_POWERBROADCAST, PBT_APMRESUMEAUTOMATIC, 0);
+        QCOMPARE(resumed.count(), 1);
+    }
+
     void hotkeyMessageEmitsSignal()
     {
         NativeHost host(uniqueKey());

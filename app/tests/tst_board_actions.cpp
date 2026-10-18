@@ -215,6 +215,46 @@ private slots:
 
     // ---- M3b: stacks ----
 
+    // The members of an expanded stack are on screen: laid out inside the viewport, each at
+    // its own place, and found there by a click.
+    void expandedMembersAreVisible()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        BoardModel& model = t.window->model();
+        const QRect stackRect = t.grid()->visualRect(model.index(model.rowOfStack(bundle)));
+        QTest::mouseClick(t.grid()->viewport(), Qt::LeftButton, {}, stackRect.center());
+        QVERIFY(model.isExpanded(bundle));
+        QCoreApplication::processEvents();
+        QCOMPARE(model.rowCount(), 4); // alpha, [bravo], bravo*, charlie*
+        QSet<QPoint> places;
+        for (const ScratchId& member : {t.b, t.c}) {
+            const QModelIndex index = model.index(model.rowOf(member));
+            QVERIFY2(index.isValid(), qPrintable(member));
+            const QRect rect = t.grid()->visualRect(index);
+            QVERIFY2(rect.isValid() && t.grid()->viewport()->rect().intersects(rect),
+                     qPrintable(QString("member rect %1,%2 %3x%4").arg(rect.x()).arg(rect.y()).arg(rect.width()).arg(rect.height())));
+            QCOMPARE(t.grid()->indexAt(rect.center()), index);
+            places.insert(rect.topLeft());
+        }
+        places.insert(t.grid()->visualRect(model.index(model.rowOfStack(bundle))).topLeft());
+        QCOMPARE(places.size(), 3); // nobody drawn on top of another
+    }
+
+    // A double-click opens the stack, like a single click; its second click must not close it again.
+    void doubleClickOpensStack()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        BoardModel& model = t.window->model();
+        const QRect stackRect = t.grid()->visualRect(model.index(model.rowOfStack(bundle)));
+        QTest::mouseClick(t.grid()->viewport(), Qt::LeftButton, {}, stackRect.center());
+        QTest::mouseDClick(t.grid()->viewport(), Qt::LeftButton, {}, stackRect.center());
+        QVERIFY(model.isExpanded(bundle));
+        QCOMPARE(model.rowCount(), 4);
+        QVERIFY(!t.window->overlay().isOpen());
+    }
+
     void clickOrEnterTogglesStack()
     {
         Board t;

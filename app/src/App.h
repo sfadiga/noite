@@ -2,6 +2,8 @@
 
 #include "AppOptions.h"
 #include "board/BoardWindow.h"
+#include "platform/Autostart.h"
+#include "radar/ReviewWindow.h"
 
 #include <QObject>
 #include <QPointer>
@@ -17,7 +19,9 @@ class CaptureWindow;
 class KeepWarm;
 class LatencyProbe;
 class NativeHost;
+class QAction;
 class QSystemTrayIcon;
+class ReviewScheduler;
 class StoreAttachments;
 
 // The tray application: owns the data folder, the store, the native host, the capture window
@@ -28,7 +32,9 @@ public:
     static constexpr int kCaptureHotkeyId = 1;
     static constexpr int kBoardHotkeyId = 2;
 
-    explicit App(AppOptions options, QObject* parent = nullptr);
+    // `autostart`: where "Start with Windows" is written (main passes the Run key). Without
+    // one, autostart is not managed, so tests never touch the real registry.
+    explicit App(AppOptions options, QObject* parent = nullptr, std::unique_ptr<AutostartRegistry> autostart = nullptr);
     ~App() override;
 
     // All startup. Returns an exit code only if the process should end right away:
@@ -44,6 +50,11 @@ public:
     // it to the front.
     void showBoard();
     BoardWindow* boardWindow() const { return board_; } // null while closed
+    // The morning review (M4): opened by the scheduler once a day, or from the tray.
+    void showReview();
+    ReviewWindow* reviewWindow() const { return review_; } // null while closed
+    ReviewScheduler* scheduler() const { return scheduler_.get(); }
+    QAction* autostartAction() const { return autostartAction_; }
 
 signals:
     // A hotkey (capture or board) could not be registered (another program holds it). noite
@@ -53,6 +64,7 @@ signals:
 private:
     void createTray();
     void registerHotkey(int id, const QString& combo);
+    void updateAutostart(bool enabled);
 
     AppOptions options_;
     std::unique_ptr<noite::Store> store_;
@@ -65,4 +77,9 @@ private:
     QPointer<BoardWindow> board_; // deletes itself on close
     BoardWindow::ViewState boardState_;
     QSystemTrayIcon* tray_ = nullptr;
+    std::unique_ptr<AutostartRegistry> autostart_;
+    std::unique_ptr<ReviewScheduler> scheduler_;
+    QPointer<ReviewWindow> review_; // deletes itself on close
+    QAction* autostartAction_ = nullptr;
+    QString dataRoot_;
 };

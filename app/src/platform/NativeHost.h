@@ -28,13 +28,22 @@ public:
     // Posts an activation request to the instance owning `instanceKey`; false if none runs.
     static bool activateRunningInstance(const QString& instanceKey);
 
+    // False between a session lock and the next unlock; true at start (we run in the session).
+    bool isUnlocked() const { return unlocked_; }
+
 signals:
     void hotkeyPressed(int id);
     void activationRequested();
+    // Session and power events (M4: the morning review checks again on unlock and resume).
+    void sessionLocked();
+    void sessionUnlocked();
+    void resumed();
 
 private:
     friend struct NativeHostAccess;
 
     quintptr hwnd_ = 0;
     QSet<int> hotkeys_;
+    bool unlocked_ = true;
+    quintptr resumeNotify_ = 0; // HPOWERNOTIFY
 };

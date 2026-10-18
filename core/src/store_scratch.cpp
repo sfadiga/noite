@@ -86,7 +86,7 @@ Scratch Store::updateContent(const ScratchId& id, const QString& html)
     Transaction tx(db());
     requireEditable(db(), id);
     writeDerived(db(), id, html);
-    touch(db(), id, nowMs());
+    detail::touch(db(), id, nowMs());
     tx.commit();
     return get(id);
 }
@@ -187,7 +187,7 @@ void Store::setManualTags(const ScratchId& id, const QStringList& tags)
         insert.step();
         insert.reset();
     }
-    touch(db(), id, nowMs());
+    detail::touch(db(), id, nowMs());
     tx.commit();
 }
 

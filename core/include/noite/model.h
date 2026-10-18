@@ -50,6 +50,15 @@ struct ScratchSummary {
     std::optional<qint64> trashedAt;
 };
 
+// The morning review (D32, M4 R2/R3): why a note needs a decision today.
+enum class ReviewReason { Overdue, DueToday, Stale };
+
+struct ReviewItem {
+    ScratchSummary note;
+    ReviewReason reason{};
+    int days = 0; // overdue: days late; stale: whole days untouched; due today: 0
+};
+
 // The start-of-day notification's numbers (D16). `open` = all active scratches.
 // Filter chips (D18, M3b C1): OR within a kind, AND across kinds; empty = no filter.
 enum class DateChip { Overdue, DueToday, NoDate };
