@@ -9,6 +9,8 @@
 
 #include <noite/store.h>
 
+#include <QApplication>
+#include <QDropEvent>
 #include <QListView>
 #include <QMimeData>
 #include <QTest>
@@ -368,12 +370,47 @@ private slots:
         QVERIFY(t.store().listBundles().isEmpty());
         QCOMPARE(t.current(), t.b);
         QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
+        // Final review I1: one undo already puts B back into the very same bundle.
+        QCOMPARE(t.bundleOf(t.b), std::optional<BundleId>(bundle));
+        QCOMPARE(t.store().listBundles().first().name, QString("bravo"));
         QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
-        QVERIFY(t.bundleOf(t.b).has_value());
-        QCOMPARE(t.bundleOf(t.b), t.bundleOf(t.c));
+        QCOMPARE(t.bundleOf(t.c), std::optional<BundleId>(bundle));
+    }
+
+    void undoRestoresOneMemberBundleAfterCardDrop()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.store().moveToBundle(t.c, std::nullopt); // bundle "bravo" = {b}
+        t.window->reload();
+        t.window->dropCard(t.b, t.window->model().rowOf(t.a)); // {a, b}; "bravo" emptied and deleted
+        QVERIFY(t.bundleOf(t.b) != std::optional<BundleId>(bundle));
+        QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(t.bundleOf(t.b), std::optional<BundleId>(bundle));
+        QCOMPARE(t.bundleOf(t.a), std::optional<BundleId>());
+        QCOMPARE(t.store().listBundles().size(), 1);
         QCOMPARE(t.store().listBundles().first().name, QString("bravo"));
     }
 
+    // The user's ask: break a bundle up in one go.
+    void unbundleStackReleasesAllAndUndoes()
+    {
+        Board t;
+        const BundleId bundle = t.bundleBC();
+        t.selectStack(bundle);
+        t.window->unbundleSelected();
+        QCOMPARE(t.bundleOf(t.b), std::optional<BundleId>());
+        QCOMPARE(t.bundleOf(t.c), std::optional<BundleId>());
+        QVERIFY(t.store().listBundles().isEmpty());
+        QCOMPARE(t.window->statusText(), QString("Unbundled bravo"));
+        QCOMPARE(t.window->model().rowCount(), 3);
+        QTest::keyClick(t.grid(), Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(t.bundleOf(t.b), std::optional<BundleId>(bundle));
+        QCOMPARE(t.bundleOf(t.c), std::optional<BundleId>(bundle));
+        QCOMPARE(t.store().listBundles().first().name, QString("bravo"));
+    }
+
+    // Final review (minor 3, regraded): the board must not reset its model inside Qt's dropEvent.
     void dropGoesThroughModelMime()
     {
         Board t;
@@ -382,8 +419,28 @@ private slots:
         QVERIFY(mime && mime->hasFormat(BoardModel::kMimeType));
         QVERIFY(!model.dropMimeData(mime, Qt::MoveAction, -1, 0, model.index(model.rowOf(t.c))));
         delete mime;
+        QVERIFY(!t.bundleOf(t.a).has_value()); // handled after the drop event returns
+        QTRY_VERIFY(t.bundleOf(t.a).has_value());
         QCOMPARE(t.bundleOf(t.a), t.bundleOf(t.c));
-        QVERIFY(t.bundleOf(t.a).has_value());
+    }
+
+    // Final review C1: a drop near a card's edge is a drop onto that card, not "empty space".
+    void dropNearCardEdgeBundles()
+    {
+        Board t;
+        BoardModel& model = t.window->model();
+        QMimeData* mime = model.mimeData({model.index(model.rowOf(t.a))});
+        const QRect target = t.grid()->visualRect(model.index(model.rowOf(t.c)));
+        const QPoint at(target.left() + 1, target.center().y());
+        QDragEnterEvent enter(at, Qt::MoveAction, mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(t.grid()->viewport(), &enter);
+        QDragMoveEvent move(at, Qt::MoveAction, mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(t.grid()->viewport(), &move);
+        QDropEvent drop(at, Qt::MoveAction, mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(t.grid()->viewport(), &drop);
+        QTRY_VERIFY(t.bundleOf(t.a).has_value());
+        QCOMPARE(t.bundleOf(t.a), t.bundleOf(t.c));
+        delete mime;
     }
 
     void stacksAreNotDraggable()

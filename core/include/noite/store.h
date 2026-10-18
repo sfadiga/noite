@@ -57,6 +57,12 @@ public:
     void moveToBundle(const ScratchId& id, std::optional<BundleId> bundle);
     void renameBundle(const BundleId& id, const QString& name);
     QList<Bundle> listBundles() const;
+    // Undo support: puts back a deleted bundle with its id, name and creation time (no-op if
+    // it exists). It stays empty until a scratch moves in, which the same undo step must do.
+    void recreateBundle(const Bundle& bundle);
+    // Every member (any status) leaves and the bundle is deleted. Returns the members.
+    // Throws NotFound for an unknown bundle.
+    QStringList dissolveBundle(const BundleId& id);
     // Copies content, manual tags, colour and bundle; clears the due date; Active; new times.
     Scratch cloneScratch(const ScratchId& id);
 

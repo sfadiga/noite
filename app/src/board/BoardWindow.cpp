@@ -15,6 +15,7 @@
 #include <QDialog>
 #include <QHBoxLayout>
 #include <QInputDialog>
+#include <QDropEvent>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -26,6 +27,22 @@ using noite::ScratchId;
 using noite::ScratchSummary;
 using noite::Tab;
 
+namespace {
+
+// In IconMode, QListView treats an internal drag onto empty space as "move the item's
+// picture there" and never asks the model; card drops must always reach the model, which
+// turns them into bundle changes (M3b final review C1). The layout stays Static.
+class BoardGrid : public QListView {
+public:
+    using QListView::QListView;
+
+protected:
+    void dragMoveEvent(QDragMoveEvent* event) override { QAbstractItemView::dragMoveEvent(event); }
+    void dropEvent(QDropEvent* event) override { QAbstractItemView::dropEvent(event); }
+};
+
+} // namespace
+
 BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std::function<QDate()> today,
                          QWidget* parent)
     : QWidget(parent)
@@ -35,7 +52,7 @@ BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std:
     , tabs_(new TabStrip(this))
     , chips_(new ChipBar(this))
     , search_(new QLineEdit(this))
-    , grid_(new QListView(this))
+    , grid_(new BoardGrid(this))
     , empty_(new QLabel(grid_->viewport()))
     , status_(new QLabel(this))
     , overlay_(new NoteOverlay(store, attachments, std::move(today), this))
@@ -64,7 +81,9 @@ BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std:
     grid_->setDefaultDropAction(Qt::MoveAction);
     grid_->setDropIndicatorShown(true);
     grid_->viewport()->setAcceptDrops(true);
-    connect(model_, &BoardModel::dropRequested, this, &BoardWindow::dropCard);
+    grid_->setDragDropOverwriteMode(true); // a drop near a card's edge is onto the card
+    // Queued: the store calls reset the model, which must not happen inside Qt's dropEvent.
+    connect(model_, &BoardModel::dropRequested, this, &BoardWindow::dropCard, Qt::QueuedConnection);
     grid_->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(grid_, &QWidget::customContextMenuRequested, this, &BoardWindow::showContextMenu);
     connect(grid_, &QAbstractItemView::clicked, this, &BoardWindow::openSelected);
@@ -190,12 +209,18 @@ void BoardWindow::selectStack(const noite::BundleId& bundle)
         grid_->setCurrentIndex(model_->index(row));
 }
 
-QString BoardWindow::bundleName(const noite::BundleId& bundle) const
+std::optional<noite::Bundle> BoardWindow::bundleRecord(const noite::BundleId& bundle) const
 {
     for (const noite::Bundle& b : store_.listBundles())
         if (b.id == bundle)
-            return b.name;
-    return {};
+            return b;
+    return std::nullopt;
+}
+
+QString BoardWindow::bundleName(const noite::BundleId& bundle) const
+{
+    const std::optional<noite::Bundle> b = bundleRecord(bundle);
+    return b ? b->name : QString();
 }
 
 void BoardWindow::renameSelectedBundle(const QString& name)
@@ -218,29 +243,40 @@ void BoardWindow::renameSelectedBundle(const QString& name)
     selectStack(*bundle);
 }
 
-void BoardWindow::rejoin(const ScratchId& id, const std::optional<noite::BundleId>& bundle, const QString& name,
-                         const std::optional<ScratchId>& partner)
+void BoardWindow::rejoin(const ScratchId& id, const std::optional<noite::Bundle>& bundle)
 {
     if (!bundle) {
         store_.moveToBundle(id, std::nullopt);
         return;
     }
-    if (!bundleName(*bundle).isNull() || !partner) {
-        if (!bundleName(*bundle).isNull())
-            store_.moveToBundle(id, bundle);
-        return; // emptied and deleted, with no former member left to rebuild it around
-    }
-    const noite::BundleId rebuilt = store_.bundleTogether(*partner, id);
-    store_.renameBundle(rebuilt, name);
+    store_.recreateBundle(*bundle); // no-op unless the action emptied (and so deleted) it
+    store_.moveToBundle(id, bundle->id);
 }
 
-std::optional<ScratchId> BoardWindow::partnerIn(const noite::BundleId& bundle, const ScratchId& excluding) const
+void BoardWindow::unbundleSelected()
 {
-    if (const int stackRow = model_->rowOfStack(bundle); stackRow >= 0)
-        for (const ScratchSummary& m : model_->row(stackRow).members)
-            if (m.id != excluding)
-                return m.id;
-    return std::nullopt;
+    const std::optional<noite::BundleId> stack = selectedStack();
+    if (!stack)
+        return;
+    const int fallback = grid_->currentIndex().row();
+    std::optional<ScratchId> select;
+    try {
+        const std::optional<noite::Bundle> saved = bundleRecord(*stack);
+        const QStringList members = store_.dissolveBundle(*stack);
+        if (saved && !members.isEmpty()) {
+            select = members.first();
+            pushUndo(tr("Unbundle"), members.first(), [this, saved, members] {
+                store_.recreateBundle(*saved);
+                for (const ScratchId& member : members)
+                    store_.moveToBundle(member, saved->id);
+            });
+            showStatus(tr("Unbundled %1").arg(saved->name));
+        }
+    } catch (const std::exception& error) {
+        qWarning() << "board:" << error.what();
+        showStatus(QString::fromUtf8(error.what()));
+    }
+    reloadSelecting(select, fallback);
 }
 
 void BoardWindow::dropCard(const ScratchId& dragged, int targetRow)
@@ -248,9 +284,9 @@ void BoardWindow::dropCard(const ScratchId& dragged, int targetRow)
     const int fallback = grid_->currentIndex().row();
     try {
         const std::optional<noite::BundleId> prev = store_.get(dragged).bundleId;
-        const QString prevName = prev ? bundleName(*prev) : QString();
-        const std::optional<ScratchId> prevPartner = prev ? partnerIn(*prev, dragged) : std::nullopt;
-        auto undoPrev = [this, dragged, prev, prevName, prevPartner] { rejoin(dragged, prev, prevName, prevPartner); };
+        const std::optional<noite::Bundle> saved = prev ? bundleRecord(*prev) : std::nullopt;
+        const QString prevName = saved ? saved->name : QString();
+        auto undoPrev = [this, dragged, saved] { rejoin(dragged, saved); };
 
         if (targetRow < 0) { // empty space: out of its bundle
             if (!prev)
@@ -292,11 +328,10 @@ void BoardWindow::removeSelectedFromBundle()
             return std::nullopt;
         const ScratchId id = s.id;
         const noite::BundleId bundle = *s.bundleId;
-        const QString name = bundleName(bundle);
-        const std::optional<ScratchId> partner = partnerIn(bundle, id);
+        const std::optional<noite::Bundle> saved = bundleRecord(bundle);
         store_.moveToBundle(id, std::nullopt);
-        pushUndo(tr("Remove from bundle"), id, [this, id, bundle, name, partner] { rejoin(id, bundle, name, partner); });
-        showStatus(tr("Removed from %1").arg(name));
+        pushUndo(tr("Remove from bundle"), id, [this, id, saved] { rejoin(id, saved); });
+        showStatus(tr("Removed from %1").arg(saved ? saved->name : QString()));
         return std::nullopt;
     });
 }
@@ -477,6 +512,7 @@ void BoardWindow::showContextMenu(const QPoint& pos)
     if (model_->isStack(index.row())) {
         const BoardRow& stack = model_->row(index.row());
         menu.addAction(stack.expanded ? tr("Collapse") : tr("Expand"), this, &BoardWindow::toggleSelectedStack);
+        menu.addAction(tr("Unbundle"), this, &BoardWindow::unbundleSelected);
         menu.addAction(tr("Rename bundle…"), this, [this, name = stack.bundleName] {
             bool ok = false;
             const QString renamed = QInputDialog::getText(this, tr("Rename bundle"), tr("Name"), QLineEdit::Normal,

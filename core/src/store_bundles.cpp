@@ -90,6 +90,32 @@ void Store::renameBundle(const BundleId& id, const QString& name)
         throw Error(ErrorCode::NotFound, "bundle " + id + " not found");
 }
 
+void Store::recreateBundle(const Bundle& bundle)
+{
+    Stmt s = db().prepare("INSERT OR IGNORE INTO bundles(id, name, created_at) VALUES (?, ?, ?)");
+    s.bind(1, bundle.id).bind(2, bundle.name).bind(3, bundle.createdAt);
+    s.step();
+}
+
+QStringList Store::dissolveBundle(const BundleId& id)
+{
+    Transaction tx(db());
+    Stmt exists = db().prepare("SELECT 1 FROM bundles WHERE id = ?");
+    exists.bind(1, id);
+    if (!exists.step())
+        throw Error(ErrorCode::NotFound, "bundle " + id + " not found");
+    Stmt members = db().prepare("SELECT id FROM scratches WHERE bundle_id = ?");
+    members.bind(1, id);
+    QStringList released;
+    while (members.step())
+        released << members.text(0);
+    for (const QString& member : released)
+        setBundle(db(), member, std::nullopt, nowMs());
+    deleteEmptyBundles(db());
+    tx.commit();
+    return released;
+}
+
 QList<Bundle> Store::listBundles() const
 {
     Stmt s = db().prepare("SELECT id, name, created_at FROM bundles ORDER BY created_at, id");
