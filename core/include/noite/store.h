@@ -105,6 +105,11 @@ public:
     // then returns the freed pages to the filesystem.
     PurgeReport purgeTrash(int retentionDays);
 
+    // ---- Background job state (store_jobs.cpp, M5) ----
+    // Unreadable or missing data reads as empty.
+    JobState jobState() const;
+    void saveJobState(const JobState& state);
+
     // ---- Settings (settings.cpp, D24, D25) ----
     Settings settings() const;
     // Validates first (InvalidSetting); nothing is stored if invalid.

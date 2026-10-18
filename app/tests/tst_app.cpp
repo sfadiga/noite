@@ -9,6 +9,7 @@
 #include "capture/CaptureWindow.h"
 #include "editor/NoteEdit.h"
 #include "editor/OpenFolder.h"
+#include "jobs/JobScheduler.h"
 #include "platform/Hotkey.h"
 #include "platform/Autostart.h"
 #include "platform/NativeHost.h"
@@ -18,9 +19,13 @@
 #include <noite/store.h>
 
 #include <QAction>
+#include <QDir>
 #include <QLineEdit>
+#include <QRandomGenerator>
 #include <QSignalSpy>
 #include <QTest>
+
+#include <sqlite3.h>
 
 #include <windows.h>
 
@@ -305,6 +310,159 @@ private slots:
         QTRY_VERIFY(app.reviewWindow());
         app.reviewWindow()->requestOpenBoard();
         QVERIFY(app.boardWindow() && app.boardWindow()->isVisible());
+    }
+
+    // ---- M5: background jobs ----
+
+    void logFileAfterStart()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9");
+        {
+            App app(AppOptions{root});
+            QVERIFY(!app.start());
+            QFile log(root + "/logs/noite.log");
+            QVERIFY(log.open(QIODevice::ReadOnly));
+            QVERIFY(QString::fromUtf8(log.readAll()).contains(QString::fromUtf8("noite started · data ")));
+        }
+        QFile log(root + "/logs/noite.log");
+        QVERIFY(log.open(QIODevice::ReadOnly));
+        QVERIFY(QString::fromUtf8(log.readAll()).contains("noite quit"));
+    }
+
+    void backupActionInTray()
+    {
+        QTemporaryDir tmp;
+        prepare(tmp.filePath("data"), "Ctrl+Alt+Shift+F9");
+        App app(AppOptions{tmp.filePath("data")});
+        QVERIFY(!app.start());
+        QCOMPARE(app.backupAction()->text(), QString("Back up now"));
+        QVERIFY(app.backupAction()->isEnabled());
+        emit app.jobs()->busyChanged(true);
+        QCOMPARE(app.backupAction()->text(), QString::fromUtf8("Backing up…"));
+        QVERIFY(!app.backupAction()->isEnabled());
+        emit app.jobs()->busyChanged(false);
+        QCOMPARE(app.backupAction()->text(), QString("Back up now"));
+        QVERIFY(app.backupAction()->isEnabled());
+    }
+
+    void backUpNowAsksWhenNoFolder()
+    {
+        QTemporaryDir tmp;
+        QTemporaryDir dest;
+        prepare(tmp.filePath("data"), "Ctrl+Alt+Shift+F9");
+        App app(AppOptions{tmp.filePath("data")});
+        QVERIFY(!app.start());
+        QSignalSpy toasts(&app, &App::toastShown);
+
+        app.setBackupFolderAsker([] { return std::nullopt; });
+        app.backUpNow();
+        QVERIFY(!app.store()->settings().backupDir);
+        QTest::qWait(100);
+        QCOMPARE(toasts.count(), 0);
+
+        const QString folder = dest.path();
+        app.setBackupFolderAsker([folder] { return std::optional<QString>(folder); });
+        app.backUpNow();
+        QCOMPARE(app.store()->settings().backupDir, std::optional<QString>(folder));
+        QTRY_COMPARE_WITH_TIMEOUT(toasts.count(), 1, 10000);
+        QVERIFY(toasts[0][1].toString().startsWith(QString::fromUtf8("Backed up · ")));
+    }
+
+    void backUpNowWithMissingFolderToastsError()
+    {
+        QTemporaryDir tmp;
+        prepare(tmp.filePath("data"), "Ctrl+Alt+Shift+F9");
+        App app(AppOptions{tmp.filePath("data")});
+        QVERIFY(!app.start());
+        const QString gone = tmp.filePath("gone");
+        Settings settings = app.store()->settings();
+        settings.backupDir = gone;
+        app.store()->saveSettings(settings);
+        int asked = 0;
+        app.setBackupFolderAsker([&asked] {
+            ++asked;
+            return std::nullopt;
+        });
+        QSignalSpy toasts(&app, &App::toastShown);
+        app.backUpNow();
+        QTRY_COMPARE_WITH_TIMEOUT(toasts.count(), 1, 10000);
+        QCOMPARE(asked, 0);
+        QVERIFY(toasts[0][1].toString().startsWith("Backup failed: backup folder not found: "));
+        QCOMPARE(app.store()->settings().backupDir, std::optional<QString>(gone));
+    }
+
+    void purgeReloadsOpenBoard()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9");
+        App app(AppOptions{root});
+        QVERIFY(!app.start());
+        const Scratch s = app.store()->createScratch(test::html({"old"}));
+        app.store()->trash(s.id);
+        // The app's store uses the system clock: backdate the trashing 31 days with SQL.
+        sqlite3* db = nullptr;
+        QVERIFY(sqlite3_open((root + "/noite.db").toUtf8().constData(), &db) == SQLITE_OK);
+        sqlite3_busy_timeout(db, 5000);
+        QVERIFY(sqlite3_exec(db, "UPDATE scratches SET trashed_at = trashed_at - 31 * 86400000", nullptr, nullptr, nullptr)
+                == SQLITE_OK);
+        sqlite3_close(db);
+
+        app.showBoard();
+        app.boardWindow()->setTab(Tab::Trash);
+        QCOMPARE(app.boardWindow()->model().rowCount(), 1);
+        app.jobs()->check();
+        QCOMPARE(app.boardWindow()->model().rowCount(), 0);
+    }
+
+    // Quitting while the snapshot copy is under way leaves no .tmp and no half-written .db.
+    void quitDuringBackupIsClean()
+    {
+        QTemporaryDir tmp;
+        QTemporaryDir dest;
+        prepare(tmp.filePath("data"), "Ctrl+Alt+Shift+F9");
+        auto app = std::make_unique<App>(AppOptions{tmp.filePath("data")});
+        QVERIFY(!app->start());
+        for (int i = 0; i < 30; ++i) {
+            QByteArray bytes(1'000'000, 0);
+            QRandomGenerator::global()->fillRange(reinterpret_cast<quint32*>(bytes.data()), bytes.size() / 4);
+            app->store()->putAttachment(bytes, "bin");
+        }
+        Settings settings = app->store()->settings();
+        settings.backupDir = dest.path();
+        app->store()->saveSettings(settings);
+        const QString snaps = dest.path() + "/noite-backups/" + app->store()->installId() + "/snapshots";
+        app->backUpNow();
+        QTRY_VERIFY(!QDir(snaps).entryList({"*.tmp"}, QDir::Files).isEmpty()); // the copy is under way
+        app.reset();
+        QVERIFY(QDir(snaps).entryList({"*.tmp"}, QDir::Files).isEmpty());
+        const QStringList dbs = QDir(snaps).entryList({"*.db"}, QDir::Files);
+        QVERIFY(dbs.size() <= 1);
+        for (const QString& db : dbs) {
+            QVERIFY_THROWS_NO_EXCEPTION(backup::verify(snaps + "/" + db));
+        }
+    }
+
+    void backupActionDisabledWhileAskingForAFolder()
+    {
+        QTemporaryDir tmp;
+        prepare(tmp.filePath("data"), "Ctrl+Alt+Shift+F9");
+        App app(AppOptions{tmp.filePath("data")});
+        QVERIFY(!app.start());
+        int asked = 0;
+        bool enabledWhileAsking = true;
+        app.setBackupFolderAsker([&]() -> std::optional<QString> {
+            ++asked;
+            enabledWhileAsking = app.backupAction()->isEnabled();
+            return std::nullopt;
+        });
+        QVERIFY(app.backupAction()->isEnabled());
+        app.backUpNow();
+        QCOMPARE(asked, 1);
+        QVERIFY(!enabledWhileAsking);
+        QVERIFY(app.backupAction()->isEnabled());
     }
 };
 

@@ -31,6 +31,16 @@ bool startsWithComponents(const QStringList& path, const QStringList& prefix)
 
 } // namespace
 
+QStringList googleDriveFolderNames()
+{
+    return {
+        "My Drive",                                       // English
+        "Meu Drive",                                      // Portuguese
+        "Mi unidad",                                      // Spanish
+        "Mon Drive", "Meine Ablage", "Il mio Drive",      // French, German, Italian
+    };
+}
+
 std::optional<SyncProvider> syncProviderFor(const QString& path, const QStringList& oneDriveRoots,
                                             const QString& volumeLabel)
 {
@@ -43,12 +53,17 @@ std::optional<SyncProvider> syncProviderFor(const QString& path, const QStringLi
     // the folder names below also catch mirrored folders and other mounts. Best effort.
     if (volumeLabel.compare("Google Drive", Qt::CaseInsensitive) == 0)
         return SyncProvider::GoogleDrive;
-    static const QStringList googleNames = {
-        "google drive", "my drive", "shared drives",                  // English
-        "meu drive", "drives compartilhados",                         // Portuguese
-        "mi unidad", "unidades compartidas",                          // Spanish
-        "mon drive", "drives partagés", "meine ablage", "il mio drive", // French, German, Italian
-    };
+    static const QStringList googleNames = [] {
+        QStringList names = {
+            "google drive", "shared drives",     // English
+            "drives compartilhados",             // Portuguese
+            "unidades compartidas",              // Spanish
+            "drives partagés",                   // French
+        };
+        for (const QString& name : googleDriveFolderNames())
+            names << name.toLower();
+        return names;
+    }();
     for (const QString& part : parts) {
         if (googleNames.contains(part))
             return SyncProvider::GoogleDrive;

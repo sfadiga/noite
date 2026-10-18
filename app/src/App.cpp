@@ -7,6 +7,10 @@
 #include "editor/AttachmentStore.h"
 #include "editor/NoteEdit.h"
 #include "editor/OpenFolder.h"
+#include "jobs/BackupFolderDialog.h"
+#include "jobs/JobScheduler.h"
+#include "log/Log.h"
+#include "platform/CrashHandler.h"
 #include "platform/Hotkey.h"
 #include "platform/NativeHost.h"
 #include "radar/ReviewScheduler.h"
@@ -21,6 +25,7 @@
 #include <QDebug>
 #include <QMenu>
 #include <QStyle>
+#include <QSysInfo>
 #include <QSystemTrayIcon>
 #include <QTimer>
 
@@ -30,11 +35,14 @@ App::App(AppOptions options, QObject* parent, std::unique_ptr<AutostartRegistry>
     : QObject(parent)
     , options_(std::move(options))
     , autostart_(std::move(autostart))
+    , askFolder_([] { return noite::askBackupFolder(); })
 {
 }
 
 App::~App()
 {
+    if (runner_)
+        runner_->cancelAndWait(); // before the windows and the store the backup reads
     if (review_) {
         review_->close(); // saves a note being edited in it
         delete review_;   // before the store it uses
@@ -45,6 +53,14 @@ App::~App()
     }
     if (controller_)
         controller_->flush();
+}
+
+App::LogSession::~LogSession()
+{
+    if (!open)
+        return;
+    qInfo() << "noite quit";
+    applog::uninstall();
 }
 
 std::optional<int> App::start()
@@ -61,6 +77,15 @@ std::optional<int> App::start()
         qCritical() << "cannot use data folder" << root << ":" << e.what();
         return 1;
     }
+
+    // The log only opens once the folder lock is ours: a second instance that just activates
+    // the first must never write into its log.
+    applog::install(dir->logsDir());
+    log_.open = true;
+    if (options_.crashHandler)
+        crash::install(dir->logsDir());
+    qInfo().noquote() << QString::fromUtf8("noite started · data %1 · Qt %2 · Windows %3")
+                             .arg(root, QString::fromLatin1(qVersion()), QSysInfo::kernelVersion());
 
     store_ = noite::Store::open(std::move(*dir), std::make_shared<noite::SystemClock>());
     clearOpenFolder(defaultOpenFolder()); // chip files opened last session (A5)
@@ -132,11 +157,66 @@ std::optional<int> App::start()
     connect(scheduler_.get(), &ReviewScheduler::reviewDue, this, &App::showReview);
     QTimer::singleShot(0, scheduler_.get(), &ReviewScheduler::check);
 
+    startJobs();
     createTray();
 
     registerHotkey(kCaptureHotkeyId, settings.captureHotkey);
     registerHotkey(kBoardHotkeyId, settings.boardHotkey);
     return std::nullopt;
+}
+
+void App::startJobs()
+{
+    runner_ = std::make_unique<ThreadBackupRunner>();
+    jobs_ = std::make_unique<JobScheduler>(*store_, [] { return QDateTime::currentDateTime(); }, *runner_);
+    connect(host_.get(), &NativeHost::resumed, jobs_.get(), &JobScheduler::check);
+    connect(jobs_.get(), &JobScheduler::purged, this, [this] {
+        if (board_)
+            board_->reload();
+    });
+    connect(jobs_.get(), &JobScheduler::toast, this, [this](const QString& title, const QString& text) {
+        if (tray_)
+            tray_->showMessage(title, text);
+        else
+            qInfo().noquote() << "toast:" << text; // no tray: the log is the only trace
+        emit toastShown(title, text);
+    });
+
+    // Like autostartAction_, made here: the tray itself may not exist (tests run offscreen).
+    backupAction_ = new QAction(tr("Back up now"), this);
+    connect(backupAction_, &QAction::triggered, this, &App::backUpNow);
+    connect(jobs_.get(), &JobScheduler::busyChanged, this, [this](bool busy) {
+        backupAction_->setText(busy ? tr("Backing up…") : tr("Back up now"));
+        backupAction_->setEnabled(!busy);
+    });
+    jobs_->startTimers();
+}
+
+void App::backUpNow()
+{
+    if (!jobs_)
+        return;
+    try {
+        noite::Settings settings = store_->settings();
+        if (!settings.backupDir) {
+            // The dialog is modal but the tray menu is not: a second click must not stack another.
+            backupAction_->setEnabled(false);
+            const std::optional<QString> folder = askFolder_();
+            backupAction_->setEnabled(!jobs_->isBusy());
+            if (!folder)
+                return;
+            settings.backupDir = *folder;
+            store_->saveSettings(settings);
+        }
+    } catch (const std::exception& error) {
+        qWarning() << "backup folder setting:" << error.what();
+        const QString text = tr("Backup failed: %1").arg(QString::fromUtf8(error.what()));
+        if (tray_)
+            tray_->showMessage(QStringLiteral("noite"), text);
+        emit toastShown(QStringLiteral("noite"), text);
+        return;
+    }
+    jobs_->backUpNow(); // a folder that is gone is reported by its failure toast
 }
 
 void App::updateAutostart(bool enabled)
@@ -209,6 +289,8 @@ void App::createTray()
     menu->addAction(tr("Morning review"), this, &App::showReview);
     menu->addSeparator();
     menu->addAction(autostartAction_);
+    menu->addSeparator();
+    menu->addAction(backupAction_);
     menu->addSeparator();
     menu->addAction(tr("Quit"), qApp, &QCoreApplication::quit);
     tray_->setContextMenu(menu);

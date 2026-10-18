@@ -19,6 +19,7 @@ enum class ErrorCode {
     InvalidSetting,
     BackupDirMissing,
     BackupInvalid,
+    Cancelled,
     Database,
     Io,
 };

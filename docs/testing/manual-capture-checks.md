@@ -55,3 +55,13 @@ Record pass/fail and a one-line note for any failure. Every failure becomes an a
 | R2 | Review keys | `D`, `K`, `Del`, `S` then `1`, `←`, `Ctrl+Z`, `Enter` to edit then `Esc` | Each acts and moves on; `←`/`Ctrl+Z` undo; the summary counts are right; edits are saved |
 | R3 | Finish later | `Esc` halfway through | The review closes; untouched notes are unchanged; it doesn't come back until tomorrow (tray → Morning review still opens it) |
 | R4 | Start with Windows | Tray → untick, check `HKCU\…\CurrentVersion\Run` (no `noite`); tick again; reboot; also start a copy with `--data C:\temp\x` | The value is the quoted exe path; after the reboot noite is in the tray; the `--data` run leaves the value alone and greys out the tray item |
+
+## Jobs
+
+| # | Check | How | Expected |
+|---|---|---|---|
+| J1 | First backup | No folder set; tray → Back up now | The Drive dialog shows `G:\Meu Drive\noite-backups`; "Back up to Drive" → toast; the file appears in Drive on the web |
+| J2 | Drive not running | Quit Google Drive; Back up now | Error toast; the log shows hourly retries afterwards |
+| J3 | Purge | `trashRetentionDays` = 1, a note trashed over a day ago; restart | The note is gone after the first check; `purge:` line in the log |
+| J4 | Log file | Open `data\logs\noite.log` | Startup, backup and purge lines |
+| J5 | Crash dump | Outside a debugger (the handler stays off under one), run `build\Release\noite_crash_helper.exe C:\temp\crashlogs av` (kinds: `av`, `throw`, `fatal`, `terminate`, `abort`, `purecall`, `invalid`, `overflow`, `nullcall`); open the `.dmp` it leaves in `C:\temp\crashlogs` in Visual Studio with `build\Release\noite_crash_helper.pdb` | The faulting function and line are shown |
