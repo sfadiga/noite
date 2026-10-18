@@ -114,6 +114,7 @@ private slots:
         QSignalSpy purged(s.scheduler.get(), &JobScheduler::purged);
 
         s.scheduler->check();
+        s.runner.succeed(); // the purge waits for the backup
         QCOMPARE(purged.size(), 1);
         QCOMPARE(purged.at(0).at(0).value<PurgeReport>().scratchesDeleted, 1);
         QCOMPARE(s.state().lastPurgeDay, std::optional<QDate>(oct(15)));
@@ -280,6 +281,84 @@ private slots:
         QCOMPARE(busy.size(), 2);
         QCOMPARE(busy.at(0).at(0).toBool(), true);
         QCOMPARE(busy.at(1).at(0).toBool(), false);
+    }
+
+    // The purge's WAL checkpoint would wait on the backup's read snapshot, so it waits for the backup.
+    void purgeSkippedWhileBackupBusy()
+    {
+        Sched s;
+        QSignalSpy purged(s.scheduler.get(), &JobScheduler::purged);
+        QVERIFY(s.scheduler->backUpNow());
+        s.scheduler->check();
+        QCOMPARE(purged.size(), 0);
+        QCOMPARE(s.state().lastPurgeDay, std::optional<QDate>());
+        s.runner.succeed();
+        s.scheduler->check();
+        QCOMPARE(purged.size(), 1);
+        QCOMPARE(s.state().lastPurgeDay, std::optional<QDate>(oct(15)));
+    }
+
+    void lastBackupDayIsTheStartDay()
+    {
+        Sched s;
+        s.at(oct(15), 23, 59);
+        s.scheduler->check();
+        s.at(oct(16), 0, 1);
+        s.runner.succeed();
+        QCOMPARE(s.state().lastBackupDay, std::optional<QDate>(oct(15)));
+    }
+
+    void missingFolderRetriesEveryFiveMinutes()
+    {
+        Sched s;
+        s.scheduler->check();
+        QVERIFY(!s.scheduler->retryPendingForTest());
+        s.runner.fail("gone");
+        QVERIFY(s.scheduler->retryPendingForTest());
+        QCOMPARE(s.scheduler->retryIntervalForTest(), JobScheduler::kMissingFolderRetryMs);
+
+        s.at(oct(15), 9, 5);
+        s.scheduler->fireRetryForTest();
+        QCOMPARE(s.runner.jobs.size(), 2);
+        s.runner.succeed();
+        QCOMPARE(s.state().lastBackupDay, std::optional<QDate>(oct(15)));
+        QVERIFY(!s.scheduler->retryPendingForTest());
+    }
+
+    void missingFolderRetriesStopAfterTheWindow()
+    {
+        Sched s;
+        s.scheduler->check();
+        s.runner.fail("gone"); // 9:00, streak starts
+        for (int minutes = 5; minutes < 60; minutes += 5) {
+            s.at(oct(15), 9, minutes);
+            s.scheduler->fireRetryForTest();
+            s.runner.fail("gone");
+            QVERIFY2(s.scheduler->retryPendingForTest(), qPrintable(QString::number(minutes)));
+        }
+        s.at(oct(15), 10, 0);
+        s.scheduler->fireRetryForTest();
+        s.runner.fail("gone");
+        QVERIFY(!s.scheduler->retryPendingForTest());
+    }
+
+    void otherErrorEndsFastRetries()
+    {
+        Sched s;
+        s.scheduler->check();
+        s.runner.fail("gone");
+        QVERIFY(s.scheduler->retryPendingForTest());
+        s.scheduler->fireRetryForTest();
+        s.runner.fail("disk full", ErrorCode::Io);
+        QVERIFY(!s.scheduler->retryPendingForTest());
+    }
+
+    void manualFailureDoesNotArmRetries()
+    {
+        Sched s;
+        QVERIFY(s.scheduler->backUpNow());
+        s.runner.fail("gone");
+        QVERIFY(!s.scheduler->retryPendingForTest());
     }
 
     // trashRetentionDays 0 in the raw settings row makes purgeTrash refuse; fixing it lets the next check purge.

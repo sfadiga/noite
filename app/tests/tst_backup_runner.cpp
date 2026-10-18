@@ -73,7 +73,7 @@ private slots:
         runner.start(jobFor(*f->store, absent));
         QVERIFY(spy.wait(10'000));
         QCOMPARE(spy.at(0).at(0).value<ErrorCode>(), ErrorCode::BackupDirMissing);
-        QVERIFY(spy.at(0).at(1).toString().contains(absent));
+        QVERIFY(spy.at(0).at(1).toString().contains(QDir::toNativeSeparators(absent)));
         QVERIFY(!runner.busy());
     }
 

@@ -12,6 +12,7 @@
 #include <QTimer>
 
 #include <functional>
+#include <optional>
 
 namespace noite {
 class Store;
@@ -29,6 +30,10 @@ public:
     static constexpr int kFirstCheckMs = 30'000;
     static constexpr int kCheckIntervalMs = 3'600'000;
     static constexpr qint64 kAlertAfterMs = 3 * noite::kDayMs;
+    // A scheduled backup that finds its folder missing (Drive not mounted yet) retries every 5 min
+    // for an hour after the first such failure, then falls back to the hourly checks.
+    static constexpr int kMissingFolderRetryMs = 300'000;
+    static constexpr qint64 kMissingFolderRetryWindowMs = 3'600'000;
 
     JobScheduler(noite::Store& store, std::function<QDateTime()> now, BackupRunner& runner, QObject* parent = nullptr);
 
@@ -38,6 +43,13 @@ public:
     // Ignores the schedule and always toasts the result. False while busy or without a backup folder.
     bool backUpNow();
     bool isBusy() const { return busy_; }
+    bool retryPendingForTest() const { return retry_.isActive(); }
+    int retryIntervalForTest() const { return retry_.interval(); }
+    void fireRetryForTest()
+    {
+        retry_.stop(); // as the expiring single shot would
+        check();
+    }
 
 signals:
     void toast(QString title, QString text);
@@ -49,16 +61,18 @@ private:
     static bool backupDue(const noite::Settings& settings, const noite::JobState& state, const QDate& today);
     void startBackup(const noite::Settings& settings, bool manual);
     void onFinished(const noite::backup::Result& result);
-    void onFailed(const QString& message);
+    void onFailed(noite::ErrorCode code, const QString& message);
     void setBusy(bool busy);
     void save(const noite::JobState& state);
 
     noite::Store& store_;
     std::function<QDateTime()> now_;
     BackupRunner& runner_;
-    QTimer firstCheck_, hourly_;
+    QTimer firstCheck_, hourly_, retry_;
     bool busy_ = false;
     bool manual_ = false;
     qint64 startedMs_ = 0;
+    QDate startedDay_;                       // local day the run in flight started (it may finish after midnight)
+    std::optional<qint64> missingSinceMs_;   // first BackupDirMissing of the current streak (store clock)
     QDate skipLoggedDay_;
 };

@@ -113,6 +113,19 @@ private slots:
         QVERIFY(QDir(tmp.path()).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).isEmpty());
     }
 
+    void errorMessagesUseNativeSeparators()
+    {
+        auto f = fixture();
+        QTemporaryDir tmp;
+        const QString absent = tmp.filePath("absent");
+        try {
+            backup::run(jobFor(*f->store, absent));
+            QFAIL("expected BackupDirMissing");
+        } catch (const Error& error) {
+            QVERIFY2(QString::fromUtf8(error.what()).endsWith(QDir::toNativeSeparators(absent)), error.what());
+        }
+    }
+
     void cancelledRunLeavesNoDb()
     {
         auto f = fixture();

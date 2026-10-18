@@ -30,10 +30,10 @@ QString snapshotsDir(const QString& installId, const QString& dest)
 QString prepareSnapshotPath(const QString& installId, const QString& dest, qint64 nowMs)
 {
     if (!QFileInfo(dest).isDir())
-        throw Error(ErrorCode::BackupDirMissing, "backup folder not found: " + dest);
+        throw Error(ErrorCode::BackupDirMissing, "backup folder not found: " + QDir::toNativeSeparators(dest));
     const QString snaps = snapshotsDir(installId, dest);
     if (!QDir().mkpath(snaps))
-        throw Error(ErrorCode::Io, "cannot create backup folders in " + dest);
+        throw Error(ErrorCode::Io, "cannot create backup folders in " + QDir::toNativeSeparators(dest));
     const QString stamp = QDateTime::fromMSecsSinceEpoch(nowMs, QTimeZone::UTC).toString("yyyyMMdd'T'HHmmsszzz'Z'");
     return snaps + "/noite-" + stamp + ".db";
 }
@@ -73,7 +73,7 @@ QString snapshot(Store& store, const QString& dest)
     QFile::remove(tmp);
     detail::vacuumInto(store.db(), tmp);
     if (!QFile::rename(tmp, final))
-        throw Error(ErrorCode::Io, "cannot finish snapshot " + final);
+        throw Error(ErrorCode::Io, "cannot finish snapshot " + QDir::toNativeSeparators(final));
     return final;
 }
 
@@ -108,7 +108,7 @@ Result run(const Job& job, const std::atomic<bool>* cancel)
     }
     if (!QFile::rename(tmp, final)) {
         QFile::remove(tmp);
-        throw Error(ErrorCode::Io, "cannot finish snapshot " + final);
+        throw Error(ErrorCode::Io, "cannot finish snapshot " + QDir::toNativeSeparators(final));
     }
 
     if (cancel && cancel->load()) { // a quit should not wait for the integrity check

@@ -3,6 +3,7 @@
 #include <noite/store.h>
 
 #include <QDebug>
+#include <QDir>
 #include <QLocale>
 
 using namespace noite;
@@ -18,7 +19,10 @@ JobScheduler::JobScheduler(Store& store, std::function<QDateTime()> now, BackupR
     hourly_.setInterval(kCheckIntervalMs);
     connect(&hourly_, &QTimer::timeout, this, &JobScheduler::check);
     connect(&runner_, &BackupRunner::finished, this, &JobScheduler::onFinished);
-    connect(&runner_, &BackupRunner::failed, this, [this](ErrorCode, const QString& message) { onFailed(message); });
+    connect(&runner_, &BackupRunner::failed, this, [this](ErrorCode code, const QString& message) { onFailed(code, message); });
+    retry_.setSingleShot(true);
+    retry_.setInterval(kMissingFolderRetryMs);
+    connect(&retry_, &QTimer::timeout, this, &JobScheduler::check);
 }
 
 void JobScheduler::startTimers()
@@ -48,9 +52,11 @@ void JobScheduler::check()
 {
     try {
         const QDate today = now_().date();
-        purgeIfDue(today);
+        // The purge's WAL checkpoint waits on the backup's read snapshot (up to the busy timeout),
+        // which would freeze the UI; it retries at the next check.
         if (busy_)
             return;
+        purgeIfDue(today);
         const Settings settings = store_.settings();
         if (!settings.backupDir) {
             if (skipLoggedDay_ != today) {
@@ -99,6 +105,7 @@ void JobScheduler::startBackup(const Settings& settings, bool manual)
     const backup::Job job{store_.dataDir().dbPath(), store_.installId(), *settings.backupDir, settings.backupKeep,
                           now_().toMSecsSinceEpoch()};
     manual_ = manual;
+    startedDay_ = now_().date();
     startedMs_ = QDateTime::currentMSecsSinceEpoch();
     setBusy(true);
     runner_.start(job);
@@ -125,11 +132,13 @@ void JobScheduler::onFinished(const backup::Result& result)
     const QString size = QString::number(result.bytes / 1048576.0, 'f', 1);
     const QString seconds = QString::number((QDateTime::currentMSecsSinceEpoch() - startedMs_) / 1000.0, 'f', 1);
     qInfo().noquote() << QStringLiteral("backup: ok %1 · %2 MB · %3 s · pruned %4")
-                             .arg(result.path, size, seconds)
+                             .arg(QDir::toNativeSeparators(result.path), size, seconds)
                              .arg(result.pruned);
+    missingSinceMs_.reset();
+    retry_.stop();
     try {
         JobState state = store_.jobState();
-        state.lastBackupDay = now_().date();
+        state.lastBackupDay = startedDay_;
         state.backupFailingSinceMs.reset();
         state.backupAlertDay.reset();
         save(state);
@@ -141,13 +150,22 @@ void JobScheduler::onFinished(const backup::Result& result)
         emit toast(QStringLiteral("noite"), QStringLiteral("Backed up · %1 MB").arg(size));
 }
 
-void JobScheduler::onFailed(const QString& message)
+void JobScheduler::onFailed(ErrorCode code, const QString& message)
 {
     qWarning().noquote() << QStringLiteral("backup: failed: %1").arg(message);
     QString alert;
     try {
         const QDateTime now = now_();
         const qint64 nowMs = now.toMSecsSinceEpoch();
+        if (!manual_ && code == ErrorCode::BackupDirMissing) {
+            if (!missingSinceMs_)
+                missingSinceMs_ = nowMs;
+            if (nowMs - *missingSinceMs_ < kMissingFolderRetryWindowMs)
+                retry_.start();
+        } else if (!manual_) {
+            missingSinceMs_.reset();
+            retry_.stop();
+        }
         JobState state = store_.jobState();
         if (!state.backupFailingSinceMs)
             state.backupFailingSinceMs = nowMs;
