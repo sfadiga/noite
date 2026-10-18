@@ -111,6 +111,10 @@ Result run(const Job& job, const std::atomic<bool>* cancel)
         throw Error(ErrorCode::Io, "cannot finish snapshot " + final);
     }
 
+    if (cancel && cancel->load()) { // a quit should not wait for the integrity check
+        QFile::remove(final);
+        throw Error(ErrorCode::Cancelled, "backup cancelled");
+    }
     try {
         verify(final);
     } catch (const Error& e) {

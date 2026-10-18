@@ -7,6 +7,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QRandomGenerator>
 
 #include <atomic>
 #include <thread>
@@ -125,6 +126,43 @@ private slots:
         QVERIFY(entries(snaps, "*.tmp").isEmpty());
     }
 
+    // The progress handler must stop a VACUUM INTO that is already running.
+    void cancelDuringVacuumStopsIt()
+    {
+        auto f = fixture();
+        for (int i = 0; i < 20; ++i) {
+            QByteArray bytes(1'000'000, 0);
+            QRandomGenerator::global()->fillRange(reinterpret_cast<quint32*>(bytes.data()), bytes.size() / 4);
+            f->store->putAttachment(bytes, "bin");
+        }
+        QTemporaryDir dest;
+        const QString snaps = snapshotsDir(*f->store, dest.path());
+        std::atomic<bool> cancel{false};
+        std::atomic<bool> done{false};
+        // Flips the flag once the copy is under way (its .tmp exists and has data).
+        std::thread watcher([&] {
+            while (!done) {
+                if (const QStringList tmps = entries(snaps, "*.tmp");
+                    !tmps.isEmpty() && QFileInfo(snaps + "/" + tmps.first()).size() > 0) {
+                    cancel = true;
+                    return;
+                }
+                std::this_thread::yield();
+            }
+        });
+        bool cancelled = false;
+        try {
+            backup::run(jobFor(*f->store, dest.path()), &cancel);
+        } catch (const Error& e) {
+            cancelled = e.code() == ErrorCode::Cancelled;
+        }
+        done = true;
+        watcher.join();
+        QVERIFY(cancelled);
+        QVERIFY(entries(snaps, "*.db").isEmpty());
+        QVERIFY(entries(snaps, "*.tmp").isEmpty());
+    }
+
     void invalidSnapshotIsDeleted()
     {
         auto f = fixture();
@@ -137,6 +175,7 @@ private slots:
         QTemporaryDir dest;
         NOITE_EXPECT_ERROR(ErrorCode::BackupInvalid, backup::run(jobFor(*f->store, dest.path())));
         QVERIFY(entries(snapshotsDir(*f->store, dest.path()), "*.db").isEmpty());
+        QVERIFY(entries(snapshotsDir(*f->store, dest.path()), "*.tmp").isEmpty());
     }
 };
 
