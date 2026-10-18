@@ -77,7 +77,7 @@ The tray menu, in the spec's order: New scratch · Open board · Morning review 
 
 ### Quitting during a backup
 
-`~App` cancels the worker and waits for it before the store closes. An SQLite progress handler stops `VACUUM INTO` within milliseconds. The half-written `.tmp` stays in the snapshots folder until `prune` removes it an hour later. A finished `.db` is never half-written (it only appears under its final name when complete).
+`~App` cancels the worker and waits for it before the store closes. An SQLite progress handler stops `VACUUM INTO` within milliseconds. `backup::run` removes its half-written `.tmp` when it fails or is cancelled. One left behind by a killed process is removed by `prune` an hour later. A finished `.db` is never half-written (it only appears under its final name when complete).
 
 ## Core (noite-core)
 
