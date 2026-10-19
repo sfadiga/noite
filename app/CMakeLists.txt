@@ -42,6 +42,7 @@ add_library(noite-app STATIC
     src/setup/BackupFolderField.h src/setup/BackupFolderField.cpp
     src/setup/SettingsApplier.h src/setup/SettingsApplier.cpp
     src/setup/SetupWizard.h src/setup/SetupWizard.cpp
+    src/setup/SettingsDialog.h src/setup/SettingsDialog.cpp
 )
 target_include_directories(noite-app PUBLIC src)
 target_link_libraries(noite-app PUBLIC noite-core Qt6::Widgets user32 wtsapi32 dbghelp)
@@ -91,6 +92,7 @@ qt_add_executable(app-tests
     tests/tst_backup_folder_field.cpp
     tests/tst_settings_applier.cpp
     tests/tst_setup_wizard.cpp
+    tests/tst_settings_dialog.cpp
     tests/tst_seed.cpp bench/Seed.h bench/Seed.cpp
 )
 # Reuses core's test registry and helpers.
