@@ -68,7 +68,10 @@ class UpgradeTest : public QObject {
 private slots:
     void goldenFoldersExist()
     {
-        QVERIFY2(goldenVersions().contains("v1") && goldenVersions().contains("v2"), qPrintable(goldenRoot()));
+        // Every older schema needs its golden folder, and so does the current one.
+        const QStringList have = goldenVersions();
+        for (int v = 1; v <= detail::kLatest; ++v)
+            QVERIFY2(have.contains(QString("v%1").arg(v)), qPrintable(QString("missing golden/v%1 in %2").arg(v).arg(goldenRoot())));
     }
 
     void fixtureUnchanged_data() { addVersions(); }

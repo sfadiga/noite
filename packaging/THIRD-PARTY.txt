@@ -5,6 +5,19 @@ Qt 6.10.3
   Source: https://download.qt.io/archive/qt/6.10/6.10.3/single/
   Licence texts: see the licenses\ folder (LGPL-3.0.txt, GPL-3.0.txt).
 
+Components included in the Qt libraries
+  libjpeg-turbo (in imageformats\qjpeg.dll)
+    This software is based in part on the work of the Independent JPEG Group.
+    Licences: IJG, BSD-3-Clause and zlib.
+  PCRE2 (BSD-3-Clause) and double-conversion (BSD-3-Clause), in Qt6Core.
+  FreeType (FreeType License), in Qt6Gui.
+    Portions of this software are copyright © The FreeType Project (www.freetype.org).
+    All rights reserved.
+  HarfBuzz (MIT), in Qt6Gui.
+  md4c (MIT), in Qt6Gui.
+  The full list of third-party code in Qt and its licences:
+  https://doc.qt.io/qt-6/licenses-used-in-qt.html
+
 SQLite
   Public domain.
 

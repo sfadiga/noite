@@ -12,8 +12,10 @@ Update
   Keep the data folder. A newer noite backs up the database before it changes its format.
 
 Restore a backup
-  Quit noite. Copy a snapshot from <your backup folder>\noite-backups\<id>\snapshots\
-  over data\noite.db (keep a copy of the old file first). Start noite.
+  Quit noite. Move data\noite.db, and data\noite.db-wal and data\noite.db-shm if present,
+  into a folder of your own (that's your copy of the old data). Copy a snapshot from
+  <your backup folder>\noite-backups\<id>\snapshots\ into data\ and rename it noite.db.
+  Start noite.
 
 Where things are
   data\         your notes (one file: noite.db)

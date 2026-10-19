@@ -51,12 +51,18 @@ There is no code signing (D23).
 | File | Contents |
 |---|---|
 | `noite-<v>-win64.zip` | Top folder `noite\`: <ul><li>what `deploy.ps1` produces (exe, Qt DLLs and plugins, app-local VC runtime)</li><li>`README.txt`, `LICENSE.txt` (MIT), `THIRD-PARTY.txt`</li><li>`licenses\LGPL-3.0.txt`, `licenses\GPL-3.0.txt`</li></ul> No `data\`, no `*.pdb`. |
-| `noite-<v>-win64-pdb.zip` | `noite.pdb` |
+| `noite-<v>-win64-pdb.zip` | `noite\noite.pdb` (extracting it beside `noite\` puts the PDB next to the exe) |
 | `SHA256SUMS.txt` | SHA-256 of both zips, `sha256sum` format |
 
-- **Release notes:** `gh release create --generate-notes` (commits since the previous tag); edited by hand before publishing.
+- **Release notes:** `gh release create --generate-notes` (the merged PRs since the previous tag, plus a compare link); edited by hand before publishing.
 - **`THIRD-PARTY.txt`:**
   - Qt 6.10.3, © The Qt Company, used under the LGPLv3, dynamically linked, unmodified; source at https://download.qt.io/archive/qt/6.10/6.10.3/single/; licence texts in `licenses\`.
+  - Components included in the Qt libraries:
+    - libjpeg-turbo (in `imageformats\qjpeg.dll`): "This software is based in part on the work of the Independent JPEG Group."; licences IJG, BSD-3-Clause and zlib;
+    - PCRE2 (BSD-3-Clause) and double-conversion (BSD-3-Clause), in Qt6Core;
+    - FreeType (FreeType License; "Portions of this software are copyright © The FreeType Project (www.freetype.org). All rights reserved.") and HarfBuzz (MIT), in Qt6Gui;
+    - md4c (MIT), in Qt6Gui;
+    - the full list of third-party code in Qt and its licences: https://doc.qt.io/qt-6/licenses-used-in-qt.html.
   - SQLite: public domain.
   - Microsoft Visual C++ runtime: redistributable under the Visual Studio licence.
 - **Size:** the folder budget stays at 45 MB (`deploy.ps1 -MaxMB 45`). The release job prints the zip sizes.
@@ -78,8 +84,10 @@ Update
   Keep the data folder. A newer noite backs up the database before it changes its format.
 
 Restore a backup
-  Quit noite. Copy a snapshot from <your backup folder>\noite-backups\<id>\snapshots\
-  over data\noite.db (keep a copy of the old file first). Start noite.
+  Quit noite. Move data\noite.db, and data\noite.db-wal and data\noite.db-shm if present,
+  into a folder of your own (that's your copy of the old data). Copy a snapshot from
+  <your backup folder>\noite-backups\<id>\snapshots\ into data\ and rename it noite.db.
+  Start noite.
 
 Where things are
   data\         your notes (one file: noite.db)
@@ -143,7 +151,7 @@ Uninstall
 | Case | Behaviour |
 |---|---|
 | Tag ≠ project version | The release job fails: `tag v0.1.1 ≠ project version 0.1.0`; no release. |
-| Release for the tag already exists | `gh release create` fails; nothing overwritten. Delete the draft and re-tag. |
+| Release for the tag already exists | The release job runs `gh release view` first and fails: `release <tag> already exists — delete the draft and re-tag`; nothing overwritten. Re-run the release job within 24 h (the artifact expires), or re-tag. |
 | Tests fail on a tag | `release` doesn't run (`needs: build`). |
 | Folder over budget / required file missing / `data` or PDB inside the zip | `build` fails on every push (`deploy.ps1`, `package.ps1 -DryRun`). |
 | No git | Version `0.1.0-dev`; the build works. |
@@ -161,7 +169,7 @@ Uninstall
 
 | # | Check | Expected |
 |---|---|---|
-| R-1 | Push tag `v0.1.0` | A draft release "noite 0.1.0" with the 3 files; the notes list the commits |
+| R-1 | Push tag `v0.1.0` | A draft release "noite 0.1.0" with the 3 files; the notes list the merged PRs |
 | R-2 | Download the zip into a new folder, run noite.exe | SmartScreen → More info → Run anyway starts it; Properties → Details shows 0.1.0; the log says `noite 0.1.0 started`; the setup wizard opens |
 | R-3 | Replace the exe in your real noite folder with the release one | Notes intact, no new migration snapshot (same schema), Settings shows 0.1.0 |
 

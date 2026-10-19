@@ -73,12 +73,12 @@ The trash purge runs once a day, at the first check. When it runs, it scans ever
 - The app never checks for updates. Updating = replace `noite.exe`; `data\` is untouched.
 - On startup, if the schema needs migrating: take a backup snapshot first, then migrate. If the migration fails, refuse to start (data stays as it was, snapshot available).
 - An older exe refuses to open a database written by a newer schema version.
-- **Restoring a backup** is a manual copy: quit noite, copy a snapshot from `<backup folder>\noite-backups\<id>\snapshots\` over `data\noite.db` (keeping the old file), start noite. The release README.txt says so.
+- **Restoring a backup** is a manual copy: quit noite, move `data\noite.db`, and `data\noite.db-wal` and `data\noite.db-shm` if present, into a folder of your own (the database runs in WAL mode, and a stale `-wal` file would replay onto the restored snapshot), copy a snapshot from `<backup folder>\noite-backups\<id>\snapshots\` into `data\` and rename it `noite.db`, start noite. The release README.txt says so.
 - **Upgrade guarantee:** committed golden data folders, one per schema version (`core/tests/golden/vN`), which the current build opens in `tst_upgrade` on every push. Before bumping the schema to vN+1, generate and commit `golden/vN` with the then-current build.
 
 ### Logs (D29)
 
-Rotating logs in `data\logs\noite.log` (7 files × 1 MB). One line per message: `yyyy-MM-dd HH:mm:ss.zzz L [thread] message`, with L one of D/I/W/C/F; debug lines are dropped in release builds. Startup and quit are logged (`noite started · data <dir> · Qt <ver> · Windows <ver>`, `noite quit`). A crash appends a `CRASH` line and a `module+offset` stack trace to the log and writes a minidump `crash-YYYYMMDD-HHMMSS.dmp` next to it (newest 3 kept), then the process ends without a dialog. Release builds produce PDBs, which are not in the portable zip; each release attaches them as `noite-<v>-win64-pdb.zip` so a dump can be read later in Visual Studio. No telemetry. Settings has "Open logs folder".
+Rotating logs in `data\logs\noite.log` (7 files × 1 MB). One line per message: `yyyy-MM-dd HH:mm:ss.zzz L [thread] message`, with L one of D/I/W/C/F; debug lines are dropped in release builds. Startup and quit are logged (`noite <version> started · data <dir> · Qt <ver> · Windows <ver>`, `noite quit`). A crash appends a `CRASH` line and a `module+offset` stack trace to the log and writes a minidump `crash-YYYYMMDD-HHMMSS.dmp` next to it (newest 3 kept), then the process ends without a dialog. Release builds produce PDBs, which are not in the portable zip; each release attaches them as `noite-<v>-win64-pdb.zip` so a dump can be read later in Visual Studio. No telemetry. Settings has "Open logs folder".
 
 ## 4. Data model
 

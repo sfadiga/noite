@@ -60,7 +60,7 @@ function New-PackageZips {
     if ($DryRun) {
         $Version = $built
     } elseif ($built -ne $Version) {
-        throw ("exe version {0} {1} release version {2}" -f $built, [char]0x2260, $Version)
+        throw ("exe version {0} {1} release version {2} {3} did you bump project(VERSION) in CMakeLists.txt before tagging?" -f $built, [char]0x2260, $Version, [char]0x2014)
     }
 
     $tmp = Join-Path $env:TEMP ("noite-pkg-" + [guid]::NewGuid().ToString("N"))

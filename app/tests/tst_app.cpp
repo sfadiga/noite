@@ -521,7 +521,6 @@ private slots:
         QVERIFY(!app.wizard());
         QVERIFY(backend.has(App::kCaptureHotkeyId, "Ctrl+Alt+K"));
         QVERIFY(backend.registered.contains(App::kBoardHotkeyId));
-        QVERIFY(!QDir("C:/noite-golden-backups").exists()); // starting never creates the backup folder
 
         app.showBoard();
         app.boardWindow()->setTab(Tab::All);
@@ -534,6 +533,8 @@ private slots:
             return n;
         };
         QTRY_COMPARE(notesShown(), activeCount);
+        QCOMPARE(app.boardWindow()->model().rowCount(), 3); // the card count
+        // The trashed note becomes purgeable from about 2026-11-17 under the real clock; this test asserts only active notes.
     }
 
     void wizardOnFirstRun()

@@ -25,7 +25,7 @@ Get the latest `noite-<version>-win64.zip` from the [Releases page](https://gith
 2. Run `noite.exe`. The first run opens a short setup.
 3. noite isn't code-signed, so Windows may say "Windows protected your PC". Click **More info**, then **Run anyway**.
 
-`SHA256SUMS.txt` has the checksums of the zips. To update, quit noite (tray icon, Quit) and replace the files with the new ones, keeping the `data\` folder. The zip's `README.txt` also explains how to restore a backup.
+`SHA256SUMS.txt` has the checksums of the zips. To update, quit noite (tray icon, Quit) and replace the files with the new ones, keeping the `data\` folder. To restore a backup, quit noite and move `data\noite.db`, and `data\noite.db-wal` and `data\noite.db-shm` if present, into a folder of your own (your copy of the old data). Then copy a snapshot from `<your backup folder>\noite-backups\<id>\snapshots\` into `data\`, rename it `noite.db`, and start noite. The zip's `README.txt` has the same steps.
 
 ## Stack
 
@@ -83,9 +83,10 @@ The keystroke latency harness (`spikes/hotkey-latency/run-trials.ps1`) **sends r
 ### Releasing
 
 1. Set the new version in `project(noite VERSION x.y.z ...)` in the top-level `CMakeLists.txt` and commit.
-2. Tag it and push the tag: `git tag vX.Y.Z` then `git push origin vX.Y.Z`.
-3. CI builds, tests and packages, then creates a **draft** release. It fails if the tag differs from the project version.
-4. Open the draft on GitHub, edit the generated notes, and publish.
+2. Merge the version bump to `main`, pull, and wait for CI to be green.
+3. Tag `main`'s HEAD and push the tag: `git tag vX.Y.Z` then `git push origin vX.Y.Z`.
+4. CI builds, tests and packages, then creates a **draft** release. It fails if the tag differs from the project version, or if a release for that tag already exists. In that case delete the draft and re-tag, or re-run the release job within 24 hours (the build artifact expires after that).
+5. Open the draft on GitHub, edit the generated notes, and publish.
 
 ### Schema changes
 
