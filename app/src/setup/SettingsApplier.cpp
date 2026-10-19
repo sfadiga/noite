@@ -68,9 +68,31 @@ std::optional<ApplyError> SettingsApplier::apply(const noite::Settings& next)
         return ApplyError{message, 0};
     }
 
+    followUp(previous, next);
+    return std::nullopt;
+}
+
+std::optional<ApplyError> SettingsApplier::applyKeepingHotkeys(noite::Settings next)
+{
+    const noite::Settings previous = store_.settings();
+    const auto held = [this](int id, const QString& stored) {
+        return hotkeys_.isRegistered(id) ? hotkeys_.combo(id) : stored;
+    };
+    next.captureHotkey = held(HotkeyManager::kCaptureId, previous.captureHotkey);
+    next.boardHotkey = held(HotkeyManager::kBoardId, previous.boardHotkey);
+    try {
+        store_.saveSettings(next);
+    } catch (const std::exception& error) {
+        return ApplyError{QString::fromUtf8(error.what()), 0};
+    }
+    followUp(previous, next);
+    return std::nullopt;
+}
+
+void SettingsApplier::followUp(const noite::Settings& previous, const noite::Settings& next)
+{
     if (next.startWithWindows != previous.startWithWindows)
         applyAutostart_(next.startWithWindows);
     if (next.dayStart != previous.dayStart || next.staleDays != previous.staleDays)
         recheckReview_();
-    return std::nullopt;
 }

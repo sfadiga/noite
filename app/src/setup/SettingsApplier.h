@@ -29,8 +29,15 @@ public:
     // Hotkeys first (all or nothing, nothing else changes if they fail), then the save (the
     // hotkeys go back if it throws), then autostart and the review recheck if those changed.
     std::optional<ApplyError> apply(const noite::Settings& next);
+    // Like apply(), but the hotkeys stay as they are: next's combinations are replaced by the ones
+    // the manager holds (the stored ones where a slot holds none) and the manager is not touched.
+    // The wizard's fallback when its hotkeys could not be applied.
+    std::optional<ApplyError> applyKeepingHotkeys(noite::Settings next);
 
 private:
+    // Autostart and the review recheck, for what changed between the two.
+    void followUp(const noite::Settings& previous, const noite::Settings& next);
+
     noite::Store& store_;
     HotkeyManager& hotkeys_;
     std::function<void(bool)> applyAutostart_;

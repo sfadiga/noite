@@ -22,6 +22,7 @@
 
 #include <noite/store.h>
 
+#include <QAbstractButton>
 #include <QAction>
 #include <QDir>
 #include <QLineEdit>
@@ -91,6 +92,16 @@ void execSql(const QString& root, const char* sql)
     const int rc = sqlite3_exec(db, sql, nullptr, nullptr, nullptr);
     sqlite3_close(db);
     QCOMPARE(rc, SQLITE_OK);
+}
+
+// Settings → Run setup again.
+void openSetupAgain(App& app)
+{
+    app.showSettings();
+    QVERIFY(app.settingsDialog());
+    emit app.settingsDialog()->runSetupRequested();
+    QVERIFY(app.wizard() && app.wizard()->isVisible());
+    QVERIFY(!app.setupPending());
 }
 
 } // namespace
@@ -658,6 +669,216 @@ private slots:
         QVERIFY(backend.has(App::kCaptureHotkeyId, "Ctrl+Alt+Shift+F9"));
         QCOMPARE(unavailable.count(), 1);
         QCOMPARE(unavailable[0][0].toString(), QString("Ctrl+Alt+Shift+F8"));
+    }
+
+    // ---- M6 fix round: nothing fires over a wizard that is open (S6) ----
+
+    void reviewHeldWhileSetupRunsAgain()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepareOverdue(root);
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+        QTRY_VERIFY(app.reviewWindow()); // the startup check
+        app.reviewWindow()->close();
+        QTRY_VERIFY(!app.reviewWindow());
+        openSetupAgain(app);
+
+        const QDate today = QDate::currentDate();
+        app.store()->setLastReviewDay(today.addDays(-1));
+        emit app.host()->sessionUnlocked();
+        QCOMPARE(app.store()->lastReviewDay(), std::optional<QDate>(today)); // checked, not shown
+        app.store()->setLastReviewDay(today.addDays(-1));
+        app.scheduler()->fireTimerForTest();
+        QCOMPARE(app.store()->lastReviewDay(), std::optional<QDate>(today));
+        QCoreApplication::processEvents();
+        QVERIFY(!app.reviewWindow());
+
+        app.wizard()->reject();
+        QVERIFY(!app.wizard());
+        QTRY_VERIFY(app.reviewWindow() && app.reviewWindow()->isVisible());
+    }
+
+    void reviewHeldDuringFirstRun()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepareOverdue(root, false);
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+        QVERIFY(app.wizard());
+
+        emit app.host()->sessionUnlocked();
+        app.scheduler()->fireTimerForTest();
+        QCOMPARE(app.store()->lastReviewDay(), std::optional<QDate>(QDate::currentDate()));
+        QCoreApplication::processEvents();
+        QVERIFY(!app.reviewWindow());
+
+        app.wizard()->reject();
+        QTRY_VERIFY(app.reviewWindow() && app.reviewWindow()->isVisible());
+    }
+
+    void jobsHeldWhileWizardOpen()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9");
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+        const Scratch s = app.store()->createScratch(test::html({"old"}));
+        app.store()->trash(s.id);
+        execSql(root, "UPDATE scratches SET trashed_at = trashed_at - 31 * 86400000");
+        openSetupAgain(app);
+
+        app.jobs()->check();
+        QCOMPARE(app.store()->list(Tab::Trash, QDate::currentDate()).size(), 1);
+
+        app.wizard()->reject(); // the skipped check runs now
+        QCOMPARE(app.store()->list(Tab::Trash, QDate::currentDate()).size(), 0);
+    }
+
+    void hotkeysIgnoredWhileWizardOpen()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9");
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+        openSetupAgain(app);
+
+        emit app.host()->hotkeyPressed(App::kBoardHotkeyId);
+        emit app.host()->hotkeyPressed(App::kCaptureHotkeyId); // not on the last page
+        QVERIFY(!app.boardWindow());
+        QVERIFY(!app.captureWindow()->isVisible());
+        QVERIFY(app.wizard() && app.wizard()->isVisible());
+    }
+
+    void activationRaisesWizard()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9", "Ctrl+Alt+Shift+F8", false);
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+        QVERIFY(app.wizard());
+
+        emit app.host()->activationRequested();
+        QVERIFY(!app.captureWindow()->isVisible());
+        QVERIFY(app.wizard() && app.wizard()->isVisible());
+    }
+
+    // A capture already open is focused; no starter note is made behind it.
+    void starterNoteSkippedWhenCaptureOpen()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9", "Ctrl+Alt+Shift+F8", false);
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+        app.captureWindow()->summon();
+        QTest::keyClicks(app.captureWindow()->editor(), "draft");
+        while (app.wizard()->currentId() != SetupWizard::kTryItPage)
+            app.wizard()->next();
+
+        emit app.host()->hotkeyPressed(App::kCaptureHotkeyId);
+        QVERIFY(!app.wizard());
+        QVERIFY(app.store()->settings().setupCompleted);
+        QVERIFY(app.captureWindow()->isVisible());
+        QCOMPARE(app.captureWindow()->editor()->toPlainText(), QString("draft"));
+        QCOMPARE(app.store()->list(Tab::All, QDate::currentDate(), "Welcome").size(), 0);
+    }
+
+    void wizardFinishSaveFailureToasts()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9", "Ctrl+Alt+Shift+F8", false);
+        {
+            FakeBackend backend;
+            App app(AppOptions{root}, nullptr, nullptr, &backend);
+            QVERIFY(!app.start());
+            QSignalSpy toasts(&app, &App::toastShown);
+            while (app.wizard()->currentId() != SetupWizard::kTryItPage)
+                app.wizard()->next();
+
+            execSql(root, "CREATE TRIGGER no_save BEFORE INSERT ON settings WHEN NEW.key = 'settings' "
+                          "BEGIN SELECT RAISE(ABORT, 'disk full'); END");
+            app.wizard()->button(QWizard::FinishButton)->click();
+            execSql(root, "DROP TRIGGER no_save");
+
+            QVERIFY(!app.wizard());
+            QCOMPARE(toasts.count(), 1);
+            QVERIFY2(toasts[0][1].toString().startsWith("Setup could not be saved: "),
+                     qPrintable(toasts[0][1].toString()));
+            QVERIFY(toasts[0][1].toString().contains("disk full"));
+            QVERIFY(!app.store()->settings().setupCompleted);
+        }
+        FakeBackend backend;
+        App second(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!second.start());
+        QVERIFY(second.wizard() && second.wizard()->isVisible());
+    }
+
+    // R8: the fallback goes through the applier, keeping the hotkeys and saving the rest.
+    void wizardFinishWithTakenHotkeyKeepsTheRest()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9", "Ctrl+Alt+Shift+F8", false);
+        FakeBackend backend;
+        backend.taken.insert("Ctrl+Alt+Shift+F8");
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QSignalSpy toasts(&app, &App::toastShown);
+        QVERIFY(!app.start());
+        QVERIFY(app.wizard());
+
+        noite::Settings collected = app.wizard()->collected();
+        collected.trashRetentionDays = 45;
+        emit app.wizard()->finished(collected, false);
+        QVERIFY(!app.wizard());
+        QCOMPARE(app.store()->settings().trashRetentionDays, 45);
+        QCOMPARE(app.store()->settings().boardHotkey, QString("Ctrl+Alt+Shift+F8"));
+        QVERIFY(!app.store()->settings().setupCompleted); // the wizard returns next start
+        QVERIFY(backend.has(App::kCaptureHotkeyId, "Ctrl+Alt+Shift+F9"));
+        QCOMPARE(toasts.count(), 1);
+        QCOMPARE(toasts[0][1].toString(),
+                 QString("Setup could not be saved: Ctrl+Alt+Shift+F8 is used by another program. Try another."));
+    }
+
+    // R9: the dialog's folder is used (and saved) without asking.
+    void backUpNowFromSettingsUsesTheFieldsFolder()
+    {
+        QTemporaryDir tmp;
+        QTemporaryDir dest;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9");
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+        QSignalSpy toasts(&app, &App::toastShown);
+        int asked = 0;
+        app.setBackupFolderAsker([&asked] {
+            ++asked;
+            return std::optional<QString>();
+        });
+        app.showSettings();
+        QVERIFY(app.settingsDialog());
+        BackupFolderField::Values values = app.settingsDialog()->backupField()->values();
+        values.folder = dest.path();
+        app.settingsDialog()->backupField()->setValues(values);
+
+        emit app.settingsDialog()->backUpNowRequested();
+        QCOMPARE(asked, 0);
+        QCOMPARE(app.store()->settings().backupDir, std::optional<QString>(dest.path()));
+        QTRY_COMPARE_WITH_TIMEOUT(toasts.count(), 1, 10000);
+        QVERIFY(toasts[0][1].toString().startsWith(QString::fromUtf8("Backed up · ")));
     }
 
     void backUpNowFromSettingsSyncsBackupField()

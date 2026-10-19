@@ -40,6 +40,9 @@ public:
     void check();
     // The 30 s single shot plus the hourly timer; tests call check() instead.
     void startTimers();
+    // While held (the setup wizard is open) check() does nothing; the release runs one check
+    // if any was skipped.
+    void setHeld(bool held);
     // Ignores the schedule and always toasts the result. False while busy or without a backup folder.
     bool backUpNow();
     bool isBusy() const { return busy_; }
@@ -70,6 +73,8 @@ private:
     BackupRunner& runner_;
     QTimer firstCheck_, hourly_, retry_;
     bool busy_ = false;
+    bool held_ = false;
+    bool skippedWhileHeld_ = false;
     bool manual_ = false;
     qint64 startedMs_ = 0;
     QDate startedDay_;                       // local day the run in flight started (it may finish after midnight)

@@ -97,8 +97,16 @@ private:
     // A "noite" message in the tray, and toastShown.
     void toast(const QString& text);
     void updateAutostart(bool enabled);
+    // A saved Start with Windows: the tray action follows (without saving again), then the Run key.
+    void syncAutostart(bool enabled);
     void startJobs();
-    void finishPendingSetup();
+    // While it is open (S6) the review waits and the job checks are skipped; both run on close.
+    bool wizardOpen() const { return setupPending_ || wizard_; }
+    void raiseWizard();
+    // After the wizard's settings are applied: a slot left empty gets the stored combination.
+    void registerMissingHotkeys();
+    // The wizard finished or was abandoned: ends a pending first run and releases what it held.
+    void wizardClosed();
 
     // Closes the log (after "noite quit") once every member below is gone, the store included.
     // applog's install/uninstall have a single owner: Apps may only overlap if the later one
@@ -139,4 +147,5 @@ private:
     QPointer<SettingsDialog> settingsDialog_;
     QAction* settingsAction_ = nullptr;
     bool setupPending_ = false;
+    bool reviewHeld_ = false; // a review came due while the wizard was open
 };

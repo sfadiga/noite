@@ -291,6 +291,62 @@ private slots:
         scheduler.check();
         QCOMPARE(due.size(), 1);
     }
+
+    // The wizard's fallback when its hotkeys could not be applied: everything else is saved.
+    void keepingHotkeysSavesTheRest()
+    {
+        Rig r;
+        Settings next = r.current;
+        next.captureHotkey = "Ctrl+Alt+K";
+        next.boardHotkey = "Ctrl+Alt+L";
+        next.trashRetentionDays = 40;
+        next.staleDays = 9;
+        next.startWithWindows = !r.current.startWithWindows;
+        QVERIFY(!r.applier.applyKeepingHotkeys(next));
+
+        Settings expected = next;
+        expected.captureHotkey = r.current.captureHotkey;
+        expected.boardHotkey = r.current.boardHotkey;
+        QCOMPARE(r.f->store->settings(), expected);
+        QCOMPARE(r.manager.combo(kCap), r.current.captureHotkey);
+        QCOMPARE(r.manager.combo(kBrd), r.current.boardHotkey);
+        QVERIFY(r.backend.has(kCap, r.current.captureHotkey));
+        QVERIFY(r.backend.has(kBrd, r.current.boardHotkey));
+        QCOMPARE(r.autostartCalls, 1);
+        QCOMPARE(r.autostartValue, next.startWithWindows);
+        QCOMPARE(r.recheckCalls, 1);
+    }
+
+    void keepingHotkeysUsesTheStoredComboForAnEmptySlot()
+    {
+        Rig r;
+        Settings stored = r.current;
+        stored.boardHotkey = "Ctrl+Alt+Shift+F8";
+        r.f->store->saveSettings(stored);
+        r.manager.clear(kBrd);
+
+        Settings next = stored;
+        next.boardHotkey = "Ctrl+Alt+L";
+        next.trashRetentionDays = 40;
+        QVERIFY(!r.applier.applyKeepingHotkeys(next));
+        QCOMPARE(r.f->store->settings().boardHotkey, QString("Ctrl+Alt+Shift+F8"));
+        QCOMPARE(r.f->store->settings().trashRetentionDays, 40);
+        QVERIFY(!r.manager.isRegistered(kBrd));
+        QVERIFY(!r.backend.registered.contains(kBrd));
+    }
+
+    void keepingHotkeysReportsAStoreFailure()
+    {
+        Rig r;
+        Settings next = r.current;
+        next.trashRetentionDays = 0;
+        const auto error = r.applier.applyKeepingHotkeys(next);
+        QVERIFY(error.has_value());
+        QCOMPARE(error->hotkeyId, 0);
+        QCOMPARE(error->message, QString("trash retention must be 1-365 days"));
+        QCOMPARE(r.f->store->settings(), r.current);
+        QCOMPARE(r.autostartCalls, 0);
+    }
 };
 
 NOITE_TEST(SettingsApplierTest)
