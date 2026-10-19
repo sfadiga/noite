@@ -26,6 +26,9 @@
 #include <QAction>
 #include <QCheckBox>
 #include <QDir>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLineEdit>
 #include <QMenu>
 #include <QRandomGenerator>
@@ -496,6 +499,42 @@ private slots:
     }
 
     // ---- M6: setup wizard and Settings ----
+
+    // The current build starts on a data folder written by schema v2 (core/tests/golden/v2):
+    // no wizard, the saved hotkeys, and the board shows what the manifest says.
+    void goldenV2StartsWithoutWizard()
+    {
+        QFile manifestFile(QString(NOITE_GOLDEN_DIR) + "/v2/manifest.json");
+        QVERIFY(manifestFile.open(QIODevice::ReadOnly));
+        const int activeCount = QJsonDocument::fromJson(manifestFile.readAll()).object()["activeCount"].toInt();
+        QVERIFY(activeCount > 0);
+
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        QVERIFY(QDir().mkpath(root));
+        QVERIFY(QFile::copy(QString(NOITE_GOLDEN_DIR) + "/v2/noite.db", root + "/noite.db"));
+
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+        QCoreApplication::processEvents();
+        QVERIFY(!app.wizard());
+        QVERIFY(backend.has(App::kCaptureHotkeyId, "Ctrl+Alt+K"));
+        QVERIFY(backend.registered.contains(App::kBoardHotkeyId));
+        QVERIFY(!QDir("C:/noite-golden-backups").exists()); // starting never creates the backup folder
+
+        app.showBoard();
+        app.boardWindow()->setTab(Tab::All);
+        // A bundle shows as one stack card; count the notes behind the cards.
+        auto notesShown = [&] {
+            int n = 0;
+            const BoardModel& model = app.boardWindow()->model();
+            for (int i = 0; i < model.rowCount(); ++i)
+                n += model.isStack(i) ? int(model.row(i).members.size()) : 1;
+            return n;
+        };
+        QTRY_COMPARE(notesShown(), activeCount);
+    }
 
     void wizardOnFirstRun()
     {

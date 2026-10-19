@@ -43,7 +43,15 @@ qt_add_executable(core-tests
     tests/tst_backup.cpp
     tests/tst_backup_job.cpp
     tests/tst_job_state.cpp
+    tests/tst_upgrade.cpp
 )
 target_include_directories(core-tests PRIVATE src tests)
 target_link_libraries(core-tests PRIVATE noite-core sqlite3 Qt6::Test)
+# The committed golden data folders (core/tests/golden/v<N>), opened by tst_upgrade and app-tests.
+target_compile_definitions(core-tests PRIVATE NOITE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/golden")
 add_test(NAME core COMMAND core-tests)
+
+# Generates a golden data folder (tests/golden/make_golden.cpp). Built, never run by the tests.
+qt_add_executable(noite_golden tests/golden/make_golden.cpp)
+target_include_directories(noite_golden PRIVATE src ${CMAKE_CURRENT_BINARY_DIR}/generated)
+target_link_libraries(noite_golden PRIVATE noite-core sqlite3 Qt6::Gui)
