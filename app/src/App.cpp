@@ -24,6 +24,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QCheckBox>
 #include <QDateTime>
 #include <QDebug>
 #include <QMenu>
@@ -32,6 +33,8 @@
 #include <QSysInfo>
 #include <QSystemTrayIcon>
 #include <QTimer>
+
+#include <utility>
 
 #include <windows.h>
 
@@ -188,25 +191,32 @@ std::optional<int> App::start()
             qWarning() << "autostart setting:" << error.what();
         }
         updateAutostart(enabled);
+        if (settingsDialog_) // its Save must not undo the toggle
+            settingsDialog_->startWithWindowsCheck()->setChecked(enabled);
     });
     updateAutostart(settings.startWithWindows);
 
     // The morning review (M4): checked now, on unlock, on resume and at the next day start. A
-    // review due while the wizard is open waits for it to close (S6): the check has already
-    // counted the day.
+    // review due while a re-run wizard is open waits for it to close (S6): the check has already
+    // counted the day. The first run checks only once it closes, so quitting mid-setup keeps
+    // today's review (R7).
     scheduler_ = std::make_unique<ReviewScheduler>(
         *store_, [] { return QDateTime::currentDateTime(); }, [this] { return host_->isUnlocked(); });
-    connect(host_.get(), &NativeHost::sessionUnlocked, scheduler_.get(), &ReviewScheduler::check);
-    connect(host_.get(), &NativeHost::resumed, scheduler_.get(), &ReviewScheduler::check);
+    const auto checkReview = [this] {
+        if (!setupPending_)
+            scheduler_->check();
+    };
+    connect(host_.get(), &NativeHost::sessionUnlocked, this, checkReview);
+    connect(host_.get(), &NativeHost::resumed, this, checkReview);
     connect(scheduler_.get(), &ReviewScheduler::reviewDue, this, [this] {
-        if (wizardOpen())
+        if (reviewWaits())
             reviewHeld_ = true;
         else
             showReview();
     });
 
     applier_ = std::make_unique<SettingsApplier>(
-        *store_, *hotkeys_, [this](bool enabled) { syncAutostart(enabled); }, [this] { scheduler_->check(); });
+        *store_, *hotkeys_, [this](bool enabled) { syncAutostart(enabled); }, checkReview);
 
     startJobs();
     createTray();
@@ -223,7 +233,7 @@ std::optional<int> App::start()
     return std::nullopt;
 }
 
-void App::wizardClosed()
+void App::wizardClosed(bool captureOpen)
 {
     if (wizard_) {
         wizard_->deleteLater();
@@ -232,13 +242,31 @@ void App::wizardClosed()
     if (setupPending_) {
         setupPending_ = false;
         jobs_->startTimers();
-        QTimer::singleShot(0, scheduler_.get(), &ReviewScheduler::check);
+        checkPending_ = true;
     }
     jobs_->setHeld(false); // runs a check skipped while the wizard was open
-    if (reviewHeld_) {
-        reviewHeld_ = false;
-        showReview();
+    // The review would take the focus from the capture, which hides on losing it (S2).
+    if (captureOpen && !captureHoldsReview_) {
+        captureHoldsReview_ = true;
+        connect(
+            controller_.get(), &CaptureController::finished, this,
+            [this] {
+                captureHoldsReview_ = false;
+                releaseReview();
+            },
+            Qt::SingleShotConnection);
     }
+    releaseReview();
+}
+
+void App::releaseReview()
+{
+    if (reviewWaits())
+        return; // the next wizardClosed() or the capture's finish comes back here
+    if (std::exchange(checkPending_, false))
+        QTimer::singleShot(0, scheduler_.get(), &ReviewScheduler::check);
+    if (std::exchange(reviewHeld_, false))
+        showReview();
 }
 
 void App::startJobs()
@@ -332,7 +360,7 @@ void App::syncAutostart(bool enabled)
     updateAutostart(enabled);
 }
 
-void App::registerMissingHotkeys()
+void App::registerMissingHotkeys(const QString& reported)
 {
     noite::Settings current;
     try {
@@ -343,8 +371,10 @@ void App::registerMissingHotkeys()
     }
     for (const auto& [id, combo] : {std::pair{kCaptureHotkeyId, current.captureHotkey},
                                     std::pair{kBoardHotkeyId, current.boardHotkey}}) {
-        if (!hotkeys_->isRegistered(id) && hotkeys_->set(id, combo) != HotkeyStatus::Ok)
+        if (!hotkeys_->isRegistered(id) && hotkeys_->set(id, combo) != HotkeyStatus::Ok
+            && !(parseHotkey(combo) && parseHotkey(combo) == parseHotkey(reported))) {
             emit hotkeyUnavailable(combo);
+        }
     }
 }
 
@@ -361,49 +391,78 @@ void App::showWizard()
     if (settingsDialog_)
         settingsDialog_->reject();
     if (!wizard_) {
+        noite::Settings initial;
+        try {
+            initial = store_->settings();
+        } catch (const std::exception& error) {
+            qWarning() << "setup:" << error.what();
+            toast(tr("Setup could not be opened: %1").arg(QString::fromUtf8(error.what())));
+            return;
+        }
         const bool autostartManaged = autostart_ && !options_.dataFromCommandLine;
-        wizard_ =
-            new SetupWizard(store_->settings(), *hotkeys_,
-                            WizardContext{dataRoot_, syncWarning_, autostartManaged, [this] { return askFolder_(); }});
+        wizard_ = new SetupWizard(initial, *hotkeys_,
+                                  WizardContext{dataRoot_, syncWarning_, autostartManaged, [this] { return askFolder_(); }});
         wizard_->setAttribute(Qt::WA_DeleteOnClose);
         jobs_->setHeld(true); // until wizardClosed()
-        // When the hotkeys can't be applied, the rest is still saved; the hotkeys stay as they are.
-        const auto saveKeepingHotkeys = [this](const noite::Settings& next) {
-            if (const auto err = applier_->applyKeepingHotkeys(next))
-                qWarning() << "wizard save:" << err->message;
-        };
-        connect(wizard_, &SetupWizard::finished, this,
-                [this, saveKeepingHotkeys](const noite::Settings& collected, bool viaHotkey) {
-                    noite::Settings s = collected;
-                    s.setupCompleted = true;
-                    if (const auto err = applier_->apply(s)) {
-                        // Not completed: the wizard returns next start.
-                        qWarning() << "wizard apply:" << err->message;
-                        toast(tr("Setup could not be saved: %1").arg(err->message));
-                        if (err->hotkeyId != 0)
-                            saveKeepingHotkeys(collected);
-                        registerMissingHotkeys();
-                    }
-                    if (viaHotkey) {
-                        if (window_->isVisible()) {
-                            window_->summon(); // a capture already open: just bring it back
+        connect(wizard_, &SetupWizard::finished, this, [this](const noite::Settings& collected, bool viaHotkey) {
+            noite::Settings s = collected;
+            s.setupCompleted = true;
+            QString notice;     // the one toast, if any
+            QString takenCombo; // a hotkey that notice already names
+            try {
+                if (const auto err = applier_->apply(s)) {
+                    qWarning() << "wizard apply:" << err->message;
+                    notice = tr("Setup could not be saved: %1").arg(err->message);
+                    if (err->hotkeyId != 0) {
+                        // R10: a hotkey alone still completes setup; the rest is saved and the
+                        // hotkeys stay as they are.
+                        if (const auto saveErr = applier_->applyKeepingHotkeys(s)) {
+                            // Not completed: the wizard returns next start.
+                            qWarning() << "wizard save:" << saveErr->message;
+                            notice = tr("Setup could not be saved: %1").arg(saveErr->message);
+                        } else if (err->status == HotkeyStatus::Taken) {
+                            takenCombo = err->hotkeyId == kCaptureHotkeyId ? s.captureHotkey : s.boardHotkey;
+                            notice = tr("%1 is used by another program. Change it in Settings.").arg(takenCombo);
                         } else {
-                            try {
-                                const noite::Scratch scratch = store_->createScratch(starterNoteHtml(s));
-                                window_->summonNote(scratch.id);
-                            } catch (const std::exception& error) {
-                                qWarning() << "starter note:" << error.what();
-                                window_->summon();
-                            }
+                            notice = tr("%1 Change it in Settings.").arg(err->message);
                         }
                     }
-                    wizardClosed();
-                });
-        connect(wizard_, &SetupWizard::abandoned, this, [this, saveKeepingHotkeys](const noite::Settings& partial) {
-            if (const auto err = applier_->apply(partial)) {
-                qWarning() << "wizard abandon:" << err->message;
-                if (err->hotkeyId != 0)
-                    saveKeepingHotkeys(partial);
+                }
+            } catch (const std::exception& error) {
+                qWarning() << "wizard apply:" << error.what();
+                notice = tr("Setup could not be saved: %1").arg(QString::fromUtf8(error.what()));
+            }
+            registerMissingHotkeys(takenCombo);
+            if (!notice.isEmpty())
+                toast(notice);
+            if (viaHotkey) {
+                if (window_->isVisible()) {
+                    window_->summon(); // a capture already open: just bring it back
+                } else {
+                    try {
+                        const noite::Scratch scratch = store_->createScratch(starterNoteHtml(s));
+                        window_->summonNote(scratch.id);
+                    } catch (const std::exception& error) {
+                        qWarning() << "starter note:" << error.what();
+                        window_->summon();
+                    }
+                }
+            }
+            wizardClosed(viaHotkey && window_->isVisible());
+        });
+        connect(wizard_, &SetupWizard::abandoned, this, [this](const noite::Settings& partial) {
+            try {
+                if (const auto err = applier_->apply(partial)) {
+                    qWarning() << "wizard abandon:" << err->message;
+                    // When the hotkeys can't be applied, the rest is still saved; the hotkeys stay as they are.
+                    if (err->hotkeyId != 0) {
+                        if (const auto saveErr = applier_->applyKeepingHotkeys(partial))
+                            qWarning() << "wizard save:" << saveErr->message;
+                    }
+                }
+            } catch (const std::exception& error) {
+                qWarning() << "wizard abandon:" << error.what();
+                toast(tr("Setup could not be saved: %1").arg(QString::fromUtf8(error.what())));
             }
             registerMissingHotkeys();
             wizardClosed();

@@ -24,6 +24,7 @@
 
 #include <QAbstractButton>
 #include <QAction>
+#include <QCheckBox>
 #include <QDir>
 #include <QLineEdit>
 #include <QMenu>
@@ -530,8 +531,48 @@ private slots:
         QVERIFY(app.captureWindow()->isVisible());
         QVERIFY(app.captureWindow()->editor()->toPlainText().startsWith(QStringLiteral("Welcome to noite")));
 
+        // S2: the review would take the focus and so hide the capture; it waits for the capture.
         QCoreApplication::processEvents();
-        QVERIFY(app.reviewWindow() && app.reviewWindow()->isVisible());
+        QVERIFY(!app.reviewWindow());
+        QVERIFY(!app.store()->lastReviewDay()); // not counted yet either
+        QVERIFY(app.captureWindow()->isVisible());
+
+        QTest::keyClick(app.captureWindow()->editor(), Qt::Key_Escape);
+        QVERIFY(!app.captureWindow()->isVisible());
+        QTRY_VERIFY(app.reviewWindow() && app.reviewWindow()->isVisible());
+    }
+
+    // A review held by a re-run wizard also waits for the Try-it capture.
+    void heldReviewWaitsForTheTryItCapture()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepareOverdue(root);
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+        QTRY_VERIFY(app.reviewWindow()); // the startup check
+        app.reviewWindow()->close();
+        QTRY_VERIFY(!app.reviewWindow());
+        openSetupAgain(app);
+        app.store()->setLastReviewDay(QDate::currentDate().addDays(-1));
+        emit app.host()->sessionUnlocked(); // due now, held by the wizard
+        while (app.wizard()->currentId() != SetupWizard::kTryItPage)
+            app.wizard()->next();
+
+        emit app.host()->hotkeyPressed(App::kCaptureHotkeyId);
+        QVERIFY(!app.wizard());
+        QVERIFY(app.captureWindow()->isVisible());
+        QCoreApplication::processEvents();
+        QVERIFY(!app.reviewWindow());
+        app.store()->setLastReviewDay(QDate::currentDate().addDays(-1));
+        emit app.host()->sessionUnlocked(); // due again while the capture is open: still held
+        QCOMPARE(app.store()->lastReviewDay(), std::optional<QDate>(QDate::currentDate()));
+        QVERIFY(!app.reviewWindow());
+
+        QTest::keyClick(app.captureWindow()->editor(), Qt::Key_Escape);
+        QVERIFY(!app.captureWindow()->isVisible());
+        QTRY_VERIFY(app.reviewWindow() && app.reviewWindow()->isVisible());
     }
 
     void wizardAbandonReturns()
@@ -711,13 +752,19 @@ private slots:
         QVERIFY(!app.start());
         QVERIFY(app.wizard());
 
+        // R7: nothing counts the day while the first run is open, so quitting now keeps the review.
         emit app.host()->sessionUnlocked();
-        app.scheduler()->fireTimerForTest();
-        QCOMPARE(app.store()->lastReviewDay(), std::optional<QDate>(QDate::currentDate()));
+        emit app.host()->resumed();
+        QCOMPARE(app.store()->lastReviewDay(), std::optional<QDate>());
         QCoreApplication::processEvents();
         QVERIFY(!app.reviewWindow());
 
-        app.wizard()->reject();
+        // Nor does the wizard's own save (the applier rechecks the review for a changed stale days).
+        noite::Settings partial = app.wizard()->collected();
+        partial.staleDays += 1;
+        emit app.wizard()->abandoned(partial);
+        QVERIFY(!app.wizard());
+        QCOMPARE(app.store()->lastReviewDay(), std::optional<QDate>());
         QTRY_VERIFY(app.reviewWindow() && app.reviewWindow()->isVisible());
     }
 
@@ -826,7 +873,8 @@ private slots:
         QVERIFY(second.wizard() && second.wizard()->isVisible());
     }
 
-    // R8: the fallback goes through the applier, keeping the hotkeys and saving the rest.
+    // R8, R10: the fallback goes through the applier, keeping the hotkeys and saving the rest; a
+    // taken hotkey alone still completes setup.
     void wizardFinishWithTakenHotkeyKeepsTheRest()
     {
         QTemporaryDir tmp;
@@ -845,11 +893,126 @@ private slots:
         QVERIFY(!app.wizard());
         QCOMPARE(app.store()->settings().trashRetentionDays, 45);
         QCOMPARE(app.store()->settings().boardHotkey, QString("Ctrl+Alt+Shift+F8"));
-        QVERIFY(!app.store()->settings().setupCompleted); // the wizard returns next start
+        QVERIFY(app.store()->settings().setupCompleted);
+        QVERIFY(!app.setupPending());
         QVERIFY(backend.has(App::kCaptureHotkeyId, "Ctrl+Alt+Shift+F9"));
         QCOMPARE(toasts.count(), 1);
         QCOMPARE(toasts[0][1].toString(),
-                 QString("Setup could not be saved: Ctrl+Alt+Shift+F8 is used by another program. Try another."));
+                 QString("Ctrl+Alt+Shift+F8 is used by another program. Change it in Settings."));
+    }
+
+    // R10: Skip setup on the first page with a taken board hotkey completes setup.
+    void skipWithTakenHotkeyCompletesSetup()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9", "Ctrl+Alt+Shift+F8", false);
+        {
+            FakeBackend backend;
+            backend.taken.insert("Ctrl+Alt+Shift+F8");
+            App app(AppOptions{root}, nullptr, nullptr, &backend);
+            QVERIFY(!app.start());
+            QVERIFY(app.wizard());
+            QCOMPARE(app.wizard()->currentId(), int(SetupWizard::kWelcomePage));
+            QSignalSpy toasts(&app, &App::toastShown);
+
+            app.wizard()->button(QWizard::CustomButton1)->click();
+            QVERIFY(!app.wizard());
+            QVERIFY(app.store()->settings().setupCompleted);
+            QVERIFY(backend.has(App::kCaptureHotkeyId, "Ctrl+Alt+Shift+F9"));
+            QCOMPARE(toasts.count(), 1);
+            QCOMPARE(toasts[0][1].toString(),
+                     QString("Ctrl+Alt+Shift+F8 is used by another program. Change it in Settings."));
+        }
+        FakeBackend backend;
+        backend.taken.insert("Ctrl+Alt+Shift+F8");
+        App second(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!second.start());
+        QVERIFY(!second.wizard());
+        QVERIFY(!second.setupPending());
+    }
+
+    // A store that can't be read when the wizard closes: reported, and nothing stays held.
+    void wizardCloseWithUnreadableStoreReleasesHolds()
+    {
+        for (const bool finish : {true, false}) {
+            QTemporaryDir tmp;
+            const QString root = tmp.filePath("data");
+            prepare(root, "Ctrl+Alt+Shift+F9", "Ctrl+Alt+Shift+F8", false);
+            FakeBackend backend;
+            App app(AppOptions{root}, nullptr, nullptr, &backend);
+            QVERIFY(!app.start());
+            QVERIFY(app.wizard());
+            const Scratch s = app.store()->createScratch(test::html({"old"}));
+            app.store()->trash(s.id);
+            execSql(root, "UPDATE scratches SET trashed_at = trashed_at - 31 * 86400000");
+            QSignalSpy toasts(&app, &App::toastShown);
+            const noite::Settings collected = app.wizard()->collected();
+
+            execSql(root, "ALTER TABLE settings RENAME TO settings_gone");
+            if (finish)
+                QVERIFY_THROWS_NO_EXCEPTION(emit app.wizard()->finished(collected, false));
+            else
+                QVERIFY_THROWS_NO_EXCEPTION(emit app.wizard()->abandoned(collected));
+            execSql(root, "ALTER TABLE settings_gone RENAME TO settings");
+
+            QVERIFY(!app.wizard());
+            QVERIFY(!app.setupPending());
+            QCOMPARE(toasts.count(), 1);
+            QVERIFY2(toasts[0][1].toString().startsWith("Setup could not be saved: "),
+                     qPrintable(toasts[0][1].toString()));
+            QVERIFY(toasts[0][1].toString().contains("no such table"));
+            app.jobs()->check(); // no longer held
+            QCOMPARE(app.store()->list(Tab::Trash, QDate::currentDate()).size(), 0);
+        }
+    }
+
+    void runSetupAgainWithUnreadableStoreToasts()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9");
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+        const Scratch s = app.store()->createScratch(test::html({"old"}));
+        app.store()->trash(s.id);
+        execSql(root, "UPDATE scratches SET trashed_at = trashed_at - 31 * 86400000");
+        QSignalSpy toasts(&app, &App::toastShown);
+
+        execSql(root, "ALTER TABLE settings RENAME TO settings_gone");
+        QVERIFY_THROWS_NO_EXCEPTION(app.showWizard());
+        execSql(root, "ALTER TABLE settings_gone RENAME TO settings");
+
+        QVERIFY(!app.wizard());
+        QCOMPARE(toasts.count(), 1);
+        QVERIFY2(toasts[0][1].toString().startsWith("Setup could not be opened: "),
+                 qPrintable(toasts[0][1].toString()));
+        QVERIFY(toasts[0][1].toString().contains("no such table"));
+        app.jobs()->check(); // not held
+        QCOMPARE(app.store()->list(Tab::Trash, QDate::currentDate()).size(), 0);
+    }
+
+    // The tray's Start with Windows reaches an open Settings, so its Save doesn't undo it.
+    void trayAutostartToggleSyncsOpenSettings()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9");
+        std::optional<QString> value;
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, std::make_unique<FakeAutostart>(&value), &backend);
+        QVERIFY(!app.start());
+        app.showSettings();
+        QVERIFY(app.settingsDialog());
+        QVERIFY(app.settingsDialog()->startWithWindowsCheck()->isChecked());
+
+        app.autostartAction()->trigger();
+        QVERIFY(!app.settingsDialog()->startWithWindowsCheck()->isChecked());
+        app.settingsDialog()->save();
+        QVERIFY(!app.store()->settings().startWithWindows);
+        QVERIFY(!value);
+        QVERIFY(!app.autostartAction()->isChecked());
     }
 
     // R9: the dialog's folder is used (and saved) without asking.

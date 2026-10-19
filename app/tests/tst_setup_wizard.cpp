@@ -63,7 +63,7 @@ private slots:
         // Page 1: welcome text includes data dir
         auto* page1Label = wizard.currentPage()->findChild<QLabel*>();
         QVERIFY(page1Label);
-        QCOMPARE(page1Label->text(), QString("Your notes live in this folder: D:/noite/data. Nothing leaves your PC."));
+        QCOMPARE(page1Label->text(), QString("Your notes live in this folder: D:\\noite\\data. Nothing leaves your PC."));
 
         // Page 2: capture hotkey
         wizard.next();

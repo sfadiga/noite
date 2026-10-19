@@ -21,6 +21,8 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
+#include <tuple>
+
 SettingsDialog::SettingsDialog(noite::Store& store, HotkeyManager& hotkeys, SettingsApplier& applier,
                                SettingsContext context, QWidget* parent)
     : QDialog(parent)
@@ -51,6 +53,12 @@ SettingsDialog::SettingsDialog(noite::Store& store, HotkeyManager& hotkeys, Sett
     boardField_->setCombo(initial.boardHotkey);
     captureField_->setOther(initial.boardHotkey);
     boardField_->setOther(initial.captureHotkey);
+    // A hotkey startup could not register (another program holds it) says so rather than ✓.
+    for (auto [field, id, otherId] : {std::tuple{captureField_, HotkeyManager::kCaptureId, HotkeyManager::kBoardId},
+                                      std::tuple{boardField_, HotkeyManager::kBoardId, HotkeyManager::kCaptureId}}) {
+        if (!hotkeys_.isPaused() && !hotkeys_.isRegistered(id) && !field->combo().isEmpty())
+            field->showError(hotkeyMessage(HotkeyStatus::Taken, field->combo(), otherId), HotkeyStatus::Taken);
+    }
     // `edited` changed: `other` learns its combination. If `other` only clashed with it and no
     // longer does, it is accepted again without a probe (the manager may hold it, as in a swap);
     // Save does the real check.

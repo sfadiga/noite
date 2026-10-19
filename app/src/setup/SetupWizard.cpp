@@ -5,6 +5,7 @@
 #include "setup/SetupTexts.h"
 
 #include <QCheckBox>
+#include <QDir>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QSpinBox>
@@ -57,6 +58,7 @@ public:
     void cleanupPage() override
     {
         field_->cancelRecording();
+        // The result can be ignored: this page's next validatePage() (or the finish) sets it again.
         if (field_->isAccepted())
             hotkeys_.set(id_, field_->combo());
     }
@@ -125,7 +127,8 @@ SetupWizard::SetupWizard(noite::Settings initial, HotkeyManager& hotkeys, Wizard
     welcomePage->setTitle(tr("Welcome"));
     auto* welcomeLayout = new QVBoxLayout(welcomePage);
     auto* welcomeLabel =
-        new QLabel(tr("Your notes live in this folder: %1. Nothing leaves your PC.").arg(context_.dataDir));
+        new QLabel(tr("Your notes live in this folder: %1. Nothing leaves your PC.")
+                       .arg(QDir::toNativeSeparators(context_.dataDir)));
     welcomeLabel->setWordWrap(true);
     welcomeLayout->addWidget(welcomeLabel);
     if (context_.sync) {

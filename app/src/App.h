@@ -102,11 +102,17 @@ private:
     void startJobs();
     // While it is open (S6) the review waits and the job checks are skipped; both run on close.
     bool wizardOpen() const { return setupPending_ || wizard_; }
+    // A review coming due now is held: a wizard is open, or the Try-it capture it opened.
+    bool reviewWaits() const { return wizardOpen() || captureHoldsReview_; }
     void raiseWizard();
-    // After the wizard's settings are applied: a slot left empty gets the stored combination.
-    void registerMissingHotkeys();
+    // After the wizard's settings are applied: a slot left empty gets the stored combination. A
+    // combination that fails and equals `reported` (already toasted) is not reported again.
+    void registerMissingHotkeys(const QString& reported = {});
     // The wizard finished or was abandoned: ends a pending first run and releases what it held.
-    void wizardClosed();
+    // `captureOpen`: its Try-it hotkey left a capture open; the review waits for it to finish.
+    void wizardClosed(bool captureOpen = false);
+    // Once nothing holds it any more: the first run's review check and a held review.
+    void releaseReview();
 
     // Closes the log (after "noite quit") once every member below is gone, the store included.
     // applog's install/uninstall have a single owner: Apps may only overlap if the later one
@@ -147,5 +153,7 @@ private:
     QPointer<SettingsDialog> settingsDialog_;
     QAction* settingsAction_ = nullptr;
     bool setupPending_ = false;
-    bool reviewHeld_ = false; // a review came due while the wizard was open
+    bool reviewHeld_ = false;         // a review came due while the wizard (or its capture) was open
+    bool checkPending_ = false;       // the first run's review check, waiting for the Try-it capture
+    bool captureHoldsReview_ = false; // the Try-it capture is open (S2: the review would hide it)
 };

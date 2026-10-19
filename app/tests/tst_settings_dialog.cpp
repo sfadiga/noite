@@ -126,6 +126,23 @@ private slots:
         QCOMPARE(dialog.backupField()->values().keep, 5);
     }
 
+    // Startup could not register the board hotkey: its field says so instead of ✓.
+    void unregisteredHotkeyShowsTaken()
+    {
+        Rig r;
+        const Settings s = r.f->store->settings();
+        r.manager.clear(kBrd);
+        r.backend.taken.insert(s.boardHotkey);
+        QVERIFY(r.manager.set(kBrd, s.boardHotkey) == HotkeyStatus::Taken);
+
+        SettingsDialog dialog(*r.f->store, r.manager, r.applier, r.context());
+        dialog.show();
+        QVERIFY(dialog.boardField()->state() == State::Taken);
+        QCOMPARE(dialog.boardField()->combo(), s.boardHotkey);
+        QCOMPARE(dialog.boardField()->statusText(), QString("%1 is used by another program. Try another.").arg(s.boardHotkey));
+        QVERIFY(dialog.captureField()->isAccepted());
+    }
+
     void saveAppliesAndCloses()
     {
         Rig r;
