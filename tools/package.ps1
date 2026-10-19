@@ -6,8 +6,10 @@
 #   package.ps1 -Static [-Version x.y.z | -DryRun] [-Exe <path>]
 #                                the single-exe zip: only noite.exe (default build\Static\noite.exe, built
 #                                with -DNOITE_STATIC=ON) and the notices; its --self-check must pass and
-#                                dumpbin must list no Qt, VC runtime or ICU DLL. The PDB is noite.pdb next to
-#                                the exe.
+#                                dumpbin must list no Qt, VC runtime or ICU DLL (Windows' own ICU in System32,
+#                                icuuc.dll/icuin.dll/icu.dll, is allowed; no ICU DLL is shipped). The PDB is
+#                                noite.pdb next to the exe.
+# Non-static packages are for local testing only; releases ship -Static (THIRD-PARTY.txt describes static linking).
 # -ExeVersion overrides the version read from the exe (used by the self-test only).
 # dist\noite\data is a live data folder: it is never copied, modified or zipped.
 [CmdletBinding()]
@@ -33,6 +35,10 @@ $Required = @(
 # -Static: the whole package, and the DLL dependents a single exe must not have.
 $StaticRequired = @("noite.exe", "README.txt", "LICENSE.txt", "THIRD-PARTY.txt", "licenses\LGPL-3.0.txt", "licenses\GPL-3.0.txt")
 $ForbiddenDependent = '^(Qt6|vcruntime|msvcp|concrt|icu|ucrtbase)'
+# Except Windows' own ICU in System32 (part of Windows 10 since 1703; Qt 6.10 needs 1809+): -no-icu still
+# leaves Qt's winsdkicu feature on, which imports icuuc.dll. Nothing ships next to the exe for it. Any other
+# icu* name (Qt's versioned icuuc74.dll, icudt74.dll, ...) would have to be shipped, so it stays refused.
+$SystemIcuDependent = '^(icuuc|icuin|icu)\.dll$'
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 function Write-ZipFromFolder([string]$Folder, [string]$ZipPath, [string]$Prefix) {
@@ -230,7 +236,7 @@ function New-StaticPackageZips {
         }
 
         if ($null -ne $DependentsOverride) { $deps = @($DependentsOverride) } else { $deps = Get-ExeDependents $exe }
-        $bad = @($deps | Where-Object { $_ -match $ForbiddenDependent })
+        $bad = @($deps | Where-Object { $_ -match $ForbiddenDependent -and $_ -notmatch $SystemIcuDependent })
         if ($bad.Count) { throw "noite.exe depends on DLL(s) a single exe must not need: $($bad -join ', ')" }
 
         Add-PackageNotices $stage $Version $PackagingDir $LicenseFile
@@ -460,6 +466,14 @@ function Invoke-SelfTest {
         # S7. a DLL dependent the single exe must not need is refused, case-insensitively
         Expect-Throw { PackStatic (New-StaticExe) $okCheck @("KERNEL32.dll", "VCRUNTIME140.dll") } `
             "VCRUNTIME140\.dll" "VCRUNTIME140.dll dependent"
+        # Windows' own ICU (System32) is allowed; any other ICU DLL would have to be shipped, so it is refused
+        $r = PackStatic (New-StaticExe) $okCheck @("KERNEL32.dll", "icuuc.dll", "ICUIN.dll", "icu.dll")
+        if (-not (Test-Path -LiteralPath $r.Zip)) { throw "self-test static: system ICU dependents not packaged" }
+        Write-Host "  ok  Windows' system ICU dependents (icuuc.dll, ICUIN.dll, icu.dll) accepted"
+        Expect-Throw { PackStatic (New-StaticExe) $okCheck @("KERNEL32.dll", "icuuc74.dll") } `
+            "icuuc74\.dll" "icuuc74.dll dependent"
+        Expect-Throw { PackStatic (New-StaticExe) $okCheck @("KERNEL32.dll", "icudt74.dll") } `
+            "icudt74\.dll" "icudt74.dll dependent"
         Expect-Throw { PackStatic (New-StaticExe) $okCheck @("KERNEL32.dll", "qt6core.dll") } `
             "qt6core\.dll" "qt6core.dll dependent"
 

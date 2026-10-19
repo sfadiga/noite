@@ -13,7 +13,7 @@
 
 | # | Decision | Why |
 |---|---|---|
-| S1 | "Single exe" = static Qt + static runtime (`/MT`) + no ICU: one `noite.exe`, no DLLs or plugin folders; `data\` still created next to it on first run | The user's choice. |
+| S1 | "Single exe" = static Qt + static runtime (`/MT`) + no ICU shipped: one `noite.exe`, no DLLs or plugin folders; `data\` still created next to it on first run. The exe may import Windows' own ICU (`icuuc.dll`/`icuin.dll`/`icu.dll` in System32, which Qt's `winsdkicu` uses even with `-no-icu`). | The user's choice. |
 | S2 | The static Qt comes from a **new public repo `sfadiga/qt-static-windows`**, built and published by **that repo's GitHub Actions** | The user's choice: reusable by others, reproducible, built on the same runner image as noite's CI. |
 | S3 | Release asset: `noite-X.Y.Z-win64.zip` holding the static `noite.exe` + README/licence texts; the DLL zip stops shipping | LGPLv3 notices must travel with a statically linked binary; a zip carries them. |
 | S4 | `version.txt` (one line, `X.Y.Z`) is the only place the number lives; CMake reads it; the tag must equal it | The user's request: one easy file to bump. |
@@ -134,6 +134,7 @@
 - **Main zip** `noite-X.Y.Z-win64.zip`: `noite\noite.exe`, `README.txt`, `LICENSE.txt`, `THIRD-PARTY.txt`, `licenses\LGPL-3.0.txt`, `licenses\GPL-3.0.txt`.
   - Required: those files.
   - Forbidden: any `*.dll`, any plugin folder, `data\`, any `*.pdb`.
+  - `dumpbin /dependents noite.exe` lists no Qt, VC runtime or ICU DLL. The one exception is Windows' own ICU (`icuuc.dll`/`icuin.dll`/`icu.dll` in System32, part of Windows 10 since 1703). No ICU DLL is shipped.
 - **Before zipping:** run `noite.exe --self-check` and fail on non-zero.
 - **PDB zip and `SHA256SUMS.txt`:** as in M7a.
 - **The non-static mode** stays as it is, for local packaging and the dynamic dry run.

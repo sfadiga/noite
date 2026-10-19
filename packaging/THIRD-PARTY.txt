@@ -21,6 +21,8 @@ Components included in Qt (all linked into noite.exe)
     All rights reserved.
   HarfBuzz (MIT), in Qt Gui.
   md4c (MIT), in Qt Gui.
+  libpng (PNG Reference Library License, libpng-2.0), in Qt Gui.
+  zlib (zlib License), in Qt Core.
   The full list of third-party code in Qt and its licences:
   https://doc.qt.io/qt-6/licenses-used-in-qt.html
 

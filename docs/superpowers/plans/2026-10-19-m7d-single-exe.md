@@ -38,7 +38,7 @@
 - Static zip:
   - `noite-X.Y.Z-win64.zip` containing only `noite\noite.exe`, `README.txt`, `LICENSE.txt`, `THIRD-PARTY.txt`, `licenses\LGPL-3.0.txt`, `licenses\GPL-3.0.txt`;
   - forbidden: any `*.dll`, any subfolder other than `licenses\`, `data\`, any `*.pdb`, `noite-self-check.txt`;
-  - `dumpbin /dependents noite.exe` must list no `Qt6*`, `vcruntime*`, `msvcp*`, `concrt*`, `icu*` or `ucrtbase*` DLL.
+  - `dumpbin /dependents noite.exe` must list no `Qt6*`, `vcruntime*`, `msvcp*`, `concrt*`, `icu*` or `ucrtbase*` DLL. The exception is Windows' own ICU (`icuuc.dll`, `icuin.dll`, `icu.dll` in System32), which Qt's `winsdkicu` imports even with `-no-icu`; no ICU DLL is shipped.
 - Changelog: Keep a Changelog 1.1.0; `## [Unreleased]` on top; releases `## [X.Y.Z] - YYYY-MM-DD`; a tag fails without a non-empty section; that section becomes the release notes.
 - Error texts:
   - `version.txt must contain X.Y.Z`
@@ -242,7 +242,7 @@ For `selfCheckMainWritesFile`:
   - **`package.ps1 -Static [-DryRun|-Version] [-Exe <path>]`:**
     - stages only `noite.exe`, from `-Exe` or by default `build\Static\noite.exe`, plus the packaging texts;
     - runs the exe with `--self-check` (`Start-Process -Wait -PassThru`, with the exe in the stage; exit ≠ 0 → throw with the file's text), then deletes `noite-self-check.txt` from the stage;
-    - runs `dumpbin /dependents` (available after the VS dev shell; the script uses `Launch-VsDevShell` like `deploy.ps1`, or finds `dumpbin` via `vswhere`) and refuses any dependent matching `^(Qt6|vcruntime|msvcp|concrt|icu|ucrtbase)` (case-insensitive);
+    - runs `dumpbin /dependents` (available after the VS dev shell; the script uses `Launch-VsDevShell` like `deploy.ps1`, or finds `dumpbin` via `vswhere`) and refuses any dependent matching `^(Qt6|vcruntime|msvcp|concrt|icu|ucrtbase)` (case-insensitive), except exactly `icuuc.dll`, `icuin.dll` and `icu.dll` (Windows' own ICU);
     - applies the Global Constraints required/forbidden lists;
     - PDB from `build\Static\noite.pdb`;
     - outputs and checksums as in M7a.
