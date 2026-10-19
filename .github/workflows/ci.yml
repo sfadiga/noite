@@ -18,6 +18,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      # GitHub writes `shell: powershell` steps as UTF-8 without a BOM, and Windows PowerShell 5.1
+      # reads them as Windows-1252: a non-ASCII character (an em dash's 0x94 is a closing quote
+      # there) can break the step's parsing, and the release job only runs on a tag.
+      - name: Workflow is ASCII-only
+        shell: bash
+        run: |
+          if grep -nP '[^\x00-\x7F]' .github/workflows/*.yml; then
+            echo "::error::non-ASCII characters in the workflow (see above); use [char]0xNNNN in PowerShell steps"
+            exit 1
+          fi
+
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
@@ -183,7 +194,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $tag = "${{ github.ref_name }}".Substring(1)
           $ver = (Get-Content version.txt -Raw).Trim()
-          if ($tag -ne $ver) { throw "tag v$tag ≠ version.txt $ver" }
+          if ($tag -ne $ver) { throw "tag v$tag $([char]0x2260) version.txt $ver" }
 
       - name: Release notes from CHANGELOG.md
         shell: powershell
@@ -218,7 +229,7 @@ jobs:
           $exists = ($LASTEXITCODE -eq 0)
           $ErrorActionPreference = 'Stop'
           if ($exists) {
-            Write-Error "release ${{ github.ref_name }} already exists — delete the draft and re-tag"
+            Write-Error "release ${{ github.ref_name }} already exists - delete the draft and re-tag"
             exit 1
           }
           gh release create "${{ github.ref_name }}" --draft --notes-file notes.md --title "noite $v" "dist/noite-$v-win64.zip" "dist/noite-$v-win64-pdb.zip" "dist/SHA256SUMS.txt"
