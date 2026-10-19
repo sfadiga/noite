@@ -31,6 +31,15 @@ void JobScheduler::startTimers()
     hourly_.start();
 }
 
+void JobScheduler::setHeld(bool held)
+{
+    held_ = held;
+    if (!held_ && skippedWhileHeld_) {
+        skippedWhileHeld_ = false;
+        check();
+    }
+}
+
 void JobScheduler::setBusy(bool busy)
 {
     if (busy_ == busy)
@@ -50,6 +59,10 @@ void JobScheduler::save(const JobState& state)
 
 void JobScheduler::check()
 {
+    if (held_) {
+        skippedWhileHeld_ = true;
+        return;
+    }
     try {
         const QDate today = now_().date();
         // The purge's WAL checkpoint waits on the backup's read snapshot (up to the busy timeout),

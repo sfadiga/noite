@@ -3,6 +3,7 @@ add_library(noite-app STATIC
     src/App.h src/App.cpp
     src/AppOptions.h src/AppOptions.cpp
     src/platform/Hotkey.h src/platform/Hotkey.cpp
+    src/platform/HotkeyManager.h src/platform/HotkeyManager.cpp
     src/platform/NativeHost.h src/platform/NativeHost.cpp
     src/editor/MarkdownShortcuts.h src/editor/MarkdownShortcuts.cpp
     src/editor/NoteEdit.h src/editor/NoteEdit.cpp
@@ -36,6 +37,12 @@ add_library(noite-app STATIC
     src/jobs/BackupFolderDialog.h src/jobs/BackupFolderDialog.cpp
     src/jobs/BackupRunner.h src/jobs/BackupRunner.cpp
     src/jobs/JobScheduler.h src/jobs/JobScheduler.cpp
+    src/setup/SetupTexts.h src/setup/SetupTexts.cpp
+    src/setup/HotkeyField.h src/setup/HotkeyField.cpp
+    src/setup/BackupFolderField.h src/setup/BackupFolderField.cpp
+    src/setup/SettingsApplier.h src/setup/SettingsApplier.cpp
+    src/setup/SetupWizard.h src/setup/SetupWizard.cpp
+    src/setup/SettingsDialog.h src/setup/SettingsDialog.cpp
 )
 target_include_directories(noite-app PUBLIC src)
 target_link_libraries(noite-app PUBLIC noite-core Qt6::Widgets user32 wtsapi32 dbghelp)
@@ -53,6 +60,7 @@ qt_add_executable(app-tests
     tests/main.cpp
     tests/tst_smoke.cpp
     tests/tst_hotkey.cpp
+    tests/tst_hotkey_manager.cpp
     tests/tst_native_host.cpp
     tests/tst_editor.cpp tests/fake_attachments.h tests/widget_helpers.h
     tests/tst_paste.cpp
@@ -79,6 +87,12 @@ qt_add_executable(app-tests
     tests/tst_backup_folder_dialog.cpp
     tests/tst_backup_runner.cpp
     tests/tst_job_scheduler.cpp
+    tests/tst_setup_texts.cpp
+    tests/tst_hotkey_field.cpp tests/fake_hotkeys.h
+    tests/tst_backup_folder_field.cpp
+    tests/tst_settings_applier.cpp
+    tests/tst_setup_wizard.cpp
+    tests/tst_settings_dialog.cpp
     tests/tst_seed.cpp bench/Seed.h bench/Seed.cpp
 )
 # Reuses core's test registry and helpers.

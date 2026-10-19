@@ -25,6 +25,49 @@ private slots:
             QVERIFY2(!parseHotkey(bad), bad);
         QVERIFY(!parseHotkey(QString::fromUtf8("Ctrl+Alt+Ä")));
     }
+
+    void formatHotkeyIsCanonical()
+    {
+        QCOMPARE(formatHotkey(*parseHotkey("shift+alt+ctrl+j")), QString("Ctrl+Alt+Shift+J"));
+        QCOMPARE(formatHotkey(*parseHotkey("meta+Ctrl+f12")), QString("Ctrl+Win+F12"));
+        QCOMPARE(formatHotkey(*parseHotkey("alt+space")), QString("Alt+Space"));
+        for (const char* text : {"Ctrl+Alt+J", "Win+Shift+N", "Ctrl+7", "Alt+F1", "Ctrl+Alt+F24", "Ctrl+Space"})
+            QVERIFY(parseHotkey(formatHotkey(*parseHotkey(text))) == parseHotkey(text));
+    }
+
+    void comboFromKeyFormats()
+    {
+        QCOMPARE(comboFromKey(Qt::Key_J, Qt::ControlModifier | Qt::AltModifier), std::optional<QString>("Ctrl+Alt+J"));
+        QCOMPARE(comboFromKey(Qt::Key_F5, Qt::ControlModifier), std::optional<QString>("Ctrl+F5"));
+        QCOMPARE(comboFromKey(Qt::Key_F24, Qt::AltModifier), std::optional<QString>("Alt+F24"));
+        QCOMPARE(comboFromKey(Qt::Key_7, Qt::ControlModifier), std::optional<QString>("Ctrl+7"));
+        QCOMPARE(comboFromKey(Qt::Key_Space, Qt::AltModifier | Qt::ShiftModifier), std::optional<QString>("Alt+Shift+Space"));
+        QCOMPARE(comboFromKey(Qt::Key_J, Qt::ControlModifier | Qt::MetaModifier), std::optional<QString>("Ctrl+J"));
+        QVERIFY(!comboFromKey(Qt::Key_J, Qt::ShiftModifier));
+        QVERIFY(!comboFromKey(Qt::Key_J, Qt::NoModifier));
+        QVERIFY(!comboFromKey(Qt::Key_Escape, Qt::ControlModifier));
+        QVERIFY(!comboFromKey(Qt::Key_Control, Qt::ControlModifier));
+        QVERIFY(!comboFromKey(Qt::Key_J, Qt::MetaModifier));
+        for (const auto& [key, mods] : {std::pair{Qt::Key_A, Qt::ControlModifier}, std::pair{Qt::Key_F12, Qt::AltModifier},
+                                         std::pair{Qt::Key_Space, Qt::ControlModifier}}) {
+            const auto combo = comboFromKey(key, mods);
+            QVERIFY(combo && parseHotkey(*combo));
+        }
+    }
+
+    void comboFromNativeKeyIgnoresLayout()
+    {
+        const auto ctrlShift = Qt::ControlModifier | Qt::ShiftModifier;
+        QCOMPARE(comboFromNativeKey('7', ctrlShift), std::optional<QString>("Ctrl+Shift+7"));
+        QCOMPARE(comboFromNativeKey('K', Qt::ControlModifier | Qt::AltModifier), std::optional<QString>("Ctrl+Alt+K"));
+        QCOMPARE(comboFromNativeKey(VK_F5, Qt::ControlModifier), std::optional<QString>("Ctrl+F5"));
+        QCOMPARE(comboFromNativeKey(VK_F24, Qt::AltModifier), std::optional<QString>("Alt+F24"));
+        QCOMPARE(comboFromNativeKey(VK_SPACE, Qt::AltModifier | Qt::ShiftModifier), std::optional<QString>("Alt+Shift+Space"));
+        QVERIFY(!comboFromNativeKey('K', Qt::ShiftModifier));
+        QVERIFY(!comboFromNativeKey(VK_CONTROL, Qt::ControlModifier));
+        QVERIFY(!comboFromNativeKey(VK_ESCAPE, Qt::ControlModifier));
+        QVERIFY(!comboFromNativeKey(0, Qt::ControlModifier));
+    }
 };
 
 NOITE_TEST(HotkeyTest)

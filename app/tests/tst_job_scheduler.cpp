@@ -388,6 +388,31 @@ private slots:
         QCOMPARE(purged.size(), 1);
         QCOMPARE(s.state().lastPurgeDay, std::optional<QDate>(oct(15)));
     }
+
+    // While the setup wizard is open: checks are skipped, and releasing runs one.
+    void heldChecksRunOnceOnRelease()
+    {
+        Sched s;
+        QSignalSpy purged(s.scheduler.get(), &JobScheduler::purged);
+        s.scheduler->setHeld(true);
+        s.scheduler->check();
+        s.scheduler->check();
+        QCOMPARE(purged.size(), 0);
+        QCOMPARE(s.runner.jobs.size(), 0);
+        QCOMPARE(s.state().lastPurgeDay, std::optional<QDate>());
+
+        s.scheduler->setHeld(false);
+        QCOMPARE(purged.size(), 1);
+        QCOMPARE(s.runner.jobs.size(), 1);
+        s.runner.succeed();
+
+        // Nothing skipped this time: the release runs nothing.
+        s.at(oct(16));
+        s.scheduler->setHeld(true);
+        s.scheduler->setHeld(false);
+        QCOMPARE(purged.size(), 1);
+        QCOMPARE(s.runner.jobs.size(), 1);
+    }
 };
 
 NOITE_TEST(JobSchedulerTest)

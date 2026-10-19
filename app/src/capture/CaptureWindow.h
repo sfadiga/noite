@@ -1,5 +1,7 @@
 #pragma once
 
+#include <noite/model.h>
+
 #include <QWidget>
 
 class CaptureController;
@@ -18,6 +20,8 @@ public:
     CaptureWindow(CaptureController& controller, NoteEdit* editor);
 
     void summon();
+    // Like summon(), but opens the existing note `id` instead of a blank one.
+    void summonNote(const noite::ScratchId& id);
     NoteEdit* editor() const { return editor_; }
     QString footerText() const; // due date and colour
     NoteFooterBar* footerBar() const { return footer_; }
@@ -31,6 +35,7 @@ protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
+    void showAndFocus(); // centre on the foreground monitor (unless open), raise, focus
 
     CaptureController& controller_;
     NoteEdit* editor_;

@@ -176,21 +176,23 @@ Configurable day-start hour (default 06:00). The first time the PC is awake and 
 
 ## 7. Setup wizard (D24)
 
-Shown on first run. Every step except step 2 can be skipped.
+Shown on first run — and on any existing data folder whose `setupCompleted` is false, prefilled with its current settings (M6 S1). While the wizard is open, the morning review check and background job timers wait until it closes (M6 S6). Every step except step 2 has **Skip setup**, which finishes with the values shown and the accepted capture hotkey, without the starter note.
 
-1. **Welcome** — "Your notes live in this folder. Nothing leaves your PC."
-2. **Capture hotkey** — user presses the combination (default `Ctrl+Alt+J`; `Ctrl+Alt+N` and `Ctrl+Alt+Space` were already taken on the author's PC). Registered immediately; if another app holds it, flag the conflict and ask for another.
-3. **Board hotkey** — default `Ctrl+Alt+B`, same conflict check.
+1. **Welcome** — "Your notes live in this folder: `<data dir>`. Nothing leaves your PC." When `data\` sits inside a Google Drive, OneDrive or Dropbox folder, a warning explains that syncing a live database can corrupt it.
+2. **Capture hotkey** — user presses the combination (default `Ctrl+Alt+J`; `Ctrl+Alt+N` and `Ctrl+Alt+Space` were already taken on the author's PC). Probed as the user types; if another app holds it (or it matches the board hotkey), flag the conflict and ask for another. The wizard registers the capture hotkey when leaving step 2.
+3. **Board hotkey** — default `Ctrl+Alt+B`, same conflict check; registered when leaving step 3.
 4. **Trash recovery window** — default 30 days (1–365).
-5. **Day-start hour** — default 06:00.
-6. **Backup** — choose folder (suggest Google Drive for Desktop folder if found), frequency (daily), retention (14).
-7. **Start with Windows** — on by default.
-8. **Try it** — "Press your hotkey now"; the wizard finishes when the user does.
+5. **Mornings** — day-start hour (default 06:00) and stale resurfacing threshold ("Bring back untouched notes after *N* days", default 7, range 1–90; D33).
+6. **Backup** — choose folder (suggest Google Drive for Desktop folder if found), frequency (daily), retention (14). The folder may stay unset; "Back up now" asks later.
+7. **Start with Windows** — on by default (disabled on a `--data` run).
+8. **Try it** — "Press `<capture hotkey>` now"; pressing the capture hotkey finishes the wizard and opens the real capture window prefilled with a starter how-to note (using the user's chosen hotkeys and stale days; M6 S2). Clicking **Finish** finishes without the starter note.
+
+Closing the wizard with ✕ ("abandoned") applies what was collected so far, leaves `setupCompleted` false so the wizard returns at the next start, and registers the current capture hotkey if none was accepted yet (showing the tray warning if another program holds it).
 
 ## 8. Settings & tray (D25)
 
-- Every wizard setting is editable later in a Settings window; the wizard can be re-run from Settings.
-- Tray menu: New scratch · Open board · Morning review · Start with Windows (checkable) · Back up now (reads "Backing up…" and is disabled while a backup runs) · Quit; Settings joins it with the Settings window (M6). Left-click opens the board.
+- **Settings window:** one grouped page (**Hotkeys**, **Notes**, **Backup**, **System**), plus the sync-folder warning at the top when applicable (M6 S3). **Save** applies all changes live without a restart; **Cancel** discards them and restores any paused hotkeys. Hotkey changes are applied all-or-nothing before saving — a combination that cannot be registered is never saved, and the previous hotkeys stay in force (M6 S5). Backup shows the last-backup status (`today`, `yesterday`, `MMM d`, `never`, or `failing since MMM d`) and a **Back up now** button. System has **Start with Windows**, **Open logs folder** (D29) and **Run setup again**.
+- **Tray menu:** New note · Board · Morning review · Start with Windows (checkable) · Settings · Back up now (reads "Backing up…" and is disabled while a backup runs) · Quit. Left-click opens the board.
 
 ## 9. Testing & CI (D28)
 

@@ -50,6 +50,19 @@ private slots:
         QCOMPARE(w.count(Tab::All), 1);
     }
 
+    void summonNoteOpensExisting()
+    {
+        Window w;
+        const Scratch made = w.f->store->createScratch("hello");
+        w.window.summonNote(made.id);
+        QVERIFY(w.window.isVisible());
+        QCOMPARE(w.edit->toPlainText(), QString("hello"));
+        QTest::keyClicks(w.edit, " world");
+        QTest::keyClick(w.edit, Qt::Key_Escape);
+        QVERIFY(!w.window.isVisible());
+        QVERIFY(w.f->store->get(made.id).html.contains("hello world"));
+    }
+
     void ctrlEnterMarksDone()
     {
         Window w;
