@@ -284,10 +284,8 @@ void SetupWizard::reject()
     if (closed_)
         return;
     closed_ = true;
-    captureField_->cancelRecording();
+    captureField_->cancelRecording(); // a recording field resumes the hotkeys it paused
     boardField_->cancelRecording();
-    if (hotkeys_.isPaused())
-        hotkeys_.resume();
     const noite::Settings partial = collected();
     QWizard::reject();
     emit abandoned(partial);
@@ -304,10 +302,8 @@ void SetupWizard::finish(bool viaHotkey)
     if (closed_)
         return;
     closed_ = true;
-    captureField_->cancelRecording();
+    captureField_->cancelRecording(); // a recording field resumes the hotkeys it paused
     boardField_->cancelRecording();
-    if (hotkeys_.isPaused())
-        hotkeys_.resume();
     const noite::Settings result = collected();
     QWizard::done(QDialog::Accepted);
     emit finished(result, viaHotkey);

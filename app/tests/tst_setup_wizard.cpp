@@ -257,21 +257,172 @@ private slots:
         QVERIFY(!wizard.button(QWizard::NextButton)->isEnabled());
     }
 
+    void captureHotkeyIgnoredBeforeLastPage_data()
+    {
+        QTest::addColumn<int>("page");
+        for (int page = 1; page <= 7; ++page)
+            QTest::addRow("page %d", page) << page;
+    }
+
     void captureHotkeyIgnoredBeforeLastPage()
     {
+        QFETCH(int, page);
         FakeBackend backend;
         HotkeyManager manager(backend);
         SetupWizard wizard(Settings{}, manager, defaultContext());
         wizard.show();
 
         QSignalSpy finishedSpy(&wizard, &SetupWizard::finished);
-        advanceToPage(wizard, 3);
-        const int page3Id = wizard.currentId();
+        advanceToPage(wizard, page);
+        const int pageId = wizard.currentId();
+        QCOMPARE(pageId, page - 1);
 
         wizard.captureHotkeyPressed();
         QCOMPARE(finishedSpy.count(), 0);
-        QCOMPARE(wizard.currentId(), page3Id);
+        QCOMPARE(wizard.currentId(), pageId);
         QVERIFY(wizard.isVisible());
+    }
+
+    // A combination another program grabs after the field accepted it: Next stays on the page.
+    void nextFailsWhenComboTakenAfterAccept()
+    {
+        FakeBackend backend;
+        HotkeyManager manager(backend);
+        SetupWizard wizard(Settings{}, manager, defaultContext());
+        wizard.show();
+        QVERIFY(QTest::qWaitForWindowActive(&wizard));
+        wizard.next(); // page 2
+
+        auto* field = wizard.currentPage()->findChild<HotkeyField*>();
+        QVERIFY(field);
+        QTest::mouseClick(field, Qt::LeftButton);
+        QTest::keyClick(field, Qt::Key_K, kCtrlAlt);
+        QVERIFY(field->isAccepted());
+
+        backend.taken.insert("Ctrl+Alt+K");
+        wizard.next();
+        QCOMPARE(wizard.currentId(), int(SetupWizard::kCapturePage));
+        QCOMPARE(field->statusText(), QString("Ctrl+Alt+K is used by another program. Try another."));
+        QVERIFY(!field->isAccepted());
+        QVERIFY(!wizard.button(QWizard::NextButton)->isEnabled());
+        QVERIFY(!manager.isRegistered(kCap));
+    }
+
+    void leavingPage3RegistersBoard()
+    {
+        FakeBackend backend;
+        HotkeyManager manager(backend);
+        SetupWizard wizard(Settings{}, manager, defaultContext());
+        wizard.show();
+
+        advanceToPage(wizard, 3);
+        QVERIFY(!backend.registered.contains(kBrd));
+        wizard.next(); // leaves page 3
+        QCOMPARE(wizard.currentId(), int(SetupWizard::kTrashPage));
+        QVERIFY(backend.has(kBrd, "Ctrl+Alt+B"));
+        QCOMPARE(manager.combo(kBrd), QString("Ctrl+Alt+B"));
+    }
+
+    // Run setup again: both hotkeys are already registered when the wizard opens.
+    void changedCaptureKeepsTwoRegistrations()
+    {
+        FakeBackend backend;
+        HotkeyManager manager(backend);
+        QCOMPARE(manager.set(kCap, "Ctrl+Alt+J"), HotkeyStatus::Ok);
+        QCOMPARE(manager.set(kBrd, "Ctrl+Alt+B"), HotkeyStatus::Ok);
+        SetupWizard wizard(Settings{}, manager, defaultContext());
+        wizard.show();
+        QVERIFY(QTest::qWaitForWindowActive(&wizard));
+        wizard.next(); // page 2
+
+        auto* field = wizard.currentPage()->findChild<HotkeyField*>();
+        QVERIFY(field);
+        QTest::mouseClick(field, Qt::LeftButton);
+        QTest::keyClick(field, Qt::Key_K, kCtrlAlt);
+        QVERIFY(field->isAccepted());
+        wizard.next(); // page 3
+        QCOMPARE(backend.registered.size(), 2);
+        QVERIFY(backend.has(kCap, "Ctrl+Alt+K"));
+        QVERIFY(backend.has(kBrd, "Ctrl+Alt+B"));
+
+        wizard.back();
+        wizard.next();
+        QCOMPARE(backend.registered.size(), 2);
+        QVERIFY(backend.has(kCap, "Ctrl+Alt+K"));
+        QVERIFY(backend.has(kBrd, "Ctrl+Alt+B"));
+    }
+
+    // The 90bf833 fixes: leaving a page while a field records resumes the hotkeys.
+    void leavingWhileRecordingResumes_data()
+    {
+        QTest::addColumn<QString>("how");
+        QTest::newRow("skip") << "skip";
+        QTest::newRow("reject") << "reject";
+        QTest::newRow("back") << "back";
+        QTest::newRow("close") << "close";
+    }
+
+    void leavingWhileRecordingResumes()
+    {
+        QFETCH(QString, how);
+        FakeBackend backend;
+        HotkeyManager manager(backend);
+        SetupWizard wizard(Settings{}, manager, defaultContext());
+        wizard.show();
+        QVERIFY(QTest::qWaitForWindowActive(&wizard));
+        QSignalSpy finishedSpy(&wizard, &SetupWizard::finished);
+        QSignalSpy abandonedSpy(&wizard, &SetupWizard::abandoned);
+
+        advanceToPage(wizard, 3);
+        auto* field = wizard.currentPage()->findChild<HotkeyField*>();
+        QVERIFY(field);
+        QTest::mouseClick(field, Qt::LeftButton);
+        QVERIFY(field->isRecording());
+        QVERIFY(manager.isPaused());
+
+        if (how == "skip") {
+            wizard.skip();
+            QCOMPARE(finishedSpy.count(), 1);
+        } else if (how == "reject") {
+            wizard.reject();
+            QCOMPARE(abandonedSpy.count(), 1);
+        } else if (how == "back") {
+            wizard.back();
+            QCOMPARE(wizard.currentId(), int(SetupWizard::kCapturePage));
+        } else {
+            QVERIFY(wizard.close());
+            QCOMPARE(abandonedSpy.count(), 1);
+            QCOMPARE(finishedSpy.count(), 0);
+        }
+        QVERIFY(!field->isRecording());
+        QVERIFY(!manager.isPaused());
+        QVERIFY(backend.has(kCap, "Ctrl+Alt+J"));
+    }
+
+    // Closing relies on the fields ending their own recording: a pause the wizard doesn't own stays.
+    void closingLeavesAForeignPause_data()
+    {
+        QTest::addColumn<bool>("finish");
+        QTest::newRow("finish") << true;
+        QTest::newRow("reject") << false;
+    }
+
+    void closingLeavesAForeignPause()
+    {
+        QFETCH(bool, finish);
+        FakeBackend backend;
+        HotkeyManager manager(backend);
+        SetupWizard wizard(Settings{}, manager, defaultContext());
+        wizard.show();
+        advanceToPage(wizard, 8);
+
+        manager.pause();
+        if (finish)
+            wizard.button(QWizard::FinishButton)->click();
+        else
+            wizard.reject();
+        QVERIFY(!wizard.isVisible());
+        QVERIFY(manager.isPaused());
     }
 
     void captureHotkeyOnLastPageFinishes()
