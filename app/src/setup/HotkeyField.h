@@ -15,17 +15,25 @@ class HotkeyField : public QWidget {
     Q_OBJECT
 
 public:
+    // Recording while a combination is being pressed; otherwise what the combination shown
+    // (combo()) is: accepted, or rejected as invalid, taken or the other hotkey's. Empty: none yet.
+    enum class State { Empty, Accepted, Recording, Invalid, Taken, SameAsOther };
+
     HotkeyField(HotkeyManager& manager, int id, QWidget* parent = nullptr);
     ~HotkeyField() override;
 
     // Shown as accepted, no probe.
     void setCombo(const QString& combo);
-    // Marks the current combination as rejected and shows `message` beside it.
-    void showError(const QString& message);
+    // Marks the current combination as rejected for `why` (not Ok) and shows `message` beside it.
+    void showError(const QString& message, HotkeyStatus why = HotkeyStatus::Taken);
     QString combo() const { return combo_; }
-    bool isAccepted() const { return accepted_; }
+    State state() const { return recording_ ? State::Recording : state_; }
+    bool isAccepted() const { return state() == State::Accepted; }
     // The other hotkey's current combination, for SameAsOther.
     void setOther(const QString& combo);
+    // Settings: a recorded combination equal to the other one is kept, as SameAsOther, so the two
+    // can be swapped before Save. Otherwise (the wizard) it is refused and recording goes on.
+    void setKeepsSameAsOther(bool keep) { keepsSameAsOther_ = keep; }
     void cancelRecording();
 
     bool isRecording() const { return recording_; }
@@ -53,9 +61,9 @@ private:
     QLabel* status_;
     QString combo_;
     QString other_;
-    bool accepted_ = false;
+    State state_ = State::Empty; // kept while recording: what Esc brings back
     bool recording_ = false;
-    // What Esc brings back.
+    bool keepsSameAsOther_ = false;
+    // The status line Esc brings back.
     QString savedStatus_;
-    bool savedAccepted_ = false;
 };

@@ -297,13 +297,17 @@ void App::backUpNow()
         }
     } catch (const std::exception& error) {
         qWarning() << "backup folder setting:" << error.what();
-        const QString text = tr("Backup failed: %1").arg(QString::fromUtf8(error.what()));
-        if (tray_)
-            tray_->showMessage(QStringLiteral("noite"), text);
-        emit toastShown(QStringLiteral("noite"), text);
+        toast(tr("Backup failed: %1").arg(QString::fromUtf8(error.what())));
         return;
     }
     jobs_->backUpNow(); // a folder that is gone is reported by its failure toast
+}
+
+void App::toast(const QString& text)
+{
+    if (tray_)
+        tray_->showMessage(QStringLiteral("noite"), text);
+    emit toastShown(QStringLiteral("noite"), text);
 }
 
 void App::updateAutostart(bool enabled)
@@ -418,10 +422,16 @@ void App::showSettings()
     }
     if (!settingsDialog_) {
         const bool autostartManaged = autostart_ && !options_.dataFromCommandLine;
-        settingsDialog_ = new SettingsDialog(
-            *store_, *hotkeys_, *applier_,
-            SettingsContext{syncWarning_, autostartManaged, logsDir_, [this] { return askFolder_(); },
-                            [] { return QDate::currentDate(); }});
+        try {
+            settingsDialog_ = new SettingsDialog(
+                *store_, *hotkeys_, *applier_,
+                SettingsContext{syncWarning_, autostartManaged, logsDir_, [this] { return askFolder_(); },
+                                [] { return QDate::currentDate(); }});
+        } catch (const std::exception& error) {
+            qWarning() << "settings:" << error.what();
+            toast(tr("Settings could not be opened: %1").arg(QString::fromUtf8(error.what())));
+            return;
+        }
         settingsDialog_->setAttribute(Qt::WA_DeleteOnClose);
         connect(settingsDialog_, &QDialog::finished, this, [this] {
             if (settingsDialog_) {

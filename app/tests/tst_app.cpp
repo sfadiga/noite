@@ -82,6 +82,17 @@ void prepareOverdue(const QString& root, bool setupCompleted = true)
     store->saveSettings(settings);
 }
 
+// Runs `sql` on the data folder's database through a second connection.
+void execSql(const QString& root, const char* sql)
+{
+    sqlite3* db = nullptr;
+    QVERIFY(sqlite3_open((root + "/noite.db").toUtf8().constData(), &db) == SQLITE_OK);
+    sqlite3_busy_timeout(db, 5000);
+    const int rc = sqlite3_exec(db, sql, nullptr, nullptr, nullptr);
+    sqlite3_close(db);
+    QCOMPARE(rc, SQLITE_OK);
+}
+
 } // namespace
 
 class AppTest : public QObject {
@@ -588,6 +599,27 @@ private slots:
         app.showSettings();
         QVERIFY(!app.settingsDialog());
         QVERIFY(app.wizard() && app.wizard()->isVisible());
+    }
+
+    void settingsThatCannotOpenToast()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9");
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+        QSignalSpy toasts(&app, &App::toastShown);
+
+        execSql(root, "ALTER TABLE settings RENAME TO settings_gone");
+        QVERIFY_THROWS_NO_EXCEPTION(app.showSettings());
+        execSql(root, "ALTER TABLE settings_gone RENAME TO settings");
+
+        QVERIFY(!app.settingsDialog());
+        QCOMPARE(toasts.count(), 1);
+        QVERIFY2(toasts[0][1].toString().startsWith("Settings could not be opened: "),
+                 qPrintable(toasts[0][1].toString()));
+        QVERIFY(toasts[0][1].toString().contains("no such table"));
     }
 
     void runSetupAgainOpensWizard()

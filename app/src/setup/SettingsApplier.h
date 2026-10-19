@@ -1,5 +1,7 @@
 #pragma once
 
+#include "platform/HotkeyManager.h"
+
 #include <noite/settings.h>
 
 #include <QString>
@@ -10,11 +12,11 @@
 namespace noite {
 class Store;
 }
-class HotkeyManager;
 
 struct ApplyError {
     QString message;
-    int hotkeyId = 0; // the hotkey to blame; 0 when the error is not about a hotkey
+    int hotkeyId = 0;                       // the hotkey to blame; 0 when the error is not about a hotkey
+    HotkeyStatus status = HotkeyStatus::Ok; // why that hotkey failed
 };
 
 // The one place a new Settings becomes real: hotkeys, the stored settings, autostart and the

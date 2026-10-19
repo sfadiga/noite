@@ -92,6 +92,45 @@ private slots:
         QCOMPARE(rig.field->statusText(), QString("That's already the new-note hotkey."));
     }
 
+    void stateFollowsTheField()
+    {
+        using State = HotkeyField::State;
+        Rig rig;
+        QVERIFY(rig.field->state() == State::Empty);
+        rig.field->setCombo("Ctrl+Alt+J");
+        QVERIFY(rig.field->state() == State::Accepted);
+        QTest::mouseClick(rig.field, Qt::LeftButton);
+        QVERIFY(rig.field->state() == State::Recording);
+        QTest::keyClick(rig.field, Qt::Key_Escape);
+        QVERIFY(rig.field->state() == State::Accepted);
+
+        rig.field->showError("taken");
+        QVERIFY(rig.field->state() == State::Taken);
+        rig.field->showError("invalid", HotkeyStatus::Invalid);
+        QVERIFY(rig.field->state() == State::Invalid);
+        rig.field->showError("same", HotkeyStatus::SameAsOther);
+        QVERIFY(rig.field->state() == State::SameAsOther);
+        QCOMPARE(rig.field->combo(), QString("Ctrl+Alt+J"));
+        QVERIFY(!rig.field->isAccepted());
+    }
+
+    // Settings keeps a duplicate so the two hotkeys can be swapped before Save.
+    void keepsSameAsOtherWhenAsked()
+    {
+        Rig rig(kCap);
+        rig.field->setKeepsSameAsOther(true);
+        rig.field->setOther("Ctrl+Alt+B");
+        QSignalSpy changed(rig.field, &HotkeyField::changed);
+        QTest::mouseClick(rig.field, Qt::LeftButton);
+        QTest::keyClick(rig.field, Qt::Key_B, kCtrlAlt);
+        QVERIFY(rig.field->state() == HotkeyField::State::SameAsOther);
+        QCOMPARE(rig.field->combo(), QString("Ctrl+Alt+B"));
+        QCOMPARE(rig.field->statusText(), QString("That's already the board hotkey."));
+        QVERIFY(!rig.field->isRecording());
+        QVERIFY(!rig.manager.isPaused());
+        QCOMPARE(changed.count(), 1);
+    }
+
     void modifierAloneKeepsWaiting()
     {
         Rig rig;

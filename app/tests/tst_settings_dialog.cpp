@@ -11,12 +11,16 @@
 #include <noite/store.h>
 
 #include <QCheckBox>
+#include <QDir>
 #include <QLabel>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QSignalSpy>
 #include <QSpinBox>
 #include <QTest>
 #include <QTimeEdit>
+
+#include <sqlite3.h>
 
 using namespace noite;
 
@@ -63,6 +67,29 @@ QPushButton* findButton(QWidget& root, const QString& text)
     }
     return nullptr;
 }
+
+QLabel* findLabelStartingWith(QWidget& root, const QString& prefix)
+{
+    for (auto* label : root.findChildren<QLabel*>()) {
+        if (label->text().startsWith(prefix))
+            return label;
+    }
+    return nullptr;
+}
+
+// Runs `sql` on the fixture's database through a second connection (to make the store fail).
+void execSql(const test::Fixture& f, const char* sql)
+{
+    sqlite3* db = nullptr;
+    QVERIFY(sqlite3_open((f.root() + "/noite.db").toUtf8().constData(), &db) == SQLITE_OK);
+    sqlite3_busy_timeout(db, 5000);
+    const int rc = sqlite3_exec(db, sql, nullptr, nullptr, nullptr);
+    sqlite3_close(db);
+    QCOMPARE(rc, SQLITE_OK);
+}
+
+using State = HotkeyField::State;
+constexpr auto kCtrlAlt = Qt::ControlModifier | Qt::AltModifier;
 
 } // namespace
 
@@ -248,20 +275,27 @@ private slots:
         dialog.show();
         QVERIFY(QTest::qWaitForWindowActive(&dialog));
 
-        constexpr auto kCtrlAlt = Qt::ControlModifier | Qt::AltModifier;
         // Record the board's current shortcut into the capture field first.
         QTest::mouseClick(dialog.captureField(), Qt::LeftButton);
         QTest::keyClick(dialog.captureField(), Qt::Key_B, kCtrlAlt);
         QCOMPARE(dialog.captureField()->combo(), QString("Ctrl+Alt+B"));
         QCOMPARE(dialog.captureField()->statusText(), QString("That's already the board hotkey."));
+        QVERIFY(dialog.captureField()->state() == State::SameAsOther);
         QVERIFY(!dialog.captureField()->isAccepted());
 
-        // Now record the old capture shortcut into the board field to complete the swap.
+        // Recording into the board without a new combination: still the same pair.
+        QTest::mouseClick(dialog.boardField(), Qt::LeftButton);
+        QTest::keyClick(dialog.boardField(), Qt::Key_Escape);
+        QVERIFY(dialog.boardField()->state() == State::Accepted);
+        QVERIFY(dialog.captureField()->state() == State::SameAsOther);
+
+        // Now record the old capture shortcut into the board field to complete the swap. The
+        // capture field is accepted without a probe (the manager still holds Ctrl+Alt+B).
         QTest::mouseClick(dialog.boardField(), Qt::LeftButton);
         QTest::keyClick(dialog.boardField(), Qt::Key_J, kCtrlAlt);
         QCOMPARE(dialog.boardField()->combo(), QString("Ctrl+Alt+J"));
-        QVERIFY(dialog.boardField()->isAccepted());
-        QVERIFY(dialog.captureField()->isAccepted());
+        QVERIFY(dialog.boardField()->state() == State::Accepted);
+        QVERIFY(dialog.captureField()->state() == State::Accepted);
         QCOMPARE(dialog.captureField()->statusText(), QString("✓ Ctrl+Alt+B"));
 
         dialog.save();
@@ -271,6 +305,166 @@ private slots:
         QCOMPARE(r.f->store->settings().boardHotkey, before.captureHotkey);
         QCOMPARE(r.manager.combo(kCap), before.boardHotkey);
         QCOMPARE(r.manager.combo(kBrd), before.captureHotkey);
+    }
+
+    // The fields know each other's combination: the second one recorded is the duplicate.
+    void sameComboInBothFieldsBlocksSave()
+    {
+        Rig r;
+        const Settings before = r.f->store->settings();
+        SettingsDialog dialog(*r.f->store, r.manager, r.applier, r.context());
+        dialog.show();
+        QVERIFY(QTest::qWaitForWindowActive(&dialog));
+
+        QTest::mouseClick(dialog.captureField(), Qt::LeftButton);
+        QTest::keyClick(dialog.captureField(), Qt::Key_L, kCtrlAlt);
+        QVERIFY(dialog.captureField()->state() == State::Accepted);
+        QTest::mouseClick(dialog.boardField(), Qt::LeftButton);
+        QTest::keyClick(dialog.boardField(), Qt::Key_L, kCtrlAlt);
+        QVERIFY(dialog.boardField()->state() == State::SameAsOther);
+        QCOMPARE(dialog.boardField()->statusText(), QString("That's already the new-note hotkey."));
+
+        dialog.save();
+
+        QVERIFY(dialog.isVisible());
+        QVERIFY(dialog.result() != int(QDialog::Accepted));
+        QVERIFY(dialog.boardField()->state() == State::SameAsOther);
+        QCOMPARE(dialog.boardField()->statusText(), QString("That's already the new-note hotkey."));
+        QVERIFY(dialog.captureField()->state() == State::Accepted);
+        QVERIFY(dialog.errorText().isEmpty());
+        QCOMPARE(r.f->store->settings(), before);
+        QCOMPARE(r.manager.combo(kCap), before.captureHotkey);
+        QCOMPARE(r.manager.combo(kBrd), before.boardHotkey);
+        QCOMPARE(r.backend.registered.size(), 2);
+        QVERIFY(r.backend.has(kCap, before.captureHotkey));
+        QVERIFY(r.backend.has(kBrd, before.boardHotkey));
+    }
+
+    void swapStepThenCancelChangesNothing()
+    {
+        Rig r;
+        const Settings before = r.f->store->settings();
+        SettingsDialog dialog(*r.f->store, r.manager, r.applier, r.context());
+        dialog.show();
+        QVERIFY(QTest::qWaitForWindowActive(&dialog));
+
+        QTest::mouseClick(dialog.captureField(), Qt::LeftButton);
+        QTest::keyClick(dialog.captureField(), Qt::Key_B, kCtrlAlt);
+        QVERIFY(dialog.captureField()->state() == State::SameAsOther);
+        findButton(dialog, "Cancel")->click();
+
+        QCOMPARE(dialog.result(), int(QDialog::Rejected));
+        QCOMPARE(r.f->store->settings(), before);
+        QVERIFY(!r.manager.isPaused());
+        QCOMPARE(r.manager.combo(kCap), before.captureHotkey);
+        QCOMPARE(r.manager.combo(kBrd), before.boardHotkey);
+        QCOMPARE(r.backend.registered.size(), 2);
+        QVERIFY(r.backend.has(kCap, before.captureHotkey));
+        QVERIFY(r.backend.has(kBrd, before.boardHotkey));
+    }
+
+    void captureTakenOnSaveShowsOnCaptureField()
+    {
+        Rig r;
+        const Settings before = r.f->store->settings();
+        SettingsDialog dialog(*r.f->store, r.manager, r.applier, r.context());
+        dialog.show();
+
+        dialog.captureField()->setCombo("Ctrl+Alt+K");
+        r.backend.taken.insert("Ctrl+Alt+K");
+        dialog.save();
+
+        QVERIFY(dialog.isVisible());
+        QVERIFY(dialog.captureField()->state() == State::Taken);
+        QCOMPARE(dialog.captureField()->statusText(), QString("Ctrl+Alt+K is used by another program. Try another."));
+        QVERIFY(dialog.boardField()->state() == State::Accepted);
+        QVERIFY(dialog.errorText().isEmpty());
+        QCOMPARE(r.f->store->settings(), before);
+        QVERIFY(r.backend.has(kCap, before.captureHotkey));
+    }
+
+    void storeFailureOnSaveShowsError()
+    {
+        Rig r;
+        const Settings before = r.f->store->settings();
+        SettingsDialog dialog(*r.f->store, r.manager, r.applier, r.context());
+        dialog.show();
+
+        dialog.trashDaysSpin()->setValue(50);
+        execSql(*r.f, "CREATE TRIGGER no_save BEFORE INSERT ON settings WHEN NEW.key = 'settings' "
+                      "BEGIN SELECT RAISE(ABORT, 'disk full'); END");
+        dialog.save();
+
+        QVERIFY(dialog.isVisible());
+        QVERIFY(dialog.result() != int(QDialog::Accepted));
+        QVERIFY2(dialog.errorText().contains("disk full"), qPrintable(dialog.errorText()));
+        QCOMPARE(r.f->store->settings(), before);
+        QVERIFY(r.backend.has(kCap, before.captureHotkey));
+        QVERIFY(r.backend.has(kBrd, before.boardHotkey));
+    }
+
+    // A store that can't even be read: Save reports it instead of throwing out of the slot.
+    void unreadableStoreOnSaveShowsError()
+    {
+        Rig r;
+        SettingsDialog dialog(*r.f->store, r.manager, r.applier, r.context());
+        dialog.show();
+
+        execSql(*r.f, "ALTER TABLE settings RENAME TO settings_gone");
+        QVERIFY_THROWS_NO_EXCEPTION(dialog.save());
+        execSql(*r.f, "ALTER TABLE settings_gone RENAME TO settings");
+
+        QVERIFY(dialog.isVisible());
+        QVERIFY2(dialog.errorText().contains("no such table"), qPrintable(dialog.errorText()));
+    }
+
+    void lastBackupNeverWhenJobStateFails()
+    {
+        Rig r;
+        JobState js;
+        js.lastBackupDay = QDate(2026, 10, 18);
+        r.f->store->saveJobState(js);
+        SettingsDialog dialog(*r.f->store, r.manager, r.applier, r.context());
+        dialog.show();
+        QVERIFY(findLabelStartingWith(dialog, "Last backup: today"));
+
+        execSql(*r.f, "ALTER TABLE settings RENAME TO settings_gone");
+        QTest::ignoreMessage(QtWarningMsg, QRegularExpression("^settings: last backup: .*no such table"));
+        QVERIFY_THROWS_NO_EXCEPTION(dialog.refreshLastBackup());
+        execSql(*r.f, "ALTER TABLE settings_gone RENAME TO settings");
+
+        QLabel* label = findLabelStartingWith(dialog, "Last backup: ");
+        QVERIFY(label);
+        QCOMPARE(label->text(), QString("Last backup: never"));
+    }
+
+    void openLogsFolderCreatesItAndReportsFailure()
+    {
+        Rig r;
+        SettingsContext ctx = r.context();
+        ctx.logsDir = r.f->root() + "/missing/logs";
+        QList<QUrl> opened;
+        bool opens = false;
+        ctx.openUrl = [&](const QUrl& url) {
+            opened.append(url);
+            return opens;
+        };
+        SettingsDialog dialog(*r.f->store, r.manager, r.applier, ctx);
+        dialog.show();
+        QPushButton* btn = findButton(dialog, "Open logs folder");
+        QVERIFY(btn);
+
+        btn->click();
+        QVERIFY(QDir(ctx.logsDir).exists());
+        QCOMPARE(opened, QList<QUrl>{QUrl::fromLocalFile(ctx.logsDir)});
+        QCOMPARE(dialog.errorText(),
+                 QString("The logs folder could not be opened: %1").arg(QDir::toNativeSeparators(ctx.logsDir)));
+
+        opens = true;
+        btn->click();
+        QCOMPARE(opened.size(), 2);
+        QVERIFY(dialog.errorText().isEmpty());
+        QVERIFY(dialog.isVisible());
     }
 };
 

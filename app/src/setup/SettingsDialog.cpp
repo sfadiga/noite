@@ -8,7 +8,9 @@
 #include <noite/store.h>
 
 #include <QCheckBox>
+#include <QDebug>
 #include <QDesktopServices>
+#include <QDir>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -43,28 +45,24 @@ SettingsDialog::SettingsDialog(noite::Store& store, HotkeyManager& hotkeys, Sett
     auto* hotkeysLayout = new QFormLayout(hotkeysGroup);
     captureField_ = new HotkeyField(hotkeys_, HotkeyManager::kCaptureId);
     boardField_ = new HotkeyField(hotkeys_, HotkeyManager::kBoardId);
+    for (HotkeyField* field : {captureField_, boardField_})
+        field->setKeepsSameAsOther(true);
     captureField_->setCombo(initial.captureHotkey);
     boardField_->setCombo(initial.boardHotkey);
-    const auto checkDuplicate = [](HotkeyField* editedField, HotkeyField* otherField, int otherId, int editedId) {
-        if (editedField->isRecording())
-            return;
-        const auto a = parseHotkey(editedField->combo());
-        const auto b = parseHotkey(otherField->combo());
-        if (a && b && *a == *b) {
-            if (editedField->isAccepted())
-                editedField->showError(hotkeyMessage(HotkeyStatus::SameAsOther, editedField->combo(), otherId));
-        } else if (!otherField->isRecording() && !otherField->isAccepted()
-                   && otherField->statusText()
-                          == hotkeyMessage(HotkeyStatus::SameAsOther, otherField->combo(), editedId)) {
-            otherField->setCombo(otherField->combo());
+    captureField_->setOther(initial.boardHotkey);
+    boardField_->setOther(initial.captureHotkey);
+    // `edited` changed: `other` learns its combination. If `other` only clashed with it and no
+    // longer does, it is accepted again without a probe (the manager may hold it, as in a swap);
+    // Save does the real check.
+    const auto sync = [](HotkeyField* edited, HotkeyField* other) {
+        other->setOther(edited->combo());
+        if (other->state() == HotkeyField::State::SameAsOther
+            && parseHotkey(other->combo()) != parseHotkey(edited->combo())) {
+            other->setCombo(other->combo());
         }
     };
-    connect(captureField_, &HotkeyField::changed, this, [this, checkDuplicate] {
-        checkDuplicate(captureField_, boardField_, HotkeyManager::kBoardId, HotkeyManager::kCaptureId);
-    });
-    connect(boardField_, &HotkeyField::changed, this, [this, checkDuplicate] {
-        checkDuplicate(boardField_, captureField_, HotkeyManager::kCaptureId, HotkeyManager::kBoardId);
-    });
+    connect(captureField_, &HotkeyField::changed, this, [this, sync] { sync(captureField_, boardField_); });
+    connect(boardField_, &HotkeyField::changed, this, [this, sync] { sync(boardField_, captureField_); });
     hotkeysLayout->addRow(tr("New note"), captureField_);
     hotkeysLayout->addRow(tr("Board"), boardField_);
     mainLayout->addWidget(hotkeysGroup);
@@ -120,7 +118,13 @@ SettingsDialog::SettingsDialog(noite::Store& store, HotkeyManager& hotkeys, Sett
     auto* openLogsBtn = new QPushButton(tr("Open logs folder"));
     auto* runSetupBtn = new QPushButton(tr("Run setup again"));
     connect(openLogsBtn, &QPushButton::clicked, this, [this] {
-        QDesktopServices::openUrl(QUrl::fromLocalFile(context_.logsDir));
+        errorLabel_->clear();
+        errorLabel_->hide();
+        QDir().mkpath(context_.logsDir); // Explorer has nothing to open before the first log
+        const QUrl url = QUrl::fromLocalFile(context_.logsDir);
+        const bool opened = context_.openUrl ? context_.openUrl(url) : QDesktopServices::openUrl(url);
+        if (!opened)
+            showMessage(tr("The logs folder could not be opened: %1").arg(QDir::toNativeSeparators(context_.logsDir)));
     });
     connect(runSetupBtn, &QPushButton::clicked, this, [this] {
         reject();
@@ -152,7 +156,13 @@ SettingsDialog::SettingsDialog(noite::Store& store, HotkeyManager& hotkeys, Sett
 void SettingsDialog::refreshLastBackup()
 {
     const QDate today = context_.today ? context_.today() : QDate::currentDate();
-    lastBackupLabel_->setText(tr("Last backup: %1").arg(lastBackupText(store_.jobState(), today)));
+    noite::JobState job;
+    try {
+        job = store_.jobState();
+    } catch (const std::exception& error) {
+        qWarning() << "settings: last backup:" << error.what(); // shown as never
+    }
+    lastBackupLabel_->setText(tr("Last backup: %1").arg(lastBackupText(job, today)));
 }
 
 noite::Settings SettingsDialog::edited() const
@@ -176,26 +186,39 @@ QString SettingsDialog::errorText() const
     return errorLabel_->text();
 }
 
+void SettingsDialog::showMessage(const QString& message)
+{
+    errorLabel_->setText(message);
+    errorLabel_->show();
+}
+
 void SettingsDialog::save()
 {
-    captureField_->cancelRecording();
+    captureField_->cancelRecording(); // a recording field resumes the hotkeys it paused
     boardField_->cancelRecording();
-    if (hotkeys_.isPaused())
-        hotkeys_.resume();
 
     errorLabel_->clear();
     errorLabel_->hide();
 
-    const std::optional<ApplyError> error = applier_.apply(edited());
+    // The field holding the other's combination already says so; nothing is applied until they differ.
+    for (const HotkeyField* field : {captureField_, boardField_}) {
+        if (field->state() == HotkeyField::State::SameAsOther)
+            return;
+    }
+
+    std::optional<ApplyError> error;
+    try {
+        error = applier_.apply(edited());
+    } catch (const std::exception& failure) {
+        error = ApplyError{QString::fromUtf8(failure.what())};
+    }
     if (error) {
-        if (error->hotkeyId == HotkeyManager::kCaptureId) {
-            captureField_->showError(error->message);
-        } else if (error->hotkeyId == HotkeyManager::kBoardId) {
-            boardField_->showError(error->message);
-        } else {
-            errorLabel_->setText(error->message);
-            errorLabel_->show();
-        }
+        if (error->hotkeyId == HotkeyManager::kCaptureId)
+            captureField_->showError(error->message, error->status);
+        else if (error->hotkeyId == HotkeyManager::kBoardId)
+            boardField_->showError(error->message, error->status);
+        else
+            showMessage(error->message);
         return;
     }
     accept();
@@ -203,9 +226,7 @@ void SettingsDialog::save()
 
 void SettingsDialog::reject()
 {
-    captureField_->cancelRecording();
+    captureField_->cancelRecording(); // a recording field resumes the hotkeys it paused
     boardField_->cancelRecording();
-    if (hotkeys_.isPaused())
-        hotkeys_.resume();
     QDialog::reject();
 }

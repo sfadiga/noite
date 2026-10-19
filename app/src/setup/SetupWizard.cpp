@@ -50,7 +50,7 @@ public:
         if (status == HotkeyStatus::Ok)
             field_->setCombo(current);
         else
-            field_->showError(hotkeyMessage(status, current, otherId()));
+            field_->showError(hotkeyMessage(status, current, otherId()), status);
         emit completeChanged();
     }
 
@@ -69,7 +69,7 @@ public:
         const HotkeyStatus status = hotkeys_.set(id_, field_->combo());
         if (status == HotkeyStatus::Ok)
             return true;
-        field_->showError(hotkeyMessage(status, field_->combo(), otherId()));
+        field_->showError(hotkeyMessage(status, field_->combo(), otherId()), status);
         emit completeChanged();
         return false;
     }
@@ -263,7 +263,7 @@ void SetupWizard::skip()
         || parseHotkey(hotkeys_.combo(HotkeyManager::kCaptureId)) != parseHotkey(captureField_->combo())) {
         const HotkeyStatus status = hotkeys_.set(HotkeyManager::kCaptureId, captureField_->combo());
         if (status != HotkeyStatus::Ok) {
-            captureField_->showError(hotkeyMessage(status, captureField_->combo(), HotkeyManager::kBoardId));
+            captureField_->showError(hotkeyMessage(status, captureField_->combo(), HotkeyManager::kBoardId), status);
             while (currentId() < kCapturePage)
                 next();
             while (currentId() > kCapturePage)

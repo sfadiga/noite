@@ -47,15 +47,25 @@ void HotkeyField::setCombo(const QString& combo)
 {
     endRecording(false);
     combo_ = combo;
-    accepted_ = !combo.isEmpty();
-    display(combo, accepted_ ? hotkeyMessage(HotkeyStatus::Ok, combo, otherId()) : QString());
+    state_ = combo.isEmpty() ? State::Empty : State::Accepted;
+    display(combo, isAccepted() ? hotkeyMessage(HotkeyStatus::Ok, combo, otherId()) : QString());
 }
 
-void HotkeyField::showError(const QString& message)
+void HotkeyField::showError(const QString& message, HotkeyStatus why)
 {
+    const bool wasAccepted = isAccepted();
     endRecording(false);
-    const bool wasAccepted = accepted_;
-    accepted_ = false;
+    switch (why) {
+    case HotkeyStatus::Invalid:
+        state_ = State::Invalid;
+        break;
+    case HotkeyStatus::SameAsOther:
+        state_ = State::SameAsOther;
+        break;
+    default:
+        state_ = State::Taken;
+        break;
+    }
     display(combo_, message);
     if (wasAccepted)
         emit changed();
@@ -76,12 +86,10 @@ void HotkeyField::startRecording()
     if (recording_)
         return;
     recording_ = true;
-    savedAccepted_ = accepted_;
     savedStatus_ = status_->text();
-    accepted_ = false;
     manager_.pause();
     display(tr("Press the shortcut…"), QString());
-    if (savedAccepted_)
+    if (state_ == State::Accepted)
         emit changed();
 }
 
@@ -94,10 +102,8 @@ void HotkeyField::endRecording(bool restore)
     recording_ = false;
     manager_.resume();
     if (restore) {
-        const bool wasAccepted = accepted_;
-        accepted_ = savedAccepted_;
         display(combo_, savedStatus_);
-        if (accepted_ != wasAccepted)
+        if (state_ == State::Accepted)
             emit changed();
     }
 }
@@ -189,10 +195,11 @@ void HotkeyField::keyPressEvent(QKeyEvent* event)
         status = manager_.probe(*combo);
 
     status_->setText(hotkeyMessage(status, *combo, otherId()));
-    if (status != HotkeyStatus::Ok)
+    const bool keep = status == HotkeyStatus::SameAsOther && keepsSameAsOther_;
+    if (status != HotkeyStatus::Ok && !keep)
         return;
     combo_ = *combo;
-    accepted_ = true;
+    state_ = keep ? State::SameAsOther : State::Accepted;
     box_->setText(combo_);
     endRecording(false);
     emit changed();

@@ -94,6 +94,8 @@ signals:
 
 private:
     void createTray();
+    // A "noite" message in the tray, and toastShown.
+    void toast(const QString& text);
     void updateAutostart(bool enabled);
     void startJobs();
     void finishPendingSetup();

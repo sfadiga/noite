@@ -40,7 +40,7 @@ std::optional<ApplyError> SettingsApplier::apply(const noite::Settings& next)
             const bool capture = outcome.failedId == HotkeyManager::kCaptureId;
             const int otherId = capture ? HotkeyManager::kBoardId : HotkeyManager::kCaptureId;
             return ApplyError{hotkeyMessage(outcome.status, capture ? next.captureHotkey : next.boardHotkey, otherId),
-                              outcome.failedId};
+                              outcome.failedId, outcome.status};
         }
     }
 
