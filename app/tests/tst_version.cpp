@@ -4,6 +4,9 @@
 
 #include "App.h"
 #include "AppOptions.h"
+#include "VersionText.h"
+#include "board/BoardWindow.h"
+#include "editor/AttachmentStore.h"
 #include "setup/SettingsDialog.h"
 
 #include <noite/store.h>
@@ -12,6 +15,7 @@
 #include <QCoreApplication>
 #include <QFile>
 #include <QLabel>
+#include <QLineEdit>
 #include <QRegularExpression>
 #include <QTest>
 
@@ -46,6 +50,40 @@ private slots:
         applyAppIdentity();
         QCOMPARE(QCoreApplication::applicationName(), QString("noite"));
         QCOMPARE(QCoreApplication::applicationVersion(), QString(NOITE_VERSION));
+    }
+
+    void boardVersionTextForms()
+    {
+        QCOMPARE(boardVersionText("1.0.0"), QString("v1.0.0"));
+        QCOMPARE(boardVersionText("1.0.0-dev+abc1234.dirty"), QString("v1.0.0-dev"));
+        QCOMPARE(boardVersionText("1.0.0-dev"), QString("v1.0.0-dev"));
+    }
+
+    void boardShowsVersionLabel()
+    {
+        auto f = test::fixture();
+        StoreAttachments attachments{*f->store};
+        BoardWindow board(*f->store, attachments, [] { return test::today(); });
+        QLabel* label = board.versionLabel();
+        QVERIFY(label);
+        QCOMPARE(label->text(), boardVersionText(NOITE_VERSION));
+        QCOMPARE(label->toolTip(), versionToolTip());
+        QVERIFY(label->toolTip().contains(QString::fromUtf8("\xC2\xB7")));
+        QCOMPARE(label->focusPolicy(), Qt::NoFocus);
+        board.show();
+        QVERIFY(label->mapTo(&board, QPoint()).x() > board.searchField()->mapTo(&board, QPoint()).x());
+    }
+
+    void boardLabelAtMinimumWidth()
+    {
+        auto f = test::fixture();
+        StoreAttachments attachments{*f->store};
+        BoardWindow board(*f->store, attachments, [] { return test::today(); });
+        board.show();
+        board.resize(board.minimumSizeHint().width(), board.height());
+        QCoreApplication::processEvents();
+        QVERIFY(board.searchField()->width() >= 260);
+        QVERIFY(board.versionLabel()->isVisible());
     }
 
     void appShowsVersion()

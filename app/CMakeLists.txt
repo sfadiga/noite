@@ -27,6 +27,7 @@ add_library(noite-app STATIC
     src/board/FlowLayout.h src/board/FlowLayout.cpp
     src/board/ChipBar.h src/board/ChipBar.cpp
     src/Theme.h src/Theme.cpp
+    src/VersionText.h src/VersionText.cpp
     src/DragMover.h src/DragMover.cpp
     src/radar/ReviewScheduler.h src/radar/ReviewScheduler.cpp
     src/radar/ReviewWindow.h src/radar/ReviewWindow.cpp

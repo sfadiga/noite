@@ -85,6 +85,7 @@ public:
     BoardModel& model() const { return *model_; }
     QListView* grid() const { return grid_; }
     QLineEdit* searchField() const { return search_; }
+    QLabel* versionLabel() const { return version_; }
     TabStrip* tabStrip() const { return tabs_; }
     ChipBar* chipBar() const { return chips_; }
     QString statusText() const;
@@ -127,6 +128,7 @@ private:
     TabStrip* tabs_;
     ChipBar* chips_;
     QLineEdit* search_;
+    QLabel* version_;
     QListView* grid_;
     QLabel* empty_;
     QLabel* status_;
