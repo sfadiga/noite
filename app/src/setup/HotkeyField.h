@@ -20,6 +20,8 @@ public:
 
     // Shown as accepted, no probe.
     void setCombo(const QString& combo);
+    // Marks the current combination as rejected and shows `message` beside it.
+    void showError(const QString& message);
     QString combo() const { return combo_; }
     bool isAccepted() const { return accepted_; }
     // The other hotkey's current combination, for SameAsOther.

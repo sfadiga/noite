@@ -45,9 +45,17 @@ QString HotkeyField::statusText() const
 
 void HotkeyField::setCombo(const QString& combo)
 {
+    endRecording(false);
     combo_ = combo;
     accepted_ = !combo.isEmpty();
     display(combo, accepted_ ? hotkeyMessage(HotkeyStatus::Ok, combo, otherId()) : QString());
+}
+
+void HotkeyField::showError(const QString& message)
+{
+    endRecording(false);
+    accepted_ = false;
+    display(combo_, message);
 }
 
 void HotkeyField::setOther(const QString& combo)
@@ -91,7 +99,16 @@ void HotkeyField::mousePressEvent(QMouseEvent* event)
 void HotkeyField::focusInEvent(QFocusEvent* event)
 {
     QWidget::focusInEvent(event);
-    startRecording();
+    switch (event->reason()) {
+    case Qt::MouseFocusReason:
+    case Qt::TabFocusReason:
+    case Qt::BacktabFocusReason:
+    case Qt::ShortcutFocusReason:
+        startRecording();
+        break;
+    default:
+        break;
+    }
 }
 
 void HotkeyField::focusOutEvent(QFocusEvent* event)
