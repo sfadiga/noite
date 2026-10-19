@@ -4,6 +4,10 @@ A note-taking app for busy people who get things done. Press a hotkey, write, an
 
 > **Status: v1 features are built (M1–M6); 1.0.0 is the first release, shipped as a single `noite.exe` (M7).** *noite* is a working name.
 
+<img width="1002" height="732" alt="image" src="https://github.com/user-attachments/assets/8369d8ed-901c-44e8-a341-837aec25f573" />
+
+<img width="1002" height="732" alt="image" src="https://github.com/user-attachments/assets/eadfb360-36ce-4958-9bca-cccd3480384c" />
+
 ## What it does (v1)
 
 - **Instant capture:** a global hotkey (default `Ctrl+Alt+J`) opens a blank scratch note immediately. About 7 ms warm and up to 100 ms on the first press after a long idle; M7b targets the idle case. It saves as you type; `Esc` hides it.
