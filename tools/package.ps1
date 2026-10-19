@@ -1,0 +1,224 @@
+# Packages dist\noite into the release assets: dist\noite-<v>-win64.zip, dist\noite-<v>-win64-pdb.zip and
+# dist\SHA256SUMS.txt (checksums of the two zips).
+#   package.ps1 -Version 0.1.0   release: the exe's ProductVersion must equal -Version
+#   package.ps1 -DryRun          same staging and checks, version read from the exe, output in dist\dry-run\
+#   package.ps1 -SelfTest        runs the script's own checks on a synthetic dist in %TEMP%
+# -ExeVersion overrides the version read from the exe (used by the self-test only).
+# dist\noite\data is a live data folder: it is never copied, modified or zipped.
+[CmdletBinding()]
+param(
+    [string]$Version,
+    [switch]$DryRun,
+    [switch]$SelfTest,
+    [string]$Dist,
+    [string]$ExeVersion
+)
+$ErrorActionPreference = "Stop"
+$src = Split-Path -Parent $PSScriptRoot
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+$Required = @(
+    "noite.exe", "Qt6Core.dll", "Qt6Gui.dll", "Qt6Widgets.dll", "platforms\qwindows.dll",
+    "imageformats\qjpeg.dll", "vcruntime140.dll",
+    "README.txt", "LICENSE.txt", "THIRD-PARTY.txt", "licenses\LGPL-3.0.txt", "licenses\GPL-3.0.txt"
+)
+$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+
+function Write-ZipFromFolder([string]$Folder, [string]$ZipPath, [string]$Prefix) {
+    if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
+    $root = (Resolve-Path $Folder).Path.TrimEnd('\')
+    $zip = [System.IO.Compression.ZipFile]::Open($ZipPath, [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        foreach ($f in Get-ChildItem $root -Recurse -File -Force) {
+            $rel = $f.FullName.Substring($root.Length + 1).Replace('\', '/')
+            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                $zip, $f.FullName, "$Prefix/$rel", [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+        }
+    } finally { $zip.Dispose() }
+}
+
+function Get-ZipEntryNames([string]$ZipPath) {
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+    try { return @($zip.Entries | ForEach-Object { $_.FullName }) } finally { $zip.Dispose() }
+}
+
+# Stages, checks and zips. Returns @{ Zip; PdbZip; Sums; Version }. Throws on any failed check.
+function New-PackageZips {
+    param(
+        [string]$DistDir, [string]$Version, [bool]$DryRun, [string]$ExeVersion,
+        [string]$OutDir, [string]$PdbPath, [string]$PackagingDir, [string]$LicenseFile
+    )
+    $exe = Join-Path $DistDir "noite.exe"
+    if (-not (Test-Path $exe)) { throw "noite.exe not found in $DistDir (run tools/deploy.ps1 first)" }
+    if (-not $DryRun) {
+        if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "-Version '$Version' is not x.y.z" }
+    }
+    $built = $ExeVersion
+    if (-not $built) { $built = (Get-Item $exe).VersionInfo.ProductVersion }
+    if (-not $built) { throw "noite.exe has no ProductVersion" }
+    if ($DryRun) {
+        $Version = $built
+    } elseif ($built -ne $Version) {
+        throw ("exe version {0} {1} release version {2}" -f $built, [char]0x2260, $Version)
+    }
+
+    $tmp = Join-Path $env:TEMP ("noite-pkg-" + [guid]::NewGuid().ToString("N"))
+    $stage = Join-Path $tmp "noite"
+    New-Item -ItemType Directory -Path $stage -Force | Out-Null
+    try {
+        # dist contents minus the live data folder
+        Get-ChildItem $DistDir -Force | Where-Object { $_.Name -ne "data" } |
+            Copy-Item -Destination $stage -Recurse -Force
+        if (Get-ChildItem $stage -Recurse -File -Force -Filter *.pdb) {
+            $names = (Get-ChildItem $stage -Recurse -File -Force -Filter *.pdb | ForEach-Object Name) -join ", "
+            throw "forbidden file(s) in dist: $names"
+        }
+
+        # notices
+        $readme = [System.IO.File]::ReadAllText((Join-Path $PackagingDir "README.txt"), [System.Text.Encoding]::UTF8)
+        $readme = $readme.Replace("<version>", $Version) -replace "`r?`n", "`r`n"
+        [System.IO.File]::WriteAllText((Join-Path $stage "README.txt"), $readme, $Utf8NoBom)
+        Copy-Item $LicenseFile (Join-Path $stage "LICENSE.txt") -Force
+        Copy-Item (Join-Path $PackagingDir "THIRD-PARTY.txt") $stage -Force
+        New-Item -ItemType Directory -Path (Join-Path $stage "licenses") -Force | Out-Null
+        Copy-Item (Join-Path $PackagingDir "licenses\*") (Join-Path $stage "licenses") -Force
+
+        foreach ($r in $Required) {
+            if (-not (Test-Path (Join-Path $stage $r))) { throw "required file missing from the package: $r" }
+        }
+        if (Test-Path (Join-Path $stage "data")) { throw "forbidden folder in the package: data\" }
+        if (-not (Test-Path $PdbPath)) { throw "PDB not found: $PdbPath (build Release first)" }
+
+        New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
+        $zipPath = Join-Path $OutDir "noite-$Version-win64.zip"
+        $pdbZipPath = Join-Path $OutDir "noite-$Version-win64-pdb.zip"
+        $sumsPath = Join-Path $OutDir "SHA256SUMS.txt"
+        Write-ZipFromFolder $stage $zipPath "noite"
+
+        $pdbDir = Join-Path $tmp "pdb"
+        New-Item -ItemType Directory -Path $pdbDir -Force | Out-Null
+        Copy-Item $PdbPath (Join-Path $pdbDir "noite.pdb")
+        Write-ZipFromFolder $pdbDir $pdbZipPath "noite"
+
+        $lines = foreach ($z in @($zipPath, $pdbZipPath)) {
+            "{0}  {1}" -f (Get-FileHash $z -Algorithm SHA256).Hash.ToLowerInvariant(), (Split-Path -Leaf $z)
+        }
+        [System.IO.File]::WriteAllText($sumsPath, (($lines -join "`n") + "`n"), $Utf8NoBom)
+    } finally {
+        Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    return @{ Zip = $zipPath; PdbZip = $pdbZipPath; Sums = $sumsPath; Version = $Version }
+}
+
+function Invoke-SelfTest {
+    function Expect-Throw([scriptblock]$Block, [string]$Pattern, [string]$Name) {
+        $msg = $null
+        try { & $Block | Out-Null } catch { $msg = $_.Exception.Message }
+        if ($null -eq $msg) { throw "self-test '$Name': expected a failure, got success" }
+        if ($msg -notmatch $Pattern) { throw "self-test '$Name': message '$msg' does not match '$Pattern'" }
+        Write-Host "  ok  $Name (refused: $msg)"
+    }
+    $root = Join-Path $env:TEMP ("noite-pkg-selftest-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $root | Out-Null
+    try {
+        $pkgDir = Join-Path $src "packaging"
+        $lic = Join-Path $src "LICENSE"
+        $pdb = Join-Path $root "noite.pdb"
+        Set-Content $pdb "pdb" -Encoding ASCII
+        $script:n = 0
+        function New-Dist([string[]]$Skip = @(), [string[]]$Extra = @()) {
+            $script:n++
+            $d = Join-Path $root "dist$($script:n)\noite"
+            New-Item -ItemType Directory -Path $d -Force | Out-Null
+            foreach ($f in @("noite.exe", "Qt6Core.dll", "Qt6Gui.dll", "Qt6Widgets.dll", "platforms\qwindows.dll",
+                             "imageformats\qjpeg.dll", "vcruntime140.dll")) {
+                if ($Skip -contains $f) { continue }
+                $p = Join-Path $d $f
+                New-Item -ItemType Directory -Path (Split-Path $p) -Force | Out-Null
+                Set-Content $p "x" -Encoding ASCII
+            }
+            foreach ($f in $Extra) {
+                $p = Join-Path $d $f
+                New-Item -ItemType Directory -Path (Split-Path $p) -Force | Out-Null
+                Set-Content $p "x" -Encoding ASCII
+            }
+            return $d
+        }
+        function Pack([string]$D, [string]$Ver, [bool]$Dry, [string]$ExeVer) {
+            $out = Join-Path $root "out$($script:n)"
+            return New-PackageZips -DistDir $D -Version $Ver -DryRun $Dry -ExeVersion $ExeVer -OutDir $out `
+                -PdbPath $pdb -PackagingDir $pkgDir -LicenseFile $lic
+        }
+
+        # 1. complete dist passes; zip has noite/README.txt with the version, CRLF, and checksums match
+        $r = Pack (New-Dist) "0.1.0" $false "0.1.0"
+        $names = Get-ZipEntryNames $r.Zip
+        if ($names -notcontains "noite/README.txt") { throw "self-test 1: noite/README.txt missing from the zip" }
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($r.Zip)
+        try {
+            $e = $zip.GetEntry("noite/README.txt")
+            $sr = New-Object System.IO.StreamReader($e.Open(), [System.Text.Encoding]::UTF8)
+            $text = $sr.ReadToEnd(); $sr.Dispose()
+        } finally { $zip.Dispose() }
+        if ($text -notmatch "^noite 0\.1\.0 ") { throw "self-test 1: README.txt does not carry the version" }
+        if ($text -match "<version>") { throw "self-test 1: <version> placeholder left in README.txt" }
+        if ($text -notmatch "`r`n") { throw "self-test 1: README.txt is not CRLF" }
+        $sums = Get-Content $r.Sums
+        if (@($sums).Count -ne 2) { throw "self-test 1: SHA256SUMS.txt should have 2 lines" }
+        foreach ($l in $sums) {
+            if ($l -notmatch '^([0-9a-f]{64})  (.+)$') { throw "self-test 1: bad checksum line '$l'" }
+            $f = Join-Path (Split-Path $r.Zip) $Matches[2]
+            if ((Get-FileHash $f -Algorithm SHA256).Hash.ToLowerInvariant() -ne $Matches[1]) { throw "self-test 1: checksum mismatch for $($Matches[2])" }
+        }
+        Write-Host "  ok  complete dist packages (README.txt carries 0.1.0, CRLF, 2 checksums)"
+
+        # 2. data\ in the dist stays out of the zip
+        $r = Pack (New-Dist -Extra @("data\noite.db", "data\logs\a.log")) "0.1.0" $false "0.1.0"
+        $bad = @(Get-ZipEntryNames $r.Zip | Where-Object { $_ -like "noite/data*" })
+        if ($bad.Count -gt 0) { throw "self-test 2: data\ leaked into the zip: $($bad -join ', ')" }
+        Write-Host "  ok  data\ excluded from the zip"
+
+        # 3. missing required file is refused, naming it
+        Expect-Throw { Pack (New-Dist -Skip @("imageformats\qjpeg.dll")) "0.1.0" $false "0.1.0" } `
+            "imageformats\\qjpeg\.dll" "missing imageformats\qjpeg.dll"
+
+        # 4. a .pdb inside the dist is refused
+        Expect-Throw { Pack (New-Dist -Extra @("noite.pdb")) "0.1.0" $false "0.1.0" } `
+            "noite\.pdb" ".pdb in the dist"
+
+        # 5. version mismatch
+        Expect-Throw { Pack (New-Dist) "0.2.0" $false "0.1.0-dev+abc" } `
+            "exe version 0\.1\.0-dev\+abc .* release version 0\.2\.0" "-Version 0.2.0 vs exe 0.1.0-dev+abc"
+
+        # 6. not x.y.z
+        Expect-Throw { Pack (New-Dist) "1.0" $false "1.0" } "not x\.y\.z" "-Version 1.0"
+
+        # dry run takes the version from the exe
+        $r = Pack (New-Dist) "" $true "0.1.0-dev+abc"
+        if ((Split-Path -Leaf $r.Zip) -ne "noite-0.1.0-dev+abc-win64.zip") { throw "self-test dry-run: unexpected zip name $($r.Zip)" }
+        Write-Host "  ok  dry run uses the exe's version"
+    } finally {
+        Remove-Item $root -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    Write-Host "package.ps1 self-test passed"
+}
+
+if ($SelfTest) { Invoke-SelfTest; return }
+
+if (-not $Dist) { $Dist = Join-Path $src "dist\noite" }
+if (-not $DryRun -and -not $Version) { throw "-Version <x.y.z> is required (or use -DryRun)" }
+$outDir = Join-Path $src "dist"
+if ($DryRun) { $outDir = Join-Path $outDir "dry-run" }
+
+$r = New-PackageZips -DistDir $Dist -Version $Version -DryRun $DryRun.IsPresent -ExeVersion $ExeVersion `
+    -OutDir $outDir -PdbPath (Join-Path $src "build\Release\noite.pdb") `
+    -PackagingDir (Join-Path $src "packaging") -LicenseFile (Join-Path $src "LICENSE")
+
+Write-Host "Version $($r.Version)"
+Write-Host "Top level of $(Split-Path -Leaf $r.Zip):"
+Get-ZipEntryNames $r.Zip | ForEach-Object { ($_ -split '/')[1] } | Where-Object { $_ } | Sort-Object -Unique |
+    ForEach-Object { Write-Host "  noite/$_" }
+foreach ($f in @($r.Zip, $r.PdbZip, $r.Sums)) {
+    Write-Host ("{0,10:N0} bytes  {1}" -f (Get-Item $f).Length, $f)
+}

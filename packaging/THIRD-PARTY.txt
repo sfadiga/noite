@@ -1,0 +1,12 @@
+Third-party components in noite
+
+Qt 6.10.3
+  Copyright (c) The Qt Company. Used under the LGPLv3, dynamically linked, unmodified.
+  Source: https://download.qt.io/archive/qt/6.10/6.10.3/single/
+  Licence texts: see the licenses\ folder (LGPL-3.0.txt, GPL-3.0.txt).
+
+SQLite
+  Public domain.
+
+Microsoft Visual C++ runtime
+  Redistributable under the Visual Studio licence.
