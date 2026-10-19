@@ -75,6 +75,14 @@ Record pass/fail and a one-line note for any failure. Every failure becomes an a
 | S3 | On page 8 press the capture hotkey | The wizard closes; the capture window shows the starter note with your hotkeys |
 | S4 | Settings: change the board hotkey, Save, press it; change it again, Cancel | The new hotkey works at once without a restart; after Cancel the saved one still works |
 
+## Single exe
+
+| # | Check | Expected |
+|---|---|---|
+| SE-1 | Download the 1.0.0 zip into a fresh folder | One `noite.exe`, no DLLs; it runs; Properties → Details shows 1.0.0; the board shows `v1.0.0` |
+| SE-2 | Paste a JPEG and a GIF image | Both work |
+| SE-3 | Replace the exe in your real noite folder | Notes intact |
+
 ## Release
 
 | # | Check | How | Expected |

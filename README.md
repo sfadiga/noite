@@ -19,13 +19,13 @@ Planned for v2: audio notes with offline speech-to-text, merging and splitting n
 
 ## Download
 
-Get the latest `noite-<version>-win64.zip` from the [Releases page](https://github.com/sfadiga/noite/releases/latest).
+Get the latest `noite-<version>-win64.zip` from the [Releases page](https://github.com/sfadiga/noite/releases/latest). It is a zip with one `noite.exe`: no DLLs and no installer.
 
 1. Unzip it anywhere you can write to (for example `Documents\noite`), not Program Files.
 2. Run `noite.exe`. The first run opens a short setup.
 3. noite isn't code-signed, so Windows may say "Windows protected your PC". Click **More info**, then **Run anyway**.
 
-`SHA256SUMS.txt` has the checksums of the zips. To update, quit noite (tray icon, Quit) and replace the files with the new ones, keeping the `data\` folder. To restore a backup, quit noite and move `data\noite.db`, and `data\noite.db-wal` and `data\noite.db-shm` if present, into a folder of your own (your copy of the old data). Then copy a snapshot from `<your backup folder>\noite-backups\<id>\snapshots\` into `data\`, rename it `noite.db`, and start noite. The zip's `README.txt` has the same steps.
+`SHA256SUMS.txt` has the checksums of the zips. To update, quit noite (tray icon, Quit) and replace `noite.exe` with the new one, keeping the `data\` folder. To restore a backup, quit noite and move `data\noite.db`, and `data\noite.db-wal` and `data\noite.db-shm` if present, into a folder of your own (your copy of the old data). Then copy a snapshot from `<your backup folder>\noite-backups\<id>\snapshots\` into `data\`, rename it `noite.db`, and start noite. The zip's `README.txt` has the same steps.
 
 ## Stack
 
@@ -76,17 +76,20 @@ powershell -File tools\deploy.ps1 -Config Release         # dist\noite: exe + Qt
 powershell -File tools\package.ps1 -Version 0.1.0         # dist\noite-0.1.0-win64.zip, the PDB zip, SHA256SUMS.txt
 ```
 
-`tools\package.ps1 -DryRun` runs the same checks without a version and writes to `dist\dry-run\`; `-SelfTest` tests the script itself. CI runs the build, the tests, `deploy.ps1` and `package.ps1 -DryRun` on every push.
+`tools\package.ps1 -DryRun` runs the same checks without a version and writes to `dist\dry-run\`; `-SelfTest` tests the script itself. Local builds are dynamic (Qt DLLs next to the exe), which is what you want for development.
+
+The released single `noite.exe` is built only in CI (the `single-exe` job): `-DNOITE_STATIC=ON` against a static Qt from [sfadiga/qt-static-windows](https://github.com/sfadiga/qt-static-windows), pinned by tag and SHA-256 in `tools\qt-static.json`. `tools\package.ps1 -Static` packages it, running `noite.exe --self-check` and refusing a Qt, VC runtime or bundled-ICU dependency. CI runs both flavours on every push: the dynamic build, tests, `deploy.ps1` and `package.ps1 -DryRun`, and the static build with `package.ps1 -Static -DryRun`.
 
 The keystroke latency harness (`spikes/hotkey-latency/run-trials.ps1`) **sends real keystrokes and takes focus**. Only run it when you're away from the keyboard.
 
 ### Releasing
 
-1. Set the new version in `project(noite VERSION x.y.z ...)` in the top-level `CMakeLists.txt` and commit.
-2. Merge the version bump to `main`, pull, and wait for CI to be green.
-3. Tag `main`'s HEAD and push the tag: `git tag vX.Y.Z` then `git push origin vX.Y.Z`.
-4. CI builds, tests and packages, then creates a **draft** release. It fails if the tag differs from the project version, or if a release for that tag already exists. In that case delete the draft and re-tag, or re-run the release job within 24 hours (the build artifact expires after that).
-5. Open the draft on GitHub, edit the generated notes, and publish.
+1. Write the release's changes under `[Unreleased]` in `CHANGELOG.md`.
+2. Run `tools\bump-version.ps1 X.Y.Z`. It updates `version.txt` and turns `[Unreleased]` into the `X.Y.Z` section.
+3. Open a PR with that, wait for CI to be green, and merge it to `main`.
+4. Pull, then tag `main`'s HEAD and push the tag: `git tag vX.Y.Z` then `git push origin vX.Y.Z`.
+5. CI builds the single exe and creates a **draft** release with the zip, the PDB zip and `SHA256SUMS.txt`, and the notes from the CHANGELOG section. It fails if the tag differs from `version.txt`, if the CHANGELOG has no entry for the version, or if a release for that tag already exists. In that case delete the draft and re-tag, or re-run the release job within 24 hours (the build artifact expires after that).
+6. Check the draft on GitHub and publish.
 
 ### Schema changes
 
@@ -94,4 +97,4 @@ Before bumping the database schema to vN+1, run `noite_golden` for vN with the c
 
 ## License
 
-[MIT](LICENSE). Qt is used under the LGPL v3, linked dynamically.
+[MIT](LICENSE). Qt is used under the LGPL v3, unmodified and linked statically into the released `noite.exe`; noite's source is public, so you can relink it against your own Qt build. The Qt source for each release is attached to the [qt-static-windows](https://github.com/sfadiga/qt-static-windows) release named in `tools\qt-static.json`.
