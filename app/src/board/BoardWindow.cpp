@@ -4,9 +4,9 @@
 #include "board/ChipBar.h"
 #include "board/CardDelegate.h"
 #include "Theme.h"
-#include "VersionText.h"
 #include "board/NoteOverlay.h"
 #include "board/TabStrip.h"
+#include "VersionText.h"
 #include "capture/CaptureController.h"
 
 #include <noite/store.h>
@@ -72,7 +72,10 @@ BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std:
 
     // Muted: the theme has no secondary-text colour, so the palette's placeholder role.
     QFont versionFont = font();
-    versionFont.setPointSizeF(versionFont.pointSizeF() - 1);
+    if (versionFont.pointSizeF() > 0)
+        versionFont.setPointSizeF(versionFont.pointSizeF() - 1);
+    else if (versionFont.pixelSize() > 1)
+        versionFont.setPixelSize(versionFont.pixelSize() - 1);
     version_->setFont(versionFont);
     version_->setForegroundRole(QPalette::PlaceholderText);
     version_->setToolTip(versionToolTip());

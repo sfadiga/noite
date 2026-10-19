@@ -6,6 +6,7 @@
 #include "AppOptions.h"
 #include "VersionText.h"
 #include "board/BoardWindow.h"
+#include "board/TabStrip.h"
 #include "editor/AttachmentStore.h"
 #include "setup/SettingsDialog.h"
 
@@ -82,8 +83,16 @@ private slots:
         board.show();
         board.resize(board.minimumSizeHint().width(), board.height());
         QCoreApplication::processEvents();
-        QVERIFY(board.searchField()->width() >= 260);
-        QVERIFY(board.versionLabel()->isVisible());
+        QWidget* search = board.searchField();
+        QWidget* label = board.versionLabel();
+        QWidget* tabs = board.tabStrip();
+        const auto left = [&](QWidget* w) { return w->mapTo(&board, QPoint()).x(); };
+        const auto right = [&](QWidget* w) { return left(w) + w->width(); };
+        QVERIFY(label->isVisible());
+        QVERIFY(search->width() >= 260);
+        QVERIFY(right(label) <= board.width());
+        QVERIFY(right(tabs) < left(search));
+        QVERIFY(right(search) <= left(label));
     }
 
     void appShowsVersion()
