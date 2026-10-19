@@ -21,8 +21,7 @@ Planned for v2: audio notes with offline speech-to-text, merging and splitting n
 
 Get the latest `noite-<version>-win64.zip` from the [Releases page](https://github.com/sfadiga/noite/releases/latest).
 
-1. Unzip it anywhere you can write to (for example `Documents
-oite`), not Program Files.
+1. Unzip it anywhere you can write to (for example `Documents\noite`), not Program Files.
 2. Run `noite.exe`. The first run opens a short setup.
 3. noite isn't code-signed, so Windows may say "Windows protected your PC". Click **More info**, then **Run anyway**.
 
@@ -72,11 +71,9 @@ python -m aqt install-qt windows desktop 6.10.3 win64_msvc2022_64 -O "$env:USERP
 ```
 
 ```powershell
-powershell -File toolsuild.ps1 -Config Release -Test    # configure, build, run the suites offscreen
-powershell -File tools\deploy.ps1 -Config Release         # dist
-oite: exe + Qt DLLs + app-local VC runtime (45 MB budget)
-powershell -File tools\package.ps1 -Version 0.1.0         # dist
-oite-0.1.0-win64.zip, the PDB zip, SHA256SUMS.txt
+powershell -File tools\build.ps1 -Config Release -Test    # configure, build, run the suites offscreen
+powershell -File tools\deploy.ps1 -Config Release         # dist\noite: exe + Qt DLLs + app-local VC runtime (45 MB budget)
+powershell -File tools\package.ps1 -Version 0.1.0         # dist\noite-0.1.0-win64.zip, the PDB zip, SHA256SUMS.txt
 ```
 
 `tools\package.ps1 -DryRun` runs the same checks without a version and writes to `dist\dry-run\`; `-SelfTest` tests the script itself. CI runs the build, the tests, `deploy.ps1` and `package.ps1 -DryRun` on every push.
