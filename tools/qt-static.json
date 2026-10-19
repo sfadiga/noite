@@ -1,0 +1,5 @@
+{
+  "tag": "qt-6.10.3-msvc2022-x64-mt-1",
+  "url": "https://github.com/sfadiga/qt-static-windows/releases/download/qt-6.10.3-msvc2022-x64-mt-1/qt-6.10.3-static-msvc2022-x64-mt.zip",
+  "sha256": "6e855749d37c05e6b709c24bd5607bde0cbb7147cbc80a59c51bd35b017839bf"
+}

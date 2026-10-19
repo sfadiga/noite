@@ -27,6 +27,8 @@ add_library(noite-app STATIC
     src/board/FlowLayout.h src/board/FlowLayout.cpp
     src/board/ChipBar.h src/board/ChipBar.cpp
     src/Theme.h src/Theme.cpp
+    src/VersionText.h src/VersionText.cpp
+    src/SelfCheck.h src/SelfCheck.cpp
     src/DragMover.h src/DragMover.cpp
     src/radar/ReviewScheduler.h src/radar/ReviewScheduler.cpp
     src/radar/ReviewWindow.h src/radar/ReviewWindow.cpp
@@ -52,6 +54,15 @@ target_compile_definitions(noite-app PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN UNICODE
 
 qt_add_executable(noite WIN32 src/main.cpp ${CMAKE_CURRENT_BINARY_DIR}/generated/noite.rc)
 target_link_libraries(noite PRIVATE noite-app)
+
+# Static Qt: the five plugins noite needs are linked into the exe (--self-check verifies them by class
+# name, SelfCheck.cpp); target names from the static Qt's lib\cmake\Qt6Gui and Qt6Widgets.
+if(NOITE_STATIC)
+    target_compile_definitions(noite-app PRIVATE NOITE_STATIC)
+    qt_import_plugins(noite INCLUDE
+        Qt6::QWindowsIntegrationPlugin Qt6::QModernWindowsStylePlugin
+        Qt6::QJpegPlugin Qt6::QGifPlugin Qt6::QICOPlugin)
+endif()
 
 # Board performance gate (D5): not shipped, run by hand on a Release build.
 qt_add_executable(board-bench bench/board_bench.cpp bench/Seed.h bench/Seed.cpp)
@@ -96,12 +107,14 @@ qt_add_executable(app-tests
     tests/tst_setup_wizard.cpp
     tests/tst_settings_dialog.cpp
     tests/tst_version.cpp
+    tests/tst_self_check.cpp
     tests/tst_seed.cpp bench/Seed.h bench/Seed.cpp
 )
 # Reuses core's test registry and helpers.
 target_include_directories(app-tests PRIVATE tests bench ${PROJECT_SOURCE_DIR}/core/tests)
 target_link_libraries(app-tests PRIVATE noite-app sqlite3 Qt6::Test)
-target_compile_definitions(app-tests PRIVATE NOITE_GOLDEN_DIR="${PROJECT_SOURCE_DIR}/core/tests/golden")
+target_compile_definitions(app-tests PRIVATE NOITE_GOLDEN_DIR="${PROJECT_SOURCE_DIR}/core/tests/golden" NOITE_SOURCE_DIR="${PROJECT_SOURCE_DIR}" NOITE_EXE_PATH="$<TARGET_FILE:noite>")
+add_dependencies(app-tests noite)
 add_test(NAME app COMMAND app-tests)
 
 # Crashes on purpose for tst_crash.cpp; lands next to app-tests.exe, never shipped.

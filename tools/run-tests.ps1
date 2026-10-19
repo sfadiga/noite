@@ -54,5 +54,13 @@ if ($cmake -and (Test-Path $cmake)) {
     $total += 1
 }
 
+# The release tools carry their own checks on temp files; a failure counts toward the total.
+foreach ($tool in @("changelog-section.ps1", "bump-version.ps1")) {
+    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot $tool) -SelfTest
+    $toolExit = $LASTEXITCODE
+    "suite $tool -SelfTest: exit $toolExit"
+    $total += [math]::Abs($toolExit)
+}
+
 "TOTAL failures: $total"
 exit $total

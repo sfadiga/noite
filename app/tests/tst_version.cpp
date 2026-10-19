@@ -4,6 +4,10 @@
 
 #include "App.h"
 #include "AppOptions.h"
+#include "VersionText.h"
+#include "board/BoardWindow.h"
+#include "board/TabStrip.h"
+#include "editor/AttachmentStore.h"
 #include "setup/SettingsDialog.h"
 
 #include <noite/store.h>
@@ -12,6 +16,7 @@
 #include <QCoreApplication>
 #include <QFile>
 #include <QLabel>
+#include <QLineEdit>
 #include <QRegularExpression>
 #include <QTest>
 
@@ -33,11 +38,61 @@ private slots:
         QVERIFY2(QString(NOITE_VERSION).startsWith(base), NOITE_VERSION);
     }
 
+    void baseVersionIsVersionTxt()
+    {
+        QFile file(QString(NOITE_SOURCE_DIR) + "/version.txt");
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        QCOMPARE(QString(NOITE_VERSION_BASE), QString::fromUtf8(file.readAll()).remove(QChar(0xFEFF)).trimmed());
+        QVERIFY2(QString(NOITE_VERSION).startsWith(NOITE_VERSION_BASE), NOITE_VERSION);
+    }
+
     void identityCarriesTheVersion()
     {
         applyAppIdentity();
         QCOMPARE(QCoreApplication::applicationName(), QString("noite"));
         QCOMPARE(QCoreApplication::applicationVersion(), QString(NOITE_VERSION));
+    }
+
+    void boardVersionTextForms()
+    {
+        QCOMPARE(boardVersionText("1.0.0"), QString("v1.0.0"));
+        QCOMPARE(boardVersionText("1.0.0-dev+abc1234.dirty"), QString("v1.0.0-dev"));
+        QCOMPARE(boardVersionText("1.0.0-dev"), QString("v1.0.0-dev"));
+    }
+
+    void boardShowsVersionLabel()
+    {
+        auto f = test::fixture();
+        StoreAttachments attachments{*f->store};
+        BoardWindow board(*f->store, attachments, [] { return test::today(); });
+        QLabel* label = board.versionLabel();
+        QVERIFY(label);
+        QCOMPARE(label->text(), boardVersionText(NOITE_VERSION));
+        QCOMPARE(label->toolTip(), versionToolTip());
+        QVERIFY(label->toolTip().contains(QString::fromUtf8("\xC2\xB7")));
+        QCOMPARE(label->focusPolicy(), Qt::NoFocus);
+        board.show();
+        QVERIFY(label->mapTo(&board, QPoint()).x() > board.searchField()->mapTo(&board, QPoint()).x());
+    }
+
+    void boardLabelAtMinimumWidth()
+    {
+        auto f = test::fixture();
+        StoreAttachments attachments{*f->store};
+        BoardWindow board(*f->store, attachments, [] { return test::today(); });
+        board.show();
+        board.resize(board.minimumSizeHint().width(), board.height());
+        QCoreApplication::processEvents();
+        QWidget* search = board.searchField();
+        QWidget* label = board.versionLabel();
+        QWidget* tabs = board.tabStrip();
+        const auto left = [&](QWidget* w) { return w->mapTo(&board, QPoint()).x(); };
+        const auto right = [&](QWidget* w) { return left(w) + w->width(); };
+        QVERIFY(label->isVisible());
+        QVERIFY(search->width() >= 260);
+        QVERIFY(right(label) <= board.width());
+        QVERIFY(right(tabs) < left(search));
+        QVERIFY(right(search) <= left(label));
     }
 
     void appShowsVersion()

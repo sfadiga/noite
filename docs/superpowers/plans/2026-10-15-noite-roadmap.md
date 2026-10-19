@@ -19,7 +19,7 @@ v1 is split into milestones. Each one produces software that works and can be te
 | M7a | Release pipeline | Versioned build (`git describe`), exe version resource, trimmed portable zip + PDB zip + checksums built by CI on every push, licence notices, draft GitHub Release on a `vX.Y.Z` tag, golden-data upgrade test, README for downloading / building / releasing | D23, D26, D28 | M6 | [m7a](2026-10-19-m7a-release-pipeline.md) |
 | M7b | Performance | **Idle first-summon (known issue, 91–103 ms vs ≤ 50 ms target): measure a phase breakdown (show / activate / paint / flush), then try a working-set floor or other fix.** 2,000-note and idle-summon performance checks gating CI | D5, D28 | M7a | later |
 | M7c | End-to-end harness | End-to-end runs with the keystroke harness | D28 | M7a | later |
-| M7d | Single-exe build | A single-exe release via a static Qt build (Qt is LGPL, noite is MIT with public source) | D23 | M7a | later |
+| M7d | Single-exe build | A single-exe release via a static Qt build (Qt is LGPL, noite is MIT with public source); the path to 1.0.0 | D23 | M7a | [m7d](2026-10-19-m7d-single-exe.md) |
 
 ## Decisions made while planning (not in the spec, confirm on review)
 

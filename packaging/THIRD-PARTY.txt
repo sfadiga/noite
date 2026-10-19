@@ -1,20 +1,28 @@
 Third-party components in noite
 
 Qt 6.10.3
-  © The Qt Company. Used under the LGPLv3, dynamically linked, unmodified.
-  Source: https://download.qt.io/archive/qt/6.10/6.10.3/single/
+  © The Qt Company. Used under the LGPLv3, unmodified, statically linked into noite.exe
+  (qtbase only).
+  Relinking: noite's complete source is public under the MIT licence; the source of
+  this exact version is https://github.com/sfadiga/noite/tree/v<version>, so the
+  application can be relinked against a modified Qt, as LGPLv3 section 4(d) requires.
+  Qt source: qtbase-everywhere-src-6.10.3.tar.xz, attached to the release this Qt was
+  built from:
+  https://github.com/sfadiga/qt-static-windows/releases/tag/qt-6.10.3-msvc2022-x64-mt-1
   Licence texts: see the licenses\ folder (LGPL-3.0.txt, GPL-3.0.txt).
 
-Components included in the Qt libraries
-  libjpeg-turbo (in imageformats\qjpeg.dll)
+Components included in Qt (all linked into noite.exe)
+  libjpeg-turbo (in Qt's JPEG image plugin)
     This software is based in part on the work of the Independent JPEG Group.
     Licences: IJG, BSD-3-Clause and zlib.
-  PCRE2 (BSD-3-Clause) and double-conversion (BSD-3-Clause), in Qt6Core.
-  FreeType (FreeType License), in Qt6Gui.
+  PCRE2 (BSD-3-Clause) and double-conversion (BSD-3-Clause), in Qt Core.
+  FreeType (FreeType License), in Qt Gui.
     Portions of this software are copyright © The FreeType Project (www.freetype.org).
     All rights reserved.
-  HarfBuzz (MIT), in Qt6Gui.
-  md4c (MIT), in Qt6Gui.
+  HarfBuzz (MIT), in Qt Gui.
+  md4c (MIT), in Qt Gui.
+  libpng (PNG Reference Library License, libpng-2.0), in Qt Gui.
+  zlib (zlib License), in Qt Core.
   The full list of third-party code in Qt and its licences:
   https://doc.qt.io/qt-6/licenses-used-in-qt.html
 
@@ -22,4 +30,4 @@ SQLite
   Public domain.
 
 Microsoft Visual C++ runtime
-  Redistributable under the Visual Studio licence.
+  Statically linked into noite.exe; redistributable under the Visual Studio licence.

@@ -6,9 +6,11 @@
 #include "Theme.h"
 #include "board/NoteOverlay.h"
 #include "board/TabStrip.h"
+#include "VersionText.h"
 #include "capture/CaptureController.h"
 
 #include <noite/store.h>
+#include <noite_version.h>
 
 #include <QCalendarWidget>
 #include <QDebug>
@@ -52,6 +54,7 @@ BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std:
     , tabs_(new TabStrip(this))
     , chips_(new ChipBar(this))
     , search_(new QLineEdit(this))
+    , version_(new QLabel(boardVersionText(NOITE_VERSION), this))
     , grid_(new BoardGrid(this))
     , empty_(new QLabel(grid_->viewport()))
     , status_(new QLabel(this))
@@ -66,6 +69,17 @@ BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std:
     search_->setFixedHeight(tabs_->buttonHeight());
     search_->setPlaceholderText(tr("SEARCH  /"));
     search_->setClearButtonEnabled(true);
+
+    // Muted: the theme has no secondary-text colour, so the palette's placeholder role.
+    QFont versionFont = font();
+    if (versionFont.pointSizeF() > 0)
+        versionFont.setPointSizeF(versionFont.pointSizeF() - 1);
+    else if (versionFont.pixelSize() > 1)
+        versionFont.setPixelSize(versionFont.pixelSize() - 1);
+    version_->setFont(versionFont);
+    version_->setForegroundRole(QPalette::PlaceholderText);
+    version_->setToolTip(versionToolTip());
+    version_->setFocusPolicy(Qt::NoFocus);
 
     grid_->setViewMode(QListView::IconMode);
     grid_->setMovement(QListView::Static);
@@ -102,6 +116,7 @@ BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std:
     top->addStretch();
     top->addWidget(search_);
     search_->setMinimumWidth(260);
+    top->addWidget(version_);
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(12, 8, 12, 6);
     layout->addLayout(top);

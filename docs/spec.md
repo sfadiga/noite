@@ -14,7 +14,7 @@
 
 **Deferred to v2:** audio recording + speech-to-text, merge, split, Linux/macOS builds, code signing. (D1, D2, D23)
 
-**Audience:** the author and a few friends. Distributed as an unsigned portable zip on GitHub Releases; users will see a SmartScreen "unknown publisher" prompt on first run. Each release has three assets: `noite-<v>-win64.zip` (the portable folder with the licence notices, no `data\`, no PDBs), `noite-<v>-win64-pdb.zip` (the PDB, for reading a friend's crash dump) and `SHA256SUMS.txt`. Pushing a tag `vX.Y.Z` makes CI create a draft release that the author checks and publishes by hand. (D23)
+**Audience:** the author and a few friends. Distributed as an unsigned portable zip on GitHub Releases; users will see a SmartScreen "unknown publisher" prompt on first run. Each release has three assets: `noite-<v>-win64.zip` (a single `noite.exe` with the licence notices; no DLLs, no `data\`, no PDBs. Qt is linked statically from an unmodified build of qtbase published at `sfadiga/qt-static-windows`, pinned in `tools\qt-static.json`; noite's source is public under MIT, so it can be relinked against a modified Qt as the LGPL requires), `noite-<v>-win64-pdb.zip` (the PDB, for reading a friend's crash dump) and `SHA256SUMS.txt`. Pushing a tag `vX.Y.Z` makes CI create a draft release that the author checks and publishes by hand. (D23)
 
 ## 2. Platform & architecture
 

@@ -1,6 +1,25 @@
 # The noite version comes from git: a clean checkout of the tag v<project version> is exactly
 # that version; anything else is "<project version>-dev+<sha>[.dirty]".
 
+# Reads version.txt (one X.Y.Z line; a UTF-8 BOM, CR/LF and surrounding whitespace are tolerated)
+# into out_var. Usable before project(). Anything else is a fatal error.
+function(noite_read_version_file path out_var)
+    set(text "")
+    if(EXISTS "${path}")
+        file(READ "${path}" text)
+    endif()
+    string(ASCII 239 187 191 bom)
+    string(FIND "${text}" "${bom}" bom_at)
+    if(bom_at EQUAL 0)
+        string(SUBSTRING "${text}" 3 -1 text)
+    endif()
+    string(STRIP "${text}" text)
+    if(NOT text MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+        message(FATAL_ERROR "version.txt must contain X.Y.Z (got '${text}' from ${path})")
+    endif()
+    set(${out_var} "${text}" PARENT_SCOPE)
+endfunction()
+
 # Turns a `git describe --tags --match "v*" --long --dirty --always` string into the version.
 # `base` is always the project version; a tag only matters when it is exactly v<base> with no
 # commits after it and no local changes.
@@ -71,8 +90,11 @@ function(noite_configure_version)
         endif()
     endif()
 
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/version.txt")
+
     noite_version_from_describe("${describe}" "${PROJECT_VERSION}" version)
     set(NOITE_VERSION "${version}" PARENT_SCOPE)
+    set(NOITE_VERSION_BASE "${PROJECT_VERSION}" PARENT_SCOPE)
     set(NOITE_VERSION_MAJOR "${PROJECT_VERSION_MAJOR}" PARENT_SCOPE)
     set(NOITE_VERSION_MINOR "${PROJECT_VERSION_MINOR}" PARENT_SCOPE)
     set(NOITE_VERSION_PATCH "${PROJECT_VERSION_PATCH}" PARENT_SCOPE)
