@@ -140,6 +140,124 @@ private slots:
         QCOMPARE(r.recheckCalls, 2);
     }
 
+    // A startup set() that failed leaves the slot empty: a failed save puts it back to empty.
+    void failedSaveClearsASlotThatWasEmpty()
+    {
+        Rig r;
+        r.manager.clear(kBrd);
+        Settings next = r.current;
+        next.boardHotkey = "Ctrl+Alt+L";
+        next.staleDays = 0;
+        const auto error = r.applier.apply(next);
+        QVERIFY(error.has_value());
+        QCOMPARE(error->hotkeyId, 0);
+        QVERIFY(r.manager.combo(kBrd).isEmpty());
+        QVERIFY(!r.backend.registered.contains(kBrd));
+        QVERIFY(r.backend.has(kCap, r.current.captureHotkey));
+        QCOMPARE(r.f->store->settings(), r.current);
+    }
+
+    void failedRestoreIsReportedAndLeavesTheSlotEmpty()
+    {
+        Rig r;
+        r.backend.taken.insert(r.current.boardHotkey); // grabbed by another program meanwhile
+        Settings next = r.current;
+        next.boardHotkey = "Ctrl+Alt+L";
+        next.staleDays = 0;
+        const auto error = r.applier.apply(next);
+        QVERIFY(error.has_value());
+        QCOMPARE(error->hotkeyId, 0);
+        QVERIFY(error->message.contains(QString("The previous board hotkey %1 could not be restored.")
+                                            .arg(r.current.boardHotkey)));
+        QVERIFY(!r.backend.registered.contains(kBrd));
+        QVERIFY(r.manager.combo(kBrd).isEmpty());
+        QVERIFY(r.backend.has(kCap, r.current.captureHotkey));
+    }
+
+    void failedSaveAfterSwapRestoresBoth()
+    {
+        Rig r;
+        Settings next = r.current;
+        next.captureHotkey = r.current.boardHotkey;
+        next.boardHotkey = r.current.captureHotkey;
+        next.staleDays = 0;
+        QVERIFY(r.applier.apply(next).has_value());
+        QCOMPARE(r.manager.combo(kCap), r.current.captureHotkey);
+        QCOMPARE(r.manager.combo(kBrd), r.current.boardHotkey);
+        QVERIFY(r.backend.has(kCap, r.current.captureHotkey));
+        QVERIFY(r.backend.has(kBrd, r.current.boardHotkey));
+    }
+
+    void pausedApplyRegistersOnResume()
+    {
+        Rig r;
+        r.manager.pause();
+        Settings next = r.current;
+        next.boardHotkey = "Ctrl+Alt+L";
+        QVERIFY(!r.applier.apply(next));
+        QVERIFY(r.backend.registered.isEmpty());
+        r.manager.resume();
+        QVERIFY(r.backend.has(kBrd, "Ctrl+Alt+L"));
+        QVERIFY(r.backend.has(kCap, r.current.captureHotkey));
+        QCOMPARE(r.f->store->settings(), next);
+    }
+
+    void invalidHotkeySavesNothing()
+    {
+        Rig r;
+        Settings next = r.current;
+        next.boardHotkey = "J";
+        next.trashRetentionDays = 40;
+        const auto error = r.applier.apply(next);
+        QVERIFY(error.has_value());
+        QCOMPARE(error->hotkeyId, kBrd);
+        QCOMPARE(error->message, QString("Use Ctrl or Alt with a key."));
+        QCOMPARE(r.f->store->settings(), r.current);
+    }
+
+    void sameAsOtherSavesNothing()
+    {
+        Rig r;
+        Settings next = r.current;
+        next.boardHotkey = next.captureHotkey;
+        const auto error = r.applier.apply(next);
+        QVERIFY(error.has_value());
+        QCOMPARE(error->hotkeyId, kBrd);
+        QCOMPARE(error->message, QString("That's already the new-note hotkey."));
+        QCOMPARE(r.f->store->settings(), r.current);
+        QCOMPARE(r.manager.combo(kBrd), r.current.boardHotkey);
+    }
+
+    // Moving the day start earlier past the clock makes the review due at once; only the
+    // recheck callback can make that happen (verified by removing the callback: fails).
+    void dayStartMovedEarlierOpensTheReview()
+    {
+        auto f = test::fixture();
+        const ScratchId id = f->store->createScratch(test::html({"pay rent"})).id;
+        f->store->setDue(id, QDate(2026, 10, 10));
+        Settings late = f->store->settings();
+        late.dayStart = QTime(10, 0);
+        f->store->saveSettings(late);
+
+        QDateTime now(QDate(2026, 10, 15), QTime(8, 0));
+        ReviewScheduler scheduler(*f->store, [&] { return now; }, [] { return true; });
+        QSignalSpy due(&scheduler, &ReviewScheduler::reviewDue);
+        scheduler.check(); // arms the timer; 08:00 is before 10:00
+        QCOMPARE(due.size(), 0);
+
+        FakeBackend backend;
+        HotkeyManager manager(backend);
+        manager.set(kCap, late.captureHotkey);
+        manager.set(kBrd, late.boardHotkey);
+        SettingsApplier applier(
+            *f->store, manager, [](bool) {}, [&] { scheduler.check(); });
+
+        Settings early = late;
+        early.dayStart = QTime(6, 0);
+        QVERIFY(!applier.apply(early));
+        QCOMPARE(due.size(), 1);
+    }
+
     // The brief's scenario: at 08:00 a review would be due under a 06:00 day start; moving the
     // day start to 10:00 and rechecking holds it back and re-arms the timer for 10:00.
     void dayStartMovedLaterHoldsTheReview()

@@ -47,9 +47,25 @@ std::optional<ApplyError> SettingsApplier::apply(const noite::Settings& next)
     try {
         store_.saveSettings(next);
     } catch (const std::exception& error) {
-        if (hotkeysChanged)
-            hotkeys_.apply(oldCapture, oldBoard);
-        return ApplyError{QString::fromUtf8(error.what()), 0};
+        QString message = QString::fromUtf8(error.what());
+        if (hotkeysChanged) {
+            // Per slot: a slot that held nothing goes back to nothing, and a restore that fails
+            // leaves the slot empty rather than holding the unsaved combination. Both are
+            // cleared first so a swap can be undone.
+            hotkeys_.clear(HotkeyManager::kCaptureId);
+            hotkeys_.clear(HotkeyManager::kBoardId);
+            const struct {
+                int id;
+                const QString& combo;
+                const char* name;
+            } restore[] ={{HotkeyManager::kCaptureId, oldCapture, "new-note"}, {HotkeyManager::kBoardId, oldBoard, "board"}};
+            for (const auto& s : restore) {
+                if (!s.combo.isEmpty() && hotkeys_.set(s.id, s.combo) != HotkeyStatus::Ok)
+                    message += QStringLiteral(" The previous %1 hotkey %2 could not be restored.")
+                                   .arg(QString::fromLatin1(s.name), s.combo);
+            }
+        }
+        return ApplyError{message, 0};
     }
 
     if (next.startWithWindows != previous.startWithWindows)

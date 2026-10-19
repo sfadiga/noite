@@ -97,6 +97,12 @@ HotkeyOutcome HotkeyManager::apply(const QString& capture, const QString& board)
     return {HotkeyStatus::Taken, failed};
 }
 
+void HotkeyManager::clear(int id)
+{
+    release(id);
+    slot(id).combo.clear();
+}
+
 HotkeyStatus HotkeyManager::probe(const QString& combo)
 {
     const std::optional<Hotkey> hotkey = parseHotkey(combo);

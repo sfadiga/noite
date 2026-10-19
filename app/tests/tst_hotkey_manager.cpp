@@ -38,6 +38,32 @@ private slots:
         QVERIFY(!manager.isRegistered(kCap));
     }
 
+    void clearUnregistersAndEmpties()
+    {
+        FakeBackend backend;
+        HotkeyManager manager(backend);
+        QCOMPARE(manager.set(kCap, "Ctrl+Alt+J"), HotkeyStatus::Ok);
+        QCOMPARE(manager.set(kBrd, "Ctrl+Alt+B"), HotkeyStatus::Ok);
+        manager.clear(kBrd);
+        QVERIFY(manager.combo(kBrd).isEmpty());
+        QVERIFY(!manager.isRegistered(kBrd));
+        QVERIFY(!backend.registered.contains(kBrd));
+        QVERIFY(backend.has(kCap, "Ctrl+Alt+J"));
+    }
+
+    void clearWhilePausedForgetsTheCombo()
+    {
+        FakeBackend backend;
+        HotkeyManager manager(backend);
+        QCOMPARE(manager.set(kCap, "Ctrl+Alt+J"), HotkeyStatus::Ok);
+        manager.pause();
+        manager.clear(kCap);
+        QVERIFY(manager.combo(kCap).isEmpty());
+        manager.resume();
+        QVERIFY(!manager.isRegistered(kCap));
+        QVERIFY(backend.registered.isEmpty());
+    }
+
     void setInvalidKeepsOldRegistration()
     {
         FakeBackend backend;

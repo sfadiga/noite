@@ -34,6 +34,8 @@ public:
     HotkeyStatus set(int id, const QString& combo);
     // Sets both, all or nothing (Settings): on any failure both previous combinations are back.
     HotkeyOutcome apply(const QString& capture, const QString& board);
+    // Unregisters one hotkey and forgets its combination (a rollback to "nothing was set").
+    void clear(int id);
     // Whether `combo` could be registered right now; leaves nothing registered. A combination
     // the manager currently holds probes as Taken (the OS refuses it): callers probe while paused.
     HotkeyStatus probe(const QString& combo);

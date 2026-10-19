@@ -26,6 +26,7 @@ public:
     bool isAccepted() const { return accepted_; }
     // The other hotkey's current combination, for SameAsOther.
     void setOther(const QString& combo);
+    void cancelRecording();
 
     bool isRecording() const { return recording_; }
     QString statusText() const;
