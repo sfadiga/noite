@@ -1,8 +1,11 @@
 cmake_minimum_required(VERSION 3.21)
-project(noite VERSION 0.1.0 LANGUAGES C CXX)
 
+# version.txt is the version source; it must be read before project().
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 include(NoiteVersion)
+noite_read_version_file("${CMAKE_CURRENT_LIST_DIR}/version.txt" NOITE_BASE)
+project(noite VERSION ${NOITE_BASE} LANGUAGES C CXX)
+
 noite_configure_version() # NOITE_VERSION from git describe
 
 set(CMAKE_CXX_STANDARD 20)

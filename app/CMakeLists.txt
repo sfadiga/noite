@@ -101,7 +101,7 @@ qt_add_executable(app-tests
 # Reuses core's test registry and helpers.
 target_include_directories(app-tests PRIVATE tests bench ${PROJECT_SOURCE_DIR}/core/tests)
 target_link_libraries(app-tests PRIVATE noite-app sqlite3 Qt6::Test)
-target_compile_definitions(app-tests PRIVATE NOITE_GOLDEN_DIR="${PROJECT_SOURCE_DIR}/core/tests/golden")
+target_compile_definitions(app-tests PRIVATE NOITE_GOLDEN_DIR="${PROJECT_SOURCE_DIR}/core/tests/golden" NOITE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 add_test(NAME app COMMAND app-tests)
 
 # Crashes on purpose for tst_crash.cpp; lands next to app-tests.exe, never shipped.
