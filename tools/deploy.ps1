@@ -11,8 +11,10 @@ $src = Split-Path $PSScriptRoot
 $exe = Join-Path $src "build\$Config\noite.exe"
 if (-not (Test-Path $exe)) { throw "build first: $exe not found (tools/build.ps1 -Config $Config)" }
 
-$vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -products * -latest -property installationPath
-& "$vs\Common7\Tools\Launch-VsDevShell.ps1" -Arch amd64 -HostArch amd64 -SkipAutomaticLocation | Out-Null
+if (-not $env:VCToolsRedistDir) {
+    $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -products * -latest -property installationPath
+    & "$vs\Common7\Tools\Launch-VsDevShell.ps1" -Arch amd64 -HostArch amd64 -SkipAutomaticLocation | Out-Null
+}
 
 $dist = Join-Path $src "dist\noite"
 # dist\noite\data is a real data folder once noite has run from here (the default is <exe dir>\data):

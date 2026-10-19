@@ -14,7 +14,7 @@
 
 **Deferred to v2:** audio recording + speech-to-text, merge, split, Linux/macOS builds, code signing. (D1, D2, D23)
 
-**Audience:** the author and a few friends. Distributed as an unsigned portable zip on GitHub Releases; users will see a SmartScreen "unknown publisher" prompt on first run. (D23)
+**Audience:** the author and a few friends. Distributed as an unsigned portable zip on GitHub Releases; users will see a SmartScreen "unknown publisher" prompt on first run. Each release has three assets: `noite-<v>-win64.zip` (the portable folder with the licence notices, no `data\`, no PDBs), `noite-<v>-win64-pdb.zip` (the PDB, for reading a friend's crash dump) and `SHA256SUMS.txt`. Pushing a tag `vX.Y.Z` makes CI create a draft release that the author checks and publishes by hand. (D23)
 
 ## 2. Platform & architecture
 
@@ -73,10 +73,12 @@ The trash purge runs once a day, at the first check. When it runs, it scans ever
 - The app never checks for updates. Updating = replace `noite.exe`; `data\` is untouched.
 - On startup, if the schema needs migrating: take a backup snapshot first, then migrate. If the migration fails, refuse to start (data stays as it was, snapshot available).
 - An older exe refuses to open a database written by a newer schema version.
+- **Restoring a backup** is a manual copy: quit noite, copy a snapshot from `<backup folder>\noite-backups\<id>\snapshots\` over `data\noite.db` (keeping the old file), start noite. The release README.txt says so.
+- **Upgrade guarantee:** committed golden data folders, one per schema version (`core/tests/golden/vN`), which the current build opens in `tst_upgrade` on every push. Before bumping the schema to vN+1, generate and commit `golden/vN` with the then-current build.
 
 ### Logs (D29)
 
-Rotating logs in `data\logs\noite.log` (7 files × 1 MB). One line per message: `yyyy-MM-dd HH:mm:ss.zzz L [thread] message`, with L one of D/I/W/C/F; debug lines are dropped in release builds. Startup and quit are logged (`noite started · data <dir> · Qt <ver> · Windows <ver>`, `noite quit`). A crash appends a `CRASH` line and a `module+offset` stack trace to the log and writes a minidump `crash-YYYYMMDD-HHMMSS.dmp` next to it (newest 3 kept), then the process ends without a dialog. Release builds produce PDBs, which are not shipped; the release workflow keeps them as CI artifacts so a dump can be read later in Visual Studio. No telemetry. Settings has "Open logs folder".
+Rotating logs in `data\logs\noite.log` (7 files × 1 MB). One line per message: `yyyy-MM-dd HH:mm:ss.zzz L [thread] message`, with L one of D/I/W/C/F; debug lines are dropped in release builds. Startup and quit are logged (`noite started · data <dir> · Qt <ver> · Windows <ver>`, `noite quit`). A crash appends a `CRASH` line and a `module+offset` stack trace to the log and writes a minidump `crash-YYYYMMDD-HHMMSS.dmp` next to it (newest 3 kept), then the process ends without a dialog. Release builds produce PDBs, which are not in the portable zip; each release attaches them as `noite-<v>-win64-pdb.zip` so a dump can be read later in Visual Studio. No telemetry. Settings has "Open logs folder".
 
 ## 4. Data model
 
@@ -202,7 +204,7 @@ Closing the wizard with ✕ ("abandoned") applies what was collected so far, lea
 | UI logic | Qt Test on the `offscreen` platform | markdown shortcuts, paste handling, chip combination logic, `@date` parsing |
 | End-to-end | keystroke harness from the spikes (dedicated target window, leak detection) | capture → board → done → trash → restore |
 | Performance | instrumented timestamps ("hotkey received", "editor painted with focus") + seeded 2,000-note benchmark + an idle-then-summon scenario | fails the build if the §2 budget is missed |
-| CI | GitHub Actions, `windows-latest` | builds the portable zip |
+| CI | GitHub Actions, `windows-latest` | builds, tests, and on every push packages and checks the portable zip (`deploy.ps1`, `package.ps1 -DryRun`); a `vX.Y.Z` tag also creates a draft GitHub Release |
 
 Keystroke and end-to-end runs send real input, so they only run on CI or while the author is away from the PC.
 
