@@ -354,7 +354,7 @@ private slots:
             QVERIFY(!app.start());
             QFile log(root + "/logs/noite.log");
             QVERIFY(log.open(QIODevice::ReadOnly));
-            QVERIFY(QString::fromUtf8(log.readAll()).contains(QString::fromUtf8("noite started · data ")));
+            QVERIFY(QString::fromUtf8(log.readAll()).contains(QString::fromUtf8(" started · data ")));
         }
         QFile log(root + "/logs/noite.log");
         QVERIFY(log.open(QIODevice::ReadOnly));

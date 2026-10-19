@@ -44,11 +44,13 @@ add_library(noite-app STATIC
     src/setup/SetupWizard.h src/setup/SetupWizard.cpp
     src/setup/SettingsDialog.h src/setup/SettingsDialog.cpp
 )
-target_include_directories(noite-app PUBLIC src)
+configure_file(src/version.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/noite_version.h @ONLY)
+configure_file(src/noite.rc.in ${CMAKE_CURRENT_BINARY_DIR}/generated/noite.rc @ONLY)
+target_include_directories(noite-app PUBLIC src ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(noite-app PUBLIC noite-core Qt6::Widgets user32 wtsapi32 dbghelp)
 target_compile_definitions(noite-app PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
 
-qt_add_executable(noite WIN32 src/main.cpp)
+qt_add_executable(noite WIN32 src/main.cpp ${CMAKE_CURRENT_BINARY_DIR}/generated/noite.rc)
 target_link_libraries(noite PRIVATE noite-app)
 
 # Board performance gate (D5): not shipped, run by hand on a Release build.
@@ -93,6 +95,7 @@ qt_add_executable(app-tests
     tests/tst_settings_applier.cpp
     tests/tst_setup_wizard.cpp
     tests/tst_settings_dialog.cpp
+    tests/tst_version.cpp
     tests/tst_seed.cpp bench/Seed.h bench/Seed.cpp
 )
 # Reuses core's test registry and helpers.

@@ -38,5 +38,21 @@ foreach ($suite in $suites) {
     $total += [math]::Abs($p.ExitCode)
 }
 
+# The version logic is a CMake script test (no Qt): a mismatch counts toward the total.
+$cmake = (Get-Command cmake -ErrorAction SilentlyContinue).Source
+if (-not $cmake) {
+    $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -products * -latest -property installationPath
+    if ($vs) { $cmake = "$vs\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" }
+}
+if ($cmake -and (Test-Path $cmake)) {
+    & $cmake -P (Join-Path $src "cmake\tests\version_test.cmake")
+    $versionExit = $LASTEXITCODE
+    "suite version: exit $versionExit"
+    $total += [math]::Abs($versionExit)
+} else {
+    "MISSING cmake for the version test"
+    $total += 1
+}
+
 "TOTAL failures: $total"
 exit $total

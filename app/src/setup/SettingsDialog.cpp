@@ -6,6 +6,7 @@
 #include "setup/SetupTexts.h"
 
 #include <noite/store.h>
+#include <noite_version.h>
 
 #include <QCheckBox>
 #include <QDebug>
@@ -142,6 +143,7 @@ SettingsDialog::SettingsDialog(noite::Store& store, HotkeyManager& hotkeys, Sett
     systemButtonsRow->addWidget(runSetupBtn);
     systemButtonsRow->addStretch(1);
     systemLayout->addLayout(systemButtonsRow);
+    systemLayout->addWidget(new QLabel(QString("noite %1").arg(QString::fromLatin1(NOITE_VERSION))));
     mainLayout->addWidget(systemGroup);
 
     errorLabel_ = new QLabel;

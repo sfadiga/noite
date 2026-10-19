@@ -10,6 +10,9 @@ struct AppOptions {
     bool crashHandler = false;        // install the crash handler at start (main only; tests leave it off)
 };
 
+// The application name "noite" and the build's version (NOITE_VERSION); main calls it first.
+void applyAppIdentity();
+
 // Reads "--data <dir>" or "--data=<dir>" (used by tests and development).
 AppOptions parseArgs(const QStringList& args);
 
