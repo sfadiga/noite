@@ -185,4 +185,4 @@
 
 1. Part A: create the repo, add the workflow and README, run the first build, publish `qt-6.10.3-msvc2022-x64-mt-1`.
 2. Part B tasks: `version.txt` + CHANGELOG + bump helper; board label; `--self-check`; static CMake option + packaging; CI `single-exe` + release changes; docs.
-3. Merge, run `tools/bump-version.ps1 1.0.0` if needed (`version.txt` already holds 1.0.0 and the CHANGELOG already has the 1.0.0 section), and tag `v1.0.0`.
+3. Merge, then tag `v1.0.0`. Part B already sets `version.txt` to `1.0.0` and writes the dated `## [1.0.0] - <date>` section, with an empty `[Unreleased]` above it. `tools/bump-version.ps1` is for every later version (it refuses a version that isn't greater than the current one, so it is never run for 1.0.0).
