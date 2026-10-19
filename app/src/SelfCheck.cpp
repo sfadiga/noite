@@ -12,7 +12,6 @@
 #include <QObject>
 #include <QPluginLoader>
 
-#include <cstring>
 
 namespace {
 

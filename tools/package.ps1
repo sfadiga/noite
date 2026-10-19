@@ -81,7 +81,7 @@ function Resolve-PackageVersion([string]$ExePath, [string]$Version, [bool]$DryRu
     if (-not $built) { throw "noite.exe has no ProductVersion" }
     if ($DryRun) { return $built }
     if ($built -ne $Version) {
-        throw ("exe version {0} {1} release version {2} {3} did you bump project(VERSION) in CMakeLists.txt before tagging?" -f $built, [char]0x2260, $Version, [char]0x2014)
+        throw ("exe version {0} {1} release version {2} {3} did you bump version.txt (tools\bump-version.ps1) before tagging?" -f $built, [char]0x2260, $Version, [char]0x2014)
     }
     return $Version
 }
@@ -92,7 +92,9 @@ function Add-PackageNotices([string]$Stage, [string]$Version, [string]$Packaging
     $readme = $readme.Replace("<version>", $Version) -replace "`r?`n", "`r`n"
     [System.IO.File]::WriteAllText((Join-Path $Stage "README.txt"), $readme, $Utf8NoBom)
     Copy-Item -LiteralPath $LicenseFile (Join-Path $Stage "LICENSE.txt") -Force
-    Copy-Item -LiteralPath (Join-Path $PackagingDir "THIRD-PARTY.txt") $Stage -Force
+    $third = [System.IO.File]::ReadAllText((Join-Path $PackagingDir "THIRD-PARTY.txt"), [System.Text.Encoding]::UTF8)
+    $third = $third.Replace("<version>", $Version) -replace "`r?`n", "`r`n"
+    [System.IO.File]::WriteAllText((Join-Path $Stage "THIRD-PARTY.txt"), $third, $Utf8NoBom)
     New-Item -ItemType Directory -Path (Join-Path $Stage "licenses") -Force | Out-Null
     Get-ChildItem -LiteralPath (Join-Path $PackagingDir "licenses") -File |
         Copy-Item -Destination (Join-Path $Stage "licenses") -Force
@@ -441,7 +443,14 @@ function Invoke-SelfTest {
         if ((Get-ZipEntryNames $r.PdbZip) -notcontains "noite/noite.pdb") { throw "self-test static: noite.pdb missing from the PDB zip" }
         if (@(Get-Content $r.Sums).Count -ne 2) { throw "self-test static: SHA256SUMS.txt should have 2 lines" }
         if ($r.SelfCheck -ne "self-check ok 0.1.0") { throw "self-test static: self-check line '$($r.SelfCheck)'" }
-        Write-Host "  ok  complete static stage packages (exactly the 6 files, PDB zip, 2 checksums)"
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($r.Zip)
+        try {
+            $sr = New-Object System.IO.StreamReader($zip.GetEntry("noite/THIRD-PARTY.txt").Open(), [System.Text.Encoding]::UTF8)
+            $third = $sr.ReadToEnd(); $sr.Dispose()
+        } finally { $zip.Dispose() }
+        if (-not $third.Contains("tree/v0.1.0")) { throw "self-test static: THIRD-PARTY.txt lacks tree/v0.1.0" }
+        if ($third.Contains("<version>")) { throw "self-test static: <version> placeholder left in THIRD-PARTY.txt" }
+        Write-Host "  ok  complete static stage packages (exactly the 6 files, PDB zip, 2 checksums, THIRD-PARTY.txt names tree/v0.1.0)"
 
         # S2. noite-self-check.txt (written by the self-check into the stage) is never in the zip
         if (@($got | Where-Object { $_ -like "*noite-self-check.txt" }).Count) { throw "self-test static: noite-self-check.txt is in the zip" }

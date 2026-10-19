@@ -42,7 +42,7 @@ private slots:
     {
         QFile file(QString(NOITE_SOURCE_DIR) + "/version.txt");
         QVERIFY(file.open(QIODevice::ReadOnly));
-        QCOMPARE(QString(NOITE_VERSION_BASE), QString::fromUtf8(file.readAll()).trimmed());
+        QCOMPARE(QString(NOITE_VERSION_BASE), QString::fromUtf8(file.readAll()).remove(QChar(0xFEFF)).trimmed());
         QVERIFY2(QString(NOITE_VERSION).startsWith(NOITE_VERSION_BASE), NOITE_VERSION);
     }
 

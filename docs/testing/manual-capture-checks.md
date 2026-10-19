@@ -87,6 +87,6 @@ Record pass/fail and a one-line note for any failure. Every failure becomes an a
 
 | # | Check | How | Expected |
 |---|---|---|---|
-| R-1 | Push tag `v0.1.0` | Push the tag and watch the CI run | A draft release "noite 0.1.0" with the 3 files; the notes list the merged PRs |
-| R-2 | Download the zip into a new folder, run noite.exe | Unzip, run `noite.exe` | SmartScreen → More info → Run anyway starts it; Properties → Details shows 0.1.0; the log says `noite 0.1.0 started`; the setup wizard opens |
-| R-3 | Replace the exe in your real noite folder with the release one | Quit noite, replace `noite.exe`, start it | Notes intact, no new migration snapshot (same schema), Settings shows 0.1.0 |
+| R-1 | Push tag `v1.0.0` | Push the tag and watch the CI run | A draft release "noite 1.0.0" with the 3 files; the notes are CHANGELOG.md's 1.0.0 section |
+| R-2 | Download the zip into a new folder, run noite.exe | Unzip (one `noite.exe` plus the notices, no DLLs or plugin folders), run `noite.exe` | SmartScreen → More info → Run anyway starts it; Properties → Details shows 1.0.0; the log says `noite 1.0.0 started`; the setup wizard opens |
+| R-3 | Replace the exe in your real noite folder with the release one | Quit noite, replace `noite.exe`, start it | Notes intact, no new migration snapshot (same schema), Settings shows 1.0.0 |

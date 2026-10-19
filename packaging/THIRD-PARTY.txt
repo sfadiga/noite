@@ -3,9 +3,9 @@ Third-party components in noite
 Qt 6.10.3
   © The Qt Company. Used under the LGPLv3, unmodified, statically linked into noite.exe
   (qtbase only).
-  Relinking: noite's complete source is public under the MIT licence at
-  https://github.com/sfadiga/noite, so the application can be relinked against a
-  modified Qt, as LGPLv3 section 4(d) requires.
+  Relinking: noite's complete source is public under the MIT licence; the source of
+  this exact version is https://github.com/sfadiga/noite/tree/v<version>, so the
+  application can be relinked against a modified Qt, as LGPLv3 section 4(d) requires.
   Qt source: qtbase-everywhere-src-6.10.3.tar.xz, attached to the release this Qt was
   built from:
   https://github.com/sfadiga/qt-static-windows/releases/tag/qt-6.10.3-msvc2022-x64-mt-1

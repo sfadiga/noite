@@ -2,7 +2,7 @@
 
 A note-taking app for busy people who get things done. Press a hotkey, write, and it's there tomorrow.
 
-> **Status: v1 features are built (M1–M6); the release pipeline (M7a) is new.** Performance work and a single-exe build come next. *noite* is a working name.
+> **Status: v1 features are built (M1–M6); 1.0.0 is the first release, shipped as a single `noite.exe` (M7).** *noite* is a working name.
 
 ## What it does (v1)
 
@@ -84,12 +84,15 @@ The keystroke latency harness (`spikes/hotkey-latency/run-trials.ps1`) **sends r
 
 ### Releasing
 
+1.0.0 is already prepared: `version.txt` is 1.0.0 and `CHANGELOG.md` has the 1.0.0 section. For 1.0.0 skip steps 1 and 2; check the CHANGELOG date (step 3), merge, wait for a green `single-exe` job on `main`, then tag.
+
 1. Write the release's changes under `[Unreleased]` in `CHANGELOG.md`.
 2. Run `tools\bump-version.ps1 X.Y.Z`. It updates `version.txt` and turns `[Unreleased]` into the `X.Y.Z` section.
-3. Open a PR with that, wait for CI to be green, and merge it to `main`.
-4. Pull, then tag `main`'s HEAD and push the tag: `git tag vX.Y.Z` then `git push origin vX.Y.Z`.
-5. CI builds the single exe and creates a **draft** release with the zip, the PDB zip and `SHA256SUMS.txt`, and the notes from the CHANGELOG section. It fails if the tag differs from `version.txt`, if the CHANGELOG has no entry for the version, or if a release for that tag already exists. In that case delete the draft and re-tag, or re-run the release job within 24 hours (the build artifact expires after that).
-6. Check the draft on GitHub and publish.
+3. Check that the date on the `X.Y.Z` CHANGELOG heading is the day you are releasing; fix it before tagging.
+4. Open a PR with that, wait for CI to be green, and merge it to `main`.
+5. Pull, then tag `main`'s HEAD and push the tag: `git tag vX.Y.Z` then `git push origin vX.Y.Z`.
+6. CI builds the single exe and creates a **draft** release with the zip, the PDB zip and `SHA256SUMS.txt`, and the notes from the CHANGELOG section. It fails if the tag differs from `version.txt`, if the CHANGELOG has no entry for the version, or if a release for that tag already exists. In that case delete the draft and re-tag, or re-run the release job within 7 days (the `noite-single-exe` build artifact expires after that).
+7. Check the draft on GitHub and publish.
 
 ### Schema changes
 

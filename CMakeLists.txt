@@ -13,6 +13,9 @@ noite_configure_version() # NOITE_VERSION from git describe
 # noite-app and sqlite3 are /MT like the static Qt (CMP0091 is NEW from cmake_minimum_required 3.21).
 option(NOITE_STATIC "Build one self-contained noite.exe against a static Qt (/MT, static plugins)" OFF)
 if(NOITE_STATIC)
+    if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+        message(FATAL_ERROR "NOITE_STATIC needs CMAKE_BUILD_TYPE=Release (the static Qt is release-only)")
+    endif()
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
