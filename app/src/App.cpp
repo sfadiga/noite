@@ -14,6 +14,7 @@
 #include "platform/Hotkey.h"
 #include "platform/NativeHost.h"
 #include "radar/ReviewScheduler.h"
+#include "setup/BackupFolderField.h"
 #include "setup/SettingsApplier.h"
 #include "setup/SetupTexts.h"
 
@@ -146,10 +147,14 @@ std::optional<int> App::start()
     connect(qApp, &QCoreApplication::aboutToQuit, this, [this] {
         if (board_)
             board_->close();
-        if (wizard_)
+        if (wizard_) {
+            wizard_->disconnect(this);
             wizard_->close();
-        if (settingsDialog_)
+        }
+        if (settingsDialog_) {
+            settingsDialog_->disconnect(this);
             settingsDialog_->close();
+        }
     });
     // A note captured while the board is open shows up on it.
     const auto refreshBoard = [this] {
@@ -271,14 +276,24 @@ void App::backUpNow()
     try {
         noite::Settings settings = store_->settings();
         if (!settings.backupDir) {
-            // The dialog is modal but the tray menu is not: a second click must not stack another.
-            backupAction_->setEnabled(false);
-            const std::optional<QString> folder = askFolder_();
-            backupAction_->setEnabled(!jobs_->isBusy());
+            std::optional<QString> folder;
+            if (settingsDialog_ && settingsDialog_->backupField()->values().folder) {
+                folder = settingsDialog_->backupField()->values().folder;
+            } else {
+                // The dialog is modal but the tray menu is not: a second click must not stack another.
+                backupAction_->setEnabled(false);
+                folder = askFolder_();
+                backupAction_->setEnabled(!jobs_->isBusy());
+            }
             if (!folder)
                 return;
             settings.backupDir = *folder;
             store_->saveSettings(settings);
+            if (settingsDialog_) {
+                BackupFolderField::Values values = settingsDialog_->backupField()->values();
+                values.folder = *folder;
+                settingsDialog_->backupField()->setValues(values);
+            }
         }
     } catch (const std::exception& error) {
         qWarning() << "backup folder setting:" << error.what();
@@ -311,41 +326,31 @@ void App::showWizard()
             new SetupWizard(store_->settings(), *hotkeys_,
                             WizardContext{dataRoot_, syncWarning_, autostartManaged, [this] { return askFolder_(); }});
         wizard_->setAttribute(Qt::WA_DeleteOnClose);
-        connect(wizard_, &SetupWizard::finished, this, [this](noite::Settings s, bool viaHotkey) {
-            if (wizard_) {
-                wizard_->deleteLater();
-                wizard_ = nullptr;
-            }
-            s.setupCompleted = true;
-            if (const auto err = applier_->apply(s)) {
-                qWarning() << "wizard apply:" << err->message;
-                if (err->hotkeyId != 0) {
-                    try {
-                        store_->saveSettings(s);
-                    } catch (const std::exception& saveErr) {
-                        qWarning() << "wizard save:" << saveErr.what();
+        const auto saveFallback = [this](const noite::Settings& target) {
+            const noite::Settings previous = store_->settings();
+            noite::Settings toSave = target;
+            toSave.captureHotkey = hotkeys_->isRegistered(kCaptureHotkeyId) ? hotkeys_->combo(kCaptureHotkeyId)
+                                                                            : previous.captureHotkey;
+            toSave.boardHotkey =
+                hotkeys_->isRegistered(kBoardHotkeyId) ? hotkeys_->combo(kBoardHotkeyId) : previous.boardHotkey;
+            try {
+                store_->saveSettings(toSave);
+                if (toSave.startWithWindows != previous.startWithWindows) {
+                    if (autostartAction_) {
+                        const QSignalBlocker blocker(autostartAction_);
+                        autostartAction_->setChecked(toSave.startWithWindows);
                     }
-                    emit hotkeyUnavailable(err->hotkeyId == kCaptureHotkeyId ? s.captureHotkey : s.boardHotkey);
+                    updateAutostart(toSave.startWithWindows);
                 }
-            }
-            if (viaHotkey) {
-                try {
-                    const noite::Scratch scratch = store_->createScratch(starterNoteHtml(s));
-                    window_->summonNote(scratch.id);
-                } catch (const std::exception& error) {
-                    qWarning() << "starter note:" << error.what();
-                    window_->summon();
+                if (!setupPending_ && scheduler_
+                    && (toSave.dayStart != previous.dayStart || toSave.staleDays != previous.staleDays)) {
+                    scheduler_->check();
                 }
+            } catch (const std::exception& saveErr) {
+                qWarning() << "wizard save:" << saveErr.what();
             }
-            finishPendingSetup();
-        });
-        connect(wizard_, &SetupWizard::abandoned, this, [this](const noite::Settings& partial) {
-            if (wizard_) {
-                wizard_->deleteLater();
-                wizard_ = nullptr;
-            }
-            if (const auto err = applier_->apply(partial))
-                qWarning() << "wizard abandon:" << err->message;
+        };
+        const auto ensureHotkeysRegistered = [this] {
             const noite::Settings current = store_->settings();
             if (!hotkeys_->isRegistered(kCaptureHotkeyId)) {
                 if (hotkeys_->set(kCaptureHotkeyId, current.captureHotkey) != HotkeyStatus::Ok)
@@ -355,8 +360,46 @@ void App::showWizard()
                 if (hotkeys_->set(kBoardHotkeyId, current.boardHotkey) != HotkeyStatus::Ok)
                     emit hotkeyUnavailable(current.boardHotkey);
             }
-            finishPendingSetup();
-        });
+        };
+        connect(wizard_, &SetupWizard::finished, this,
+                [this, saveFallback, ensureHotkeysRegistered](noite::Settings s, bool viaHotkey) {
+                    if (wizard_) {
+                        wizard_->deleteLater();
+                        wizard_ = nullptr;
+                    }
+                    s.setupCompleted = true;
+                    if (const auto err = applier_->apply(s)) {
+                        qWarning() << "wizard apply:" << err->message;
+                        if (err->hotkeyId != 0) {
+                            saveFallback(s);
+                            ensureHotkeysRegistered();
+                        }
+                    }
+                    if (viaHotkey) {
+                        try {
+                            const noite::Scratch scratch = store_->createScratch(starterNoteHtml(s));
+                            window_->summonNote(scratch.id);
+                        } catch (const std::exception& error) {
+                            qWarning() << "starter note:" << error.what();
+                            window_->summon();
+                        }
+                    }
+                    finishPendingSetup();
+                });
+        connect(wizard_, &SetupWizard::abandoned, this,
+                [this, saveFallback, ensureHotkeysRegistered](const noite::Settings& partial) {
+                    if (wizard_) {
+                        wizard_->deleteLater();
+                        wizard_ = nullptr;
+                    }
+                    if (const auto err = applier_->apply(partial)) {
+                        qWarning() << "wizard abandon:" << err->message;
+                        if (err->hotkeyId != 0)
+                            saveFallback(partial);
+                    }
+                    ensureHotkeysRegistered();
+                    finishPendingSetup();
+                });
     }
     wizard_->show();
     wizard_->raise();

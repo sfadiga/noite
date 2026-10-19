@@ -16,6 +16,7 @@
 #include "platform/NativeHost.h"
 #include "radar/ReviewScheduler.h"
 #include "radar/ReviewWindow.h"
+#include "setup/BackupFolderField.h"
 #include "setup/SettingsDialog.h"
 #include "setup/SetupWizard.h"
 
@@ -603,6 +604,53 @@ private slots:
         emit app.settingsDialog()->runSetupRequested();
         QVERIFY(!app.settingsDialog());
         QVERIFY(app.wizard() && app.wizard()->isVisible());
+    }
+
+    void wizardAbandonSavesPartialWhenHotkeyTaken()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9", "Ctrl+Alt+Shift+F8", false);
+        FakeBackend backend;
+        backend.taken.insert("Ctrl+Alt+Shift+F8");
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QSignalSpy unavailable(&app, &App::hotkeyUnavailable);
+        QVERIFY(!app.start());
+        QVERIFY(app.wizard());
+
+        noite::Settings partial = app.wizard()->collected();
+        partial.trashRetentionDays = 45;
+        emit app.wizard()->abandoned(partial);
+        QCOMPARE(app.store()->settings().trashRetentionDays, 45);
+        QVERIFY(!app.store()->settings().setupCompleted);
+        QVERIFY(backend.has(App::kCaptureHotkeyId, "Ctrl+Alt+Shift+F9"));
+        QCOMPARE(unavailable.count(), 1);
+        QCOMPARE(unavailable[0][0].toString(), QString("Ctrl+Alt+Shift+F8"));
+    }
+
+    void backUpNowFromSettingsSyncsBackupField()
+    {
+        QTemporaryDir tmp;
+        QTemporaryDir dest;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9");
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+        QSignalSpy toasts(&app, &App::toastShown);
+
+        const QString folder = dest.path();
+        app.setBackupFolderAsker([folder] { return std::optional<QString>(folder); });
+        app.showSettings();
+        QVERIFY(app.settingsDialog());
+        QVERIFY(!app.settingsDialog()->backupField()->values().folder);
+
+        emit app.settingsDialog()->backUpNowRequested();
+        QTRY_COMPARE_WITH_TIMEOUT(toasts.count(), 1, 10000);
+        QCOMPARE(app.settingsDialog()->backupField()->values().folder, std::optional<QString>(folder));
+
+        app.settingsDialog()->save();
+        QCOMPARE(app.store()->settings().backupDir, std::optional<QString>(folder));
     }
 };
 
