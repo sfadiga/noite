@@ -84,6 +84,8 @@ public:
     QAction* settingsAction() const { return settingsAction_; }
     bool setupPending() const { return setupPending_; }
     QMenu* trayMenu() const { return trayMenu_.get(); }
+    // The tray icon's tooltip: "noite <version>" (available without a tray).
+    QString trayToolTip() const;
 
 signals:
     // A hotkey (capture or board) could not be registered (another program holds it). noite

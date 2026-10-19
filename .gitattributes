@@ -1,0 +1,2 @@
+# Golden data folders are frozen binary fixtures (see core/tests/golden/make_golden.cpp).
+core/tests/golden/**/*.db binary

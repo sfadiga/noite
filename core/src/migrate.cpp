@@ -11,6 +11,8 @@
 
 namespace noite::detail {
 
+// Before adding migration N+1: run noite_golden for the current schema N (core/tests/golden/vN)
+// and commit it, so tst_upgrade keeps proving that vN data opens.
 const std::vector<Migration> kMigrations = {
     {1, kSchemaV1},
     {2, kSchemaV2},

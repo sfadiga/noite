@@ -4,14 +4,19 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  core:
-    name: core + app (Windows, MSVC, Qt 6.10.3)
+  build:
+    name: build + test + package (Windows, MSVC, Qt 6.10.3)
     runs-on: windows-latest
     env:
       QT_QPA_FONTDIR: C:\Windows\Fonts
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -42,3 +47,66 @@ jobs:
         with:
           name: test-results
           path: build/Release/test-results/
+
+      - name: Deploy (portable folder, size budget)
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/deploy.ps1 -Config Release -QtDir $env:QT_ROOT_DIR
+
+      - name: Package self-test
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/package.ps1 -SelfTest
+
+      - name: Package dry run
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/package.ps1 -DryRun
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: noite-dist
+          if-no-files-found: error
+          path: |
+            dist/noite/**
+            build/Release/noite.pdb
+          retention-days: 1
+
+  release:
+    name: draft release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: noite-dist
+          path: .
+
+      - name: Package
+        shell: powershell
+        run: |
+          $v = "${{ github.ref_name }}".Substring(1)
+          powershell -NoProfile -ExecutionPolicy Bypass -File tools/package.ps1 -Version $v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem dist\*.zip | ForEach-Object { "{0}  {1:N1} MB" -f $_.Name, ($_.Length / 1MB) }
+
+      - name: Create draft release
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = "${{ github.ref_name }}".Substring(1)
+          $ErrorActionPreference = 'Continue'
+          gh release view "${{ github.ref_name }}" *> $null
+          $exists = ($LASTEXITCODE -eq 0)
+          $ErrorActionPreference = 'Stop'
+          if ($exists) {
+            Write-Error "release ${{ github.ref_name }} already exists — delete the draft and re-tag"
+            exit 1
+          }
+          gh release create "${{ github.ref_name }}" --draft --generate-notes --title "noite $v" "dist/noite-$v-win64.zip" "dist/noite-$v-win64-pdb.zip" "dist/SHA256SUMS.txt"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

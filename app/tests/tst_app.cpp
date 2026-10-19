@@ -26,6 +26,9 @@
 #include <QAction>
 #include <QCheckBox>
 #include <QDir>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLineEdit>
 #include <QMenu>
 #include <QRandomGenerator>
@@ -354,7 +357,7 @@ private slots:
             QVERIFY(!app.start());
             QFile log(root + "/logs/noite.log");
             QVERIFY(log.open(QIODevice::ReadOnly));
-            QVERIFY(QString::fromUtf8(log.readAll()).contains(QString::fromUtf8("noite started · data ")));
+            QVERIFY(QString::fromUtf8(log.readAll()).contains(QString::fromUtf8(" started · data ")));
         }
         QFile log(root + "/logs/noite.log");
         QVERIFY(log.open(QIODevice::ReadOnly));
@@ -496,6 +499,43 @@ private slots:
     }
 
     // ---- M6: setup wizard and Settings ----
+
+    // The current build starts on a data folder written by schema v2 (core/tests/golden/v2):
+    // no wizard, the saved hotkeys, and the board shows what the manifest says.
+    void goldenV2StartsWithoutWizard()
+    {
+        QFile manifestFile(QString(NOITE_GOLDEN_DIR) + "/v2/manifest.json");
+        QVERIFY(manifestFile.open(QIODevice::ReadOnly));
+        const int activeCount = QJsonDocument::fromJson(manifestFile.readAll()).object()["activeCount"].toInt();
+        QVERIFY(activeCount > 0);
+
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        QVERIFY(QDir().mkpath(root));
+        QVERIFY(QFile::copy(QString(NOITE_GOLDEN_DIR) + "/v2/noite.db", root + "/noite.db"));
+
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+        QCoreApplication::processEvents();
+        QVERIFY(!app.wizard());
+        QVERIFY(backend.has(App::kCaptureHotkeyId, "Ctrl+Alt+K"));
+        QVERIFY(backend.registered.contains(App::kBoardHotkeyId));
+
+        app.showBoard();
+        app.boardWindow()->setTab(Tab::All);
+        // A bundle shows as one stack card; count the notes behind the cards.
+        auto notesShown = [&] {
+            int n = 0;
+            const BoardModel& model = app.boardWindow()->model();
+            for (int i = 0; i < model.rowCount(); ++i)
+                n += model.isStack(i) ? int(model.row(i).members.size()) : 1;
+            return n;
+        };
+        QTRY_COMPARE(notesShown(), activeCount);
+        QCOMPARE(app.boardWindow()->model().rowCount(), 3); // the card count
+        // The trashed note becomes purgeable from about 2026-11-17 under the real clock; this test asserts only active notes.
+    }
 
     void wizardOnFirstRun()
     {

@@ -21,6 +21,7 @@
 #include <noite/data_dir.h>
 #include <noite/error.h>
 #include <noite/store.h>
+#include <noite_version.h>
 
 #include <QAction>
 #include <QApplication>
@@ -108,8 +109,9 @@ std::optional<int> App::start()
     log_.open = true;
     if (options_.crashHandler)
         crash::install(logsDir_);
-    qInfo().noquote() << QString::fromUtf8("noite started · data %1 · Qt %2 · Windows %3")
-                             .arg(root, QString::fromLatin1(qVersion()), QSysInfo::kernelVersion());
+    qInfo().noquote() << QString::fromUtf8("noite %1 started · data %2 · Qt %3 · Windows %4")
+                             .arg(QString::fromLatin1(NOITE_VERSION), root, QString::fromLatin1(qVersion()),
+                                  QSysInfo::kernelVersion());
 
     store_ = noite::Store::open(std::move(*dir), std::make_shared<noite::SystemClock>());
     clearOpenFolder(defaultOpenFolder()); // chip files opened last session (A5)
@@ -550,6 +552,11 @@ int App::run()
     return QApplication::exec();
 }
 
+QString App::trayToolTip() const
+{
+    return QString("noite %1").arg(QString::fromLatin1(NOITE_VERSION));
+}
+
 void App::createTray()
 {
     settingsAction_ = new QAction(tr("Settings"), this);
@@ -570,7 +577,7 @@ void App::createTray()
     if (!QSystemTrayIcon::isSystemTrayAvailable())
         return;
     tray_ = new QSystemTrayIcon(qApp->style()->standardIcon(QStyle::SP_FileDialogDetailedView), this);
-    tray_->setToolTip("noite");
+    tray_->setToolTip(trayToolTip());
     tray_->setContextMenu(trayMenu_.get());
     connect(tray_, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
         if (reason == QSystemTrayIcon::Trigger)

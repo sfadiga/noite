@@ -1,6 +1,15 @@
 #include "AppOptions.h"
 
+#include <noite_version.h>
+
+#include <QCoreApplication>
 #include <QDir>
+
+void applyAppIdentity()
+{
+    QCoreApplication::setApplicationName("noite");
+    QCoreApplication::setApplicationVersion(NOITE_VERSION);
+}
 
 AppOptions parseArgs(const QStringList& args)
 {
