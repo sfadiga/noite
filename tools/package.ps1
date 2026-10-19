@@ -20,17 +20,17 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 $Required = @(
     "noite.exe", "Qt6Core.dll", "Qt6Gui.dll", "Qt6Widgets.dll", "platforms\qwindows.dll",
-    "imageformats\qjpeg.dll", "vcruntime140.dll",
+    "imageformats\qjpeg.dll", "imageformats\qgif.dll", "styles\qmodernwindowsstyle.dll", "vcruntime140.dll",
     "README.txt", "LICENSE.txt", "THIRD-PARTY.txt", "licenses\LGPL-3.0.txt", "licenses\GPL-3.0.txt"
 )
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 function Write-ZipFromFolder([string]$Folder, [string]$ZipPath, [string]$Prefix) {
-    if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
-    $root = (Resolve-Path $Folder).Path.TrimEnd('\')
+    if (Test-Path -LiteralPath $ZipPath) { Remove-Item -LiteralPath $ZipPath -Force }
+    $root = (Resolve-Path -LiteralPath $Folder).Path.TrimEnd('\')
     $zip = [System.IO.Compression.ZipFile]::Open($ZipPath, [System.IO.Compression.ZipArchiveMode]::Create)
     try {
-        foreach ($f in Get-ChildItem $root -Recurse -File -Force) {
+        foreach ($f in Get-ChildItem -LiteralPath $root -Recurse -File -Force) {
             $rel = $f.FullName.Substring($root.Length + 1).Replace('\', '/')
             [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
                 $zip, $f.FullName, "$Prefix/$rel", [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
@@ -50,12 +50,12 @@ function New-PackageZips {
         [string]$OutDir, [string]$PdbPath, [string]$PackagingDir, [string]$LicenseFile
     )
     $exe = Join-Path $DistDir "noite.exe"
-    if (-not (Test-Path $exe)) { throw "noite.exe not found in $DistDir (run tools/deploy.ps1 first)" }
+    if (-not (Test-Path -LiteralPath $exe)) { throw "noite.exe not found in $DistDir (run tools/deploy.ps1 first)" }
     if (-not $DryRun) {
         if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "-Version '$Version' is not x.y.z" }
     }
     $built = $ExeVersion
-    if (-not $built) { $built = (Get-Item $exe).VersionInfo.ProductVersion }
+    if (-not $built) { $built = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion }
     if (-not $built) { throw "noite.exe has no ProductVersion" }
     if ($DryRun) {
         $Version = $built
@@ -68,10 +68,10 @@ function New-PackageZips {
     New-Item -ItemType Directory -Path $stage -Force | Out-Null
     try {
         # dist contents minus the live data folder
-        Get-ChildItem $DistDir -Force | Where-Object { $_.Name -ne "data" } |
+        Get-ChildItem -LiteralPath $DistDir -Force | Where-Object { $_.Name -ne "data" } |
             Copy-Item -Destination $stage -Recurse -Force
-        if (Get-ChildItem $stage -Recurse -File -Force -Filter *.pdb) {
-            $names = (Get-ChildItem $stage -Recurse -File -Force -Filter *.pdb | ForEach-Object Name) -join ", "
+        if (Get-ChildItem -LiteralPath $stage -Recurse -File -Force -Filter *.pdb) {
+            $names = (Get-ChildItem -LiteralPath $stage -Recurse -File -Force -Filter *.pdb | ForEach-Object Name) -join ", "
             throw "forbidden file(s) in dist: $names"
         }
 
@@ -79,34 +79,44 @@ function New-PackageZips {
         $readme = [System.IO.File]::ReadAllText((Join-Path $PackagingDir "README.txt"), [System.Text.Encoding]::UTF8)
         $readme = $readme.Replace("<version>", $Version) -replace "`r?`n", "`r`n"
         [System.IO.File]::WriteAllText((Join-Path $stage "README.txt"), $readme, $Utf8NoBom)
-        Copy-Item $LicenseFile (Join-Path $stage "LICENSE.txt") -Force
-        Copy-Item (Join-Path $PackagingDir "THIRD-PARTY.txt") $stage -Force
+        Copy-Item -LiteralPath $LicenseFile (Join-Path $stage "LICENSE.txt") -Force
+        Copy-Item -LiteralPath (Join-Path $PackagingDir "THIRD-PARTY.txt") $stage -Force
         New-Item -ItemType Directory -Path (Join-Path $stage "licenses") -Force | Out-Null
-        Copy-Item (Join-Path $PackagingDir "licenses\*") (Join-Path $stage "licenses") -Force
+        Get-ChildItem -LiteralPath (Join-Path $PackagingDir "licenses") -File |
+            Copy-Item -Destination (Join-Path $stage "licenses") -Force
 
         foreach ($r in $Required) {
-            if (-not (Test-Path (Join-Path $stage $r))) { throw "required file missing from the package: $r" }
+            if (-not (Test-Path -LiteralPath (Join-Path $stage $r))) { throw "required file missing from the package: $r" }
         }
-        if (Test-Path (Join-Path $stage "data")) { throw "forbidden folder in the package: data\" }
-        if (-not (Test-Path $PdbPath)) { throw "PDB not found: $PdbPath (build Release first)" }
+        if (Test-Path -LiteralPath (Join-Path $stage "data")) { throw "forbidden folder in the package: data\" }
+        if (-not (Test-Path -LiteralPath $PdbPath)) { throw "PDB not found: $PdbPath (build Release first)" }
 
-        New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
-        $zipPath = Join-Path $OutDir "noite-$Version-win64.zip"
-        $pdbZipPath = Join-Path $OutDir "noite-$Version-win64-pdb.zip"
-        $sumsPath = Join-Path $OutDir "SHA256SUMS.txt"
-        Write-ZipFromFolder $stage $zipPath "noite"
+        # build the outputs in a temp folder; move them into place only when all three exist
+        $work = Join-Path $tmp "out"
+        New-Item -ItemType Directory -Path $work -Force | Out-Null
+        $zipName = "noite-$Version-win64.zip"
+        $pdbZipName = "noite-$Version-win64-pdb.zip"
+        Write-ZipFromFolder $stage (Join-Path $work $zipName) "noite"
 
         $pdbDir = Join-Path $tmp "pdb"
         New-Item -ItemType Directory -Path $pdbDir -Force | Out-Null
-        Copy-Item $PdbPath (Join-Path $pdbDir "noite.pdb")
-        Write-ZipFromFolder $pdbDir $pdbZipPath "noite"
+        Copy-Item -LiteralPath $PdbPath (Join-Path $pdbDir "noite.pdb")
+        Write-ZipFromFolder $pdbDir (Join-Path $work $pdbZipName) "noite"
 
-        $lines = foreach ($z in @($zipPath, $pdbZipPath)) {
-            "{0}  {1}" -f (Get-FileHash $z -Algorithm SHA256).Hash.ToLowerInvariant(), (Split-Path -Leaf $z)
+        $lines = foreach ($n in @($zipName, $pdbZipName)) {
+            "{0}  {1}" -f (Get-FileHash -LiteralPath (Join-Path $work $n) -Algorithm SHA256).Hash.ToLowerInvariant(), $n
         }
-        [System.IO.File]::WriteAllText($sumsPath, (($lines -join "`n") + "`n"), $Utf8NoBom)
+        [System.IO.File]::WriteAllText((Join-Path $work "SHA256SUMS.txt"), (($lines -join "`n") + "`n"), $Utf8NoBom)
+
+        New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
+        foreach ($n in @($zipName, $pdbZipName, "SHA256SUMS.txt")) {
+            Move-Item -LiteralPath (Join-Path $work $n) -Destination (Join-Path $OutDir $n) -Force
+        }
+        $zipPath = Join-Path $OutDir $zipName
+        $pdbZipPath = Join-Path $OutDir $pdbZipName
+        $sumsPath = Join-Path $OutDir "SHA256SUMS.txt"
     } finally {
-        Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
     return @{ Zip = $zipPath; PdbZip = $pdbZipPath; Sums = $sumsPath; Version = $Version }
 }
@@ -132,7 +142,7 @@ function Invoke-SelfTest {
             $d = Join-Path $root "dist$($script:n)\noite"
             New-Item -ItemType Directory -Path $d -Force | Out-Null
             foreach ($f in @("noite.exe", "Qt6Core.dll", "Qt6Gui.dll", "Qt6Widgets.dll", "platforms\qwindows.dll",
-                             "imageformats\qjpeg.dll", "vcruntime140.dll")) {
+                             "imageformats\qjpeg.dll", "imageformats\qgif.dll", "styles\qmodernwindowsstyle.dll", "vcruntime140.dll")) {
                 if ($Skip -contains $f) { continue }
                 $p = Join-Path $d $f
                 New-Item -ItemType Directory -Path (Split-Path $p) -Force | Out-Null
@@ -187,6 +197,12 @@ function Invoke-SelfTest {
         Expect-Throw { Pack (New-Dist -Extra @("noite.pdb")) "0.1.0" $false "0.1.0" } `
             "noite\.pdb" ".pdb in the dist"
 
+        # 3b. missing styles plugin
+        Expect-Throw { Pack (New-Dist -Skip @("styles\qmodernwindowsstyle.dll")) "0.1.0" $false "0.1.0" } `
+            "styles\\qmodernwindowsstyle\.dll" "missing styles\qmodernwindowsstyle.dll"
+        Expect-Throw { Pack (New-Dist -Skip @("imageformats\qgif.dll")) "0.1.0" $false "0.1.0" } `
+            "imageformats\\qgif\.dll" "missing imageformats\qgif.dll"
+
         # 5. version mismatch
         Expect-Throw { Pack (New-Dist) "0.2.0" $false "0.1.0-dev+abc" } `
             "exe version 0\.1\.0-dev\+abc .* release version 0\.2\.0" "-Version 0.2.0 vs exe 0.1.0-dev+abc"
@@ -194,12 +210,27 @@ function Invoke-SelfTest {
         # 6. not x.y.z
         Expect-Throw { Pack (New-Dist) "1.0" $false "1.0" } "not x\.y\.z" "-Version 1.0"
 
+        # missing build PDB, and no stray zips left behind
+        $missingPdb = $pdb
+        $pdb = Join-Path $root "nope.pdb"
+        $d = New-Dist
+        Expect-Throw { Pack $d "0.1.0" $false "0.1.0" } "PDB not found" "missing PDB"
+        if (Test-Path -LiteralPath (Join-Path $root "out$($script:n)")) { throw "self-test: failed run left an output folder behind" }
+        $pdb = $missingPdb
+
+        # -Dist with a space and brackets
+        $weird = Join-Path $root "my dist [x]"
+        Copy-Item -LiteralPath (New-Dist -Extra @("data\noite.db")) -Destination $weird -Recurse
+        $r = Pack $weird "0.1.0" $false "0.1.0"
+        if ((Get-ZipEntryNames $r.Zip) -notcontains "noite/noite.exe") { throw "self-test: bracketed -Dist not packaged" }
+        Write-Host "  ok  -Dist containing a space and [x]"
+
         # dry run takes the version from the exe
         $r = Pack (New-Dist) "" $true "0.1.0-dev+abc"
         if ((Split-Path -Leaf $r.Zip) -ne "noite-0.1.0-dev+abc-win64.zip") { throw "self-test dry-run: unexpected zip name $($r.Zip)" }
         Write-Host "  ok  dry run uses the exe's version"
     } finally {
-        Remove-Item $root -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
     }
     Write-Host "package.ps1 self-test passed"
 }
@@ -220,5 +251,5 @@ Write-Host "Top level of $(Split-Path -Leaf $r.Zip):"
 Get-ZipEntryNames $r.Zip | ForEach-Object { ($_ -split '/')[1] } | Where-Object { $_ } | Sort-Object -Unique |
     ForEach-Object { Write-Host "  noite/$_" }
 foreach ($f in @($r.Zip, $r.PdbZip, $r.Sums)) {
-    Write-Host ("{0,10:N0} bytes  {1}" -f (Get-Item $f).Length, $f)
+    Write-Host ("{0,10:N0} bytes  {1}" -f (Get-Item -LiteralPath $f).Length, $f)
 }
