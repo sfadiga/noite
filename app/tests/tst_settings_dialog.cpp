@@ -246,9 +246,24 @@ private slots:
         const Settings before = r.f->store->settings();
         SettingsDialog dialog(*r.f->store, r.manager, r.applier, r.context());
         dialog.show();
+        QVERIFY(QTest::qWaitForWindowActive(&dialog));
 
-        dialog.captureField()->setCombo(before.boardHotkey);
-        dialog.boardField()->setCombo(before.captureHotkey);
+        constexpr auto kCtrlAlt = Qt::ControlModifier | Qt::AltModifier;
+        // Record the board's current shortcut into the capture field first.
+        QTest::mouseClick(dialog.captureField(), Qt::LeftButton);
+        QTest::keyClick(dialog.captureField(), Qt::Key_B, kCtrlAlt);
+        QCOMPARE(dialog.captureField()->combo(), QString("Ctrl+Alt+B"));
+        QCOMPARE(dialog.captureField()->statusText(), QString("That's already the board hotkey."));
+        QVERIFY(!dialog.captureField()->isAccepted());
+
+        // Now record the old capture shortcut into the board field to complete the swap.
+        QTest::mouseClick(dialog.boardField(), Qt::LeftButton);
+        QTest::keyClick(dialog.boardField(), Qt::Key_J, kCtrlAlt);
+        QCOMPARE(dialog.boardField()->combo(), QString("Ctrl+Alt+J"));
+        QVERIFY(dialog.boardField()->isAccepted());
+        QVERIFY(dialog.captureField()->isAccepted());
+        QCOMPARE(dialog.captureField()->statusText(), QString("✓ Ctrl+Alt+B"));
+
         dialog.save();
 
         QCOMPARE(dialog.result(), int(QDialog::Accepted));

@@ -43,12 +43,28 @@ SettingsDialog::SettingsDialog(noite::Store& store, HotkeyManager& hotkeys, Sett
     auto* hotkeysLayout = new QFormLayout(hotkeysGroup);
     captureField_ = new HotkeyField(hotkeys_, HotkeyManager::kCaptureId);
     boardField_ = new HotkeyField(hotkeys_, HotkeyManager::kBoardId);
-    captureField_->setOther(initial.boardHotkey);
     captureField_->setCombo(initial.captureHotkey);
-    boardField_->setOther(initial.captureHotkey);
     boardField_->setCombo(initial.boardHotkey);
-    connect(captureField_, &HotkeyField::changed, this, [this] { boardField_->setOther(captureField_->combo()); });
-    connect(boardField_, &HotkeyField::changed, this, [this] { captureField_->setOther(boardField_->combo()); });
+    const auto checkDuplicate = [](HotkeyField* editedField, HotkeyField* otherField, int otherId, int editedId) {
+        if (editedField->isRecording())
+            return;
+        const auto a = parseHotkey(editedField->combo());
+        const auto b = parseHotkey(otherField->combo());
+        if (a && b && *a == *b) {
+            if (editedField->isAccepted())
+                editedField->showError(hotkeyMessage(HotkeyStatus::SameAsOther, editedField->combo(), otherId));
+        } else if (!otherField->isRecording() && !otherField->isAccepted()
+                   && otherField->statusText()
+                          == hotkeyMessage(HotkeyStatus::SameAsOther, otherField->combo(), editedId)) {
+            otherField->setCombo(otherField->combo());
+        }
+    };
+    connect(captureField_, &HotkeyField::changed, this, [this, checkDuplicate] {
+        checkDuplicate(captureField_, boardField_, HotkeyManager::kBoardId, HotkeyManager::kCaptureId);
+    });
+    connect(boardField_, &HotkeyField::changed, this, [this, checkDuplicate] {
+        checkDuplicate(boardField_, captureField_, HotkeyManager::kCaptureId, HotkeyManager::kBoardId);
+    });
     hotkeysLayout->addRow(tr("New note"), captureField_);
     hotkeysLayout->addRow(tr("Board"), boardField_);
     mainLayout->addWidget(hotkeysGroup);
