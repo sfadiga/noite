@@ -55,6 +55,15 @@ target_compile_definitions(noite-app PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN UNICODE
 qt_add_executable(noite WIN32 src/main.cpp ${CMAKE_CURRENT_BINARY_DIR}/generated/noite.rc)
 target_link_libraries(noite PRIVATE noite-app)
 
+# Static Qt: the five plugins noite needs are linked into the exe (--self-check verifies them by class
+# name, SelfCheck.cpp); target names from the static Qt's lib\cmake\Qt6Gui and Qt6Widgets.
+if(NOITE_STATIC)
+    target_compile_definitions(noite-app PRIVATE NOITE_STATIC)
+    qt_import_plugins(noite INCLUDE
+        Qt6::QWindowsIntegrationPlugin Qt6::QModernWindowsStylePlugin
+        Qt6::QJpegPlugin Qt6::QGifPlugin Qt6::QICOPlugin)
+endif()
+
 # Board performance gate (D5): not shipped, run by hand on a Release build.
 qt_add_executable(board-bench bench/board_bench.cpp bench/Seed.h bench/Seed.cpp)
 target_include_directories(board-bench PRIVATE bench)
