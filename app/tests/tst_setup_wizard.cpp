@@ -119,6 +119,7 @@ private slots:
     {
         FakeBackend backend;
         backend.taken.insert("Ctrl+Alt+J");
+        backend.taken.insert("Ctrl+Alt+N");
         HotkeyManager manager(backend);
         Settings initial;
         initial.captureHotkey = "Ctrl+Alt+J";
@@ -139,9 +140,48 @@ private slots:
         QVERIFY(field->isAccepted());
         QVERIFY(wizard.button(QWizard::NextButton)->isEnabled());
 
+        // Clicking again starts recording and disables Next until accepted or Esc.
+        QTest::mouseClick(field, Qt::LeftButton);
+        QVERIFY(field->isRecording());
+        QVERIFY(!wizard.button(QWizard::NextButton)->isEnabled());
+        QTest::keyClick(field, Qt::Key_N, kCtrlAlt); // taken
+        QVERIFY(!wizard.button(QWizard::NextButton)->isEnabled());
+        QTest::keyClick(field, Qt::Key_Escape); // restores Ctrl+Alt+K
+        QVERIFY(!field->isRecording());
+        QVERIFY(wizard.button(QWizard::NextButton)->isEnabled());
+
         wizard.next(); // leaves page 2 -> page 3
         QCOMPARE(manager.combo(kCap), QString("Ctrl+Alt+K"));
         QVERIFY(backend.has(kCap, "Ctrl+Alt+K"));
+    }
+
+    void backFromPage3UpdatesOtherAndManager()
+    {
+        FakeBackend backend;
+        HotkeyManager manager(backend);
+        SetupWizard wizard(Settings{}, manager, defaultContext());
+        wizard.show();
+        QVERIFY(QTest::qWaitForWindowActive(&wizard));
+
+        wizard.next(); // page 2
+        wizard.next(); // page 3 (registers capture Ctrl+Alt+J)
+
+        auto* brdField = wizard.currentPage()->findChild<HotkeyField*>();
+        QVERIFY(brdField);
+        QTest::mouseClick(brdField, Qt::LeftButton);
+        QTest::keyClick(brdField, Qt::Key_L, kCtrlAlt);
+        QCOMPARE(brdField->combo(), QString("Ctrl+Alt+L"));
+
+        wizard.back(); // back to page 2
+        QCOMPARE(manager.combo(kBrd), QString("Ctrl+Alt+L"));
+        auto* capField = wizard.currentPage()->findChild<HotkeyField*>();
+        QVERIFY(capField);
+        QTest::mouseClick(capField, Qt::LeftButton);
+        QTest::keyClick(capField, Qt::Key_L, kCtrlAlt);
+        QCOMPARE(capField->statusText(), QString("That's already the board hotkey."));
+        QVERIFY(!capField->isAccepted());
+        QTest::keyClick(capField, Qt::Key_Escape);
+        QVERIFY(capField->isAccepted());
     }
 
     void skipOfferedExceptPage2()
@@ -150,6 +190,9 @@ private slots:
         HotkeyManager manager(backend);
         SetupWizard wizard(Settings{}, manager, defaultContext());
         wizard.show();
+
+        QVERIFY(wizard.testOption(QWizard::NoCancelButton));
+        QVERIFY(!wizard.button(QWizard::CancelButton)->isVisible());
 
         QAbstractButton* skipBtn = wizard.button(QWizard::CustomButton1);
         QVERIFY(skipBtn);

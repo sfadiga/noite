@@ -37,17 +37,15 @@ public:
         field_->setOther(other);
         const QString current = field_->combo();
 
+        const auto parsed = parseHotkey(current);
+        const auto parsedOther = parseHotkey(other);
         HotkeyStatus status = HotkeyStatus::Ok;
-        if (!(hotkeys_.isRegistered(id_) && parseHotkey(hotkeys_.combo(id_)) == parseHotkey(current))) {
-            const auto parsed = parseHotkey(current);
-            const auto parsedOther = parseHotkey(other);
-            if (!parsed)
-                status = HotkeyStatus::Invalid;
-            else if (parsedOther && *parsed == *parsedOther)
-                status = HotkeyStatus::SameAsOther;
-            else
-                status = hotkeys_.probe(current);
-        }
+        if (!parsed)
+            status = HotkeyStatus::Invalid;
+        else if (parsedOther && *parsed == *parsedOther)
+            status = HotkeyStatus::SameAsOther;
+        else if (!(hotkeys_.isRegistered(id_) && parseHotkey(hotkeys_.combo(id_)) == parsed))
+            status = hotkeys_.probe(current);
 
         if (status == HotkeyStatus::Ok)
             field_->setCombo(current);
@@ -56,10 +54,18 @@ public:
         emit completeChanged();
     }
 
+    void cleanupPage() override
+    {
+        field_->cancelRecording();
+        if (field_->isAccepted())
+            hotkeys_.set(id_, field_->combo());
+    }
+
     bool isComplete() const override { return field_->isAccepted(); }
 
     bool validatePage() override
     {
+        field_->cancelRecording();
         const HotkeyStatus status = hotkeys_.set(id_, field_->combo());
         if (status == HotkeyStatus::Ok)
             return true;
@@ -110,6 +116,7 @@ SetupWizard::SetupWizard(noite::Settings initial, HotkeyManager& hotkeys, Wizard
 {
     setWindowTitle(tr("Set up noite"));
     setWizardStyle(QWizard::ModernStyle);
+    setOption(QWizard::NoCancelButton, true);
     setButtonText(QWizard::CustomButton1, tr("Skip setup"));
     setOption(QWizard::HaveCustomButton1, true);
 
@@ -212,6 +219,10 @@ SetupWizard::SetupWizard(noite::Settings initial, HotkeyManager& hotkeys, Wizard
 
     connect(this, &QWizard::currentIdChanged, this, [this](int id) {
         setOption(QWizard::HaveCustomButton1, id != kCapturePage);
+        if (id == kCapturePage)
+            captureField_->setOther(boardField_->combo());
+        else if (id == kBoardPage)
+            boardField_->setOther(captureField_->combo());
     });
     connect(this, &QWizard::customButtonClicked, this, [this](int which) {
         if (which == QWizard::CustomButton1)
@@ -246,10 +257,17 @@ void SetupWizard::skip()
 {
     if (currentId() == kCapturePage)
         return;
-    if (!hotkeys_.isRegistered(HotkeyManager::kCaptureId)) {
-        if (hotkeys_.set(HotkeyManager::kCaptureId, captureField_->combo()) != HotkeyStatus::Ok) {
-            if (currentId() == kWelcomePage)
+    captureField_->cancelRecording();
+    boardField_->cancelRecording();
+    if (!hotkeys_.isRegistered(HotkeyManager::kCaptureId)
+        || parseHotkey(hotkeys_.combo(HotkeyManager::kCaptureId)) != parseHotkey(captureField_->combo())) {
+        const HotkeyStatus status = hotkeys_.set(HotkeyManager::kCaptureId, captureField_->combo());
+        if (status != HotkeyStatus::Ok) {
+            captureField_->showError(hotkeyMessage(status, captureField_->combo(), HotkeyManager::kBoardId));
+            while (currentId() < kCapturePage)
                 next();
+            while (currentId() > kCapturePage)
+                back();
             return;
         }
     }
@@ -266,6 +284,8 @@ void SetupWizard::reject()
     if (closed_)
         return;
     closed_ = true;
+    captureField_->cancelRecording();
+    boardField_->cancelRecording();
     if (hotkeys_.isPaused())
         hotkeys_.resume();
     const noite::Settings partial = collected();
@@ -284,6 +304,8 @@ void SetupWizard::finish(bool viaHotkey)
     if (closed_)
         return;
     closed_ = true;
+    captureField_->cancelRecording();
+    boardField_->cancelRecording();
     if (hotkeys_.isPaused())
         hotkeys_.resume();
     const noite::Settings result = collected();

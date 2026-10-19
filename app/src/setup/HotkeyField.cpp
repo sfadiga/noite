@@ -54,13 +54,21 @@ void HotkeyField::setCombo(const QString& combo)
 void HotkeyField::showError(const QString& message)
 {
     endRecording(false);
+    const bool wasAccepted = accepted_;
     accepted_ = false;
     display(combo_, message);
+    if (wasAccepted)
+        emit changed();
 }
 
 void HotkeyField::setOther(const QString& combo)
 {
     other_ = combo;
+}
+
+void HotkeyField::cancelRecording()
+{
+    endRecording(true);
 }
 
 void HotkeyField::startRecording()
@@ -73,6 +81,8 @@ void HotkeyField::startRecording()
     accepted_ = false;
     manager_.pause();
     display(tr("Press the shortcut…"), QString());
+    if (savedAccepted_)
+        emit changed();
 }
 
 // Leaves recording and resumes the hotkeys; `restore` brings back the previous combination and
@@ -84,8 +94,11 @@ void HotkeyField::endRecording(bool restore)
     recording_ = false;
     manager_.resume();
     if (restore) {
+        const bool wasAccepted = accepted_;
         accepted_ = savedAccepted_;
         display(combo_, savedStatus_);
+        if (accepted_ != wasAccepted)
+            emit changed();
     }
 }
 
