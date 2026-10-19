@@ -27,15 +27,27 @@ $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 function Write-ZipFromFolder([string]$Folder, [string]$ZipPath, [string]$Prefix) {
     if (Test-Path -LiteralPath $ZipPath) { Remove-Item -LiteralPath $ZipPath -Force }
-    $root = (Resolve-Path -LiteralPath $Folder).Path.TrimEnd('\')
+    # Entry names are built from each item's own Name while walking down, never by slicing a FullName with the
+    # root's length: $Folder may be an 8.3 short path (GitHub runner %TEMP%) while FullName comes back long.
+    $rootDir = New-Object System.IO.DirectoryInfo((Resolve-Path -LiteralPath $Folder).ProviderPath)
     $zip = [System.IO.Compression.ZipFile]::Open($ZipPath, [System.IO.Compression.ZipArchiveMode]::Create)
-    try {
-        foreach ($f in Get-ChildItem -LiteralPath $root -Recurse -File -Force) {
-            $rel = $f.FullName.Substring($root.Length + 1).Replace('\', '/')
+    try { Add-ZipFolderEntries $zip $rootDir $Prefix } finally { $zip.Dispose() }
+}
+
+function Add-ZipFolderEntries($Zip, [System.IO.DirectoryInfo]$Dir, [string]$EntryPrefix) {
+    foreach ($i in $Dir.GetFileSystemInfos()) {
+        if ($i -is [System.IO.DirectoryInfo]) {
+            Add-ZipFolderEntries $Zip $i "$EntryPrefix/$($i.Name)"
+        } else {
             [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-                $zip, $f.FullName, "$Prefix/$rel", [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+                $Zip, $i.FullName, "$EntryPrefix/$($i.Name)", [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
         }
-    } finally { $zip.Dispose() }
+    }
+}
+
+function Get-TempBase {
+    if ($env:TEMP -and (Test-Path -LiteralPath $env:TEMP)) { return $env:TEMP }
+    return [System.IO.Path]::GetTempPath().TrimEnd('\')
 }
 
 function Get-ZipEntryNames([string]$ZipPath) {
@@ -63,7 +75,7 @@ function New-PackageZips {
         throw ("exe version {0} {1} release version {2} {3} did you bump project(VERSION) in CMakeLists.txt before tagging?" -f $built, [char]0x2260, $Version, [char]0x2014)
     }
 
-    $tmp = Join-Path $env:TEMP ("noite-pkg-" + [guid]::NewGuid().ToString("N"))
+    $tmp = Join-Path (Get-TempBase) ("noite-pkg-" + [guid]::NewGuid().ToString("N"))
     $stage = Join-Path $tmp "noite"
     New-Item -ItemType Directory -Path $stage -Force | Out-Null
     try {
@@ -129,7 +141,7 @@ function Invoke-SelfTest {
         if ($msg -notmatch $Pattern) { throw "self-test '$Name': message '$msg' does not match '$Pattern'" }
         Write-Host "  ok  $Name (refused: $msg)"
     }
-    $root = Join-Path $env:TEMP ("noite-pkg-selftest-" + [guid]::NewGuid().ToString("N"))
+    $root = Join-Path (Get-TempBase) ("noite-pkg-selftest-" + [guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $root | Out-Null
     try {
         $pkgDir = Join-Path $src "packaging"
@@ -229,6 +241,35 @@ function Invoke-SelfTest {
         $r = Pack (New-Dist) "" $true "0.1.0-dev+abc"
         if ((Split-Path -Leaf $r.Zip) -ne "noite-0.1.0-dev+abc-win64.zip") { throw "self-test dry-run: unexpected zip name $($r.Zip)" }
         Write-Host "  ok  dry run uses the exe's version"
+
+        # 8.3 short paths (the GitHub runner's %TEMP% is C:\Users\RUNNER~1\...): entry names must not depend on path form
+        $longDist = New-Dist
+        $fso = New-Object -ComObject Scripting.FileSystemObject
+        $shortDist = $fso.GetFolder($longDist).ShortPath
+        if ($shortDist -eq $longDist) {
+            Write-Host "  skipped: no 8.3 names (short-path regression case)"
+        } else {
+            $shortOut = $fso.GetFolder($root).ShortPath + "\out-short"
+            # the staging folder derives from %TEMP%, so make that short too (as on the runner)
+            $longTemp = Join-Path $root "a-long-temp-folder-name"
+            New-Item -ItemType Directory -Path $longTemp | Out-Null
+            $savedTemp = $env:TEMP
+            $env:TEMP = $fso.GetFolder($longTemp).ShortPath
+            try {
+                $r = New-PackageZips -DistDir $shortDist -Version "0.1.0" -DryRun $false -ExeVersion "0.1.0" -OutDir $shortOut `
+                    -PdbPath $pdb -PackagingDir $pkgDir -LicenseFile $lic
+            } finally { $env:TEMP = $savedTemp }
+            foreach ($z in @($r.Zip, $r.PdbZip)) {
+                $zn = Get-ZipEntryNames $z
+                $outside = @($zn | Where-Object { $_ -notlike "noite/*" })
+                if ($outside.Count -gt 0) { throw "self-test short path: entries outside noite/ in ${z}: $($outside -join ', ')" }
+            }
+            $zn = Get-ZipEntryNames $r.Zip
+            foreach ($need in @("noite/README.txt", "noite/noite.exe", "noite/platforms/qwindows.dll")) {
+                if ($zn -notcontains $need) { throw "self-test short path: $need missing from the zip (entries: $($zn -join ', '))" }
+            }
+            Write-Host "  ok  8.3 short -DistDir/-OutDir ($shortDist) packages with clean entry names"
+        }
     } finally {
         Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
     }
