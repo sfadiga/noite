@@ -65,3 +65,12 @@ Record pass/fail and a one-line note for any failure. Every failure becomes an a
 | J3 | Purge | `trashRetentionDays` = 1, a note trashed over a day ago; restart | The note is gone after the first check; `purge:` line in the log |
 | J4 | Log file | Open `data\logs\noite.log` | Startup, backup and purge lines |
 | J5 | Crash dump | Outside a debugger (the handler stays off under one), run `build\Release\noite_crash_helper.exe C:\temp\crashlogs av` (kinds: `av`, `throw`, `fatal`, `terminate`, `abort`, `purecall`, `invalid`, `overflow`, `nullcall`); open the `.dmp` it leaves in `C:\temp\crashlogs` in Visual Studio with `build\Release\noite_crash_helper.pdb` | The faulting function and line are shown |
+
+## Setup
+
+| # | Check | Expected |
+|---|---|---|
+| S1 | Start the new build on the existing data folder | The wizard opens, prefilled with the current settings |
+| S2 | On page 2 press Ctrl+Alt+N (taken on this PC), then Ctrl+Alt+J | The "used by another program" message, then ✓ |
+| S3 | On page 8 press the capture hotkey | The wizard closes; the capture window shows the starter note with your hotkeys |
+| S4 | Settings: change the board hotkey, Save, press it; change it again, Cancel | The new hotkey works at once without a restart; after Cancel the saved one still works |

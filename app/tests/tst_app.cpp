@@ -1,3 +1,4 @@
+#include "fake_hotkeys.h"
 #include "helpers.h"
 #include "registry.h"
 
@@ -15,12 +16,15 @@
 #include "platform/NativeHost.h"
 #include "radar/ReviewScheduler.h"
 #include "radar/ReviewWindow.h"
+#include "setup/SettingsDialog.h"
+#include "setup/SetupWizard.h"
 
 #include <noite/store.h>
 
 #include <QAction>
 #include <QDir>
 #include <QLineEdit>
+#include <QMenu>
 #include <QRandomGenerator>
 #include <QSignalSpy>
 #include <QTest>
@@ -34,12 +38,14 @@ using namespace noite;
 namespace {
 
 // Give a data folder rarely used hotkeys, so tests never take the user's real ones.
-void prepare(const QString& root, const QString& hotkey, const QString& boardHotkey = "Ctrl+Alt+Shift+F8")
+void prepare(const QString& root, const QString& hotkey, const QString& boardHotkey = "Ctrl+Alt+Shift+F8",
+             bool setupCompleted = true)
 {
     auto store = Store::open(DataDir::acquire(root), std::make_shared<SystemClock>());
     Settings settings = store->settings();
     settings.captureHotkey = hotkey;
     settings.boardHotkey = boardHotkey;
+    settings.setupCompleted = setupCompleted;
     store->saveSettings(settings);
 }
 
@@ -64,9 +70,9 @@ struct FakeAutostart final : AutostartRegistry {
 };
 
 // A data folder holding one overdue note, with the day starting at midnight.
-void prepareOverdue(const QString& root)
+void prepareOverdue(const QString& root, bool setupCompleted = true)
 {
-    prepare(root, "Ctrl+Alt+Shift+F9");
+    prepare(root, "Ctrl+Alt+Shift+F9", "Ctrl+Alt+Shift+F8", setupCompleted);
     auto store = Store::open(DataDir::acquire(root), std::make_shared<SystemClock>());
     const Scratch s = store->createScratch(test::html({"pay rent"}));
     store->setDue(s.id, QDate::currentDate().addDays(-2));
@@ -463,6 +469,140 @@ private slots:
         QCOMPARE(asked, 1);
         QVERIFY(!enabledWhileAsking);
         QVERIFY(app.backupAction()->isEnabled());
+    }
+
+    // ---- M6: setup wizard and Settings ----
+
+    void wizardOnFirstRun()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepareOverdue(root, false);
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+        QCoreApplication::processEvents();
+        QVERIFY(app.wizard() && app.wizard()->isVisible());
+        QVERIFY(app.setupPending());
+        QVERIFY(!app.reviewWindow());
+    }
+
+    void wizardFinishViaHotkey()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepareOverdue(root, false);
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+        QVERIFY(app.wizard());
+        while (app.wizard()->currentId() != SetupWizard::kTryItPage)
+            app.wizard()->next();
+        QCOMPARE(app.wizard()->currentId(), int(SetupWizard::kTryItPage));
+
+        emit app.host()->hotkeyPressed(App::kCaptureHotkeyId);
+        QVERIFY(!app.wizard());
+        QVERIFY(app.store()->settings().setupCompleted);
+        QVERIFY(!app.setupPending());
+        QVERIFY(app.captureWindow()->isVisible());
+        QVERIFY(app.captureWindow()->editor()->toPlainText().startsWith(QStringLiteral("Welcome to noite")));
+
+        QCoreApplication::processEvents();
+        QVERIFY(app.reviewWindow() && app.reviewWindow()->isVisible());
+    }
+
+    void wizardAbandonReturns()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepareOverdue(root, false);
+        {
+            FakeBackend backend;
+            App app(AppOptions{root}, nullptr, nullptr, &backend);
+            QVERIFY(!app.start());
+            QVERIFY(app.wizard() && app.wizard()->isVisible());
+            app.wizard()->reject();
+            QVERIFY(!app.wizard());
+            QVERIFY(!app.store()->settings().setupCompleted);
+        }
+        FakeBackend backend;
+        App second(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!second.start());
+        QVERIFY(second.wizard() && second.wizard()->isVisible());
+    }
+
+    void completedSkipsWizard()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9", "Ctrl+Alt+Shift+F8");
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+        QVERIFY(!app.wizard());
+        QVERIFY(!app.setupPending());
+        QVERIFY(backend.has(App::kCaptureHotkeyId, "Ctrl+Alt+Shift+F9"));
+        QVERIFY(backend.has(App::kBoardHotkeyId, "Ctrl+Alt+Shift+F8"));
+    }
+
+    void settingsInTrayOrder()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9");
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+        QVERIFY(app.trayMenu());
+        QStringList texts;
+        for (QAction* action : app.trayMenu()->actions()) {
+            if (!action->isSeparator())
+                texts.append(action->text());
+        }
+        QCOMPARE(texts,
+                 QStringList({"New note", "Board", "Morning review", "Start with Windows", "Settings", "Back up now",
+                              "Quit"}));
+    }
+
+    void settingsOpensOnce()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9");
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+
+        app.showSettings();
+        SettingsDialog* first = app.settingsDialog();
+        QVERIFY(first && first->isVisible());
+        app.showSettings();
+        QCOMPARE(app.settingsDialog(), first);
+
+        first->reject();
+        QVERIFY(!app.settingsDialog());
+
+        app.showWizard();
+        QVERIFY(app.wizard() && app.wizard()->isVisible());
+        app.showSettings();
+        QVERIFY(!app.settingsDialog());
+        QVERIFY(app.wizard() && app.wizard()->isVisible());
+    }
+
+    void runSetupAgainOpensWizard()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9");
+        FakeBackend backend;
+        App app(AppOptions{root}, nullptr, nullptr, &backend);
+        QVERIFY(!app.start());
+
+        app.showSettings();
+        QVERIFY(app.settingsDialog() && app.settingsDialog()->isVisible());
+        emit app.settingsDialog()->runSetupRequested();
+        QVERIFY(!app.settingsDialog());
+        QVERIFY(app.wizard() && app.wizard()->isVisible());
     }
 };
 

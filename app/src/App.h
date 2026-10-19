@@ -5,6 +5,10 @@
 #include "platform/Autostart.h"
 #include "platform/HotkeyManager.h"
 #include "radar/ReviewWindow.h"
+#include "setup/SettingsDialog.h"
+#include "setup/SetupWizard.h"
+
+#include <noite/data_dir.h>
 
 #include <QObject>
 #include <QPointer>
@@ -24,8 +28,10 @@ class KeepWarm;
 class LatencyProbe;
 class NativeHost;
 class QAction;
+class QMenu;
 class QSystemTrayIcon;
 class ReviewScheduler;
+class SettingsApplier;
 class StoreAttachments;
 
 // The tray application: owns the data folder, the store, the native host, the capture window
@@ -37,8 +43,10 @@ public:
     static constexpr int kBoardHotkeyId = HotkeyManager::kBoardId;
 
     // `autostart`: where "Start with Windows" is written (main passes the Run key). Without
-    // one, autostart is not managed, so tests never touch the real registry.
-    explicit App(AppOptions options, QObject* parent = nullptr, std::unique_ptr<AutostartRegistry> autostart = nullptr);
+    // one, autostart is not managed, so tests never touch the real registry. `hotkeyBackend`
+    // overrides `host_` for hotkey registration in tests.
+    explicit App(AppOptions options, QObject* parent = nullptr, std::unique_ptr<AutostartRegistry> autostart = nullptr,
+                 HotkeyBackend* hotkeyBackend = nullptr);
     ~App() override;
 
     // All startup. Returns an exit code only if the process should end right away:
@@ -68,6 +76,14 @@ public:
     void backUpNow();
     // Replaces the folder dialog; tests only.
     void setBackupFolderAsker(std::function<std::optional<QString>()> asker) { askFolder_ = std::move(asker); }
+    // First-run setup wizard and Settings window (M6).
+    void showWizard();
+    SetupWizard* wizard() const { return wizard_; } // null while closed
+    void showSettings();
+    SettingsDialog* settingsDialog() const { return settingsDialog_; } // null while closed
+    QAction* settingsAction() const { return settingsAction_; }
+    bool setupPending() const { return setupPending_; }
+    QMenu* trayMenu() const { return trayMenu_.get(); }
 
 signals:
     // A hotkey (capture or board) could not be registered (another program holds it). noite
@@ -80,6 +96,7 @@ private:
     void createTray();
     void updateAutostart(bool enabled);
     void startJobs();
+    void finishPendingSetup();
 
     // Closes the log (after "noite quit") once every member below is gone, the store included.
     // applog's install/uninstall have a single owner: Apps may only overlap if the later one
@@ -93,6 +110,7 @@ private:
     LogSession log_;
     std::unique_ptr<noite::Store> store_;
     std::unique_ptr<NativeHost> host_;
+    HotkeyBackend* hotkeyBackend_ = nullptr;
     std::unique_ptr<HotkeyManager> hotkeys_;
     std::unique_ptr<StoreAttachments> attachments_;
     std::unique_ptr<CaptureController> controller_;
@@ -101,14 +119,22 @@ private:
     std::unique_ptr<KeepWarm> keepWarm_;
     QPointer<BoardWindow> board_; // deletes itself on close
     BoardWindow::ViewState boardState_;
+    std::unique_ptr<QMenu> trayMenu_;
     QSystemTrayIcon* tray_ = nullptr;
     std::unique_ptr<AutostartRegistry> autostart_;
     std::unique_ptr<ReviewScheduler> scheduler_;
     QPointer<ReviewWindow> review_; // deletes itself on close
     QAction* autostartAction_ = nullptr;
     QString dataRoot_;
+    std::optional<noite::SyncProvider> syncWarning_;
+    QString logsDir_;
     std::unique_ptr<BackupRunner> runner_;
     std::unique_ptr<JobScheduler> jobs_;
     QAction* backupAction_ = nullptr;
     std::function<std::optional<QString>()> askFolder_;
+    std::unique_ptr<SettingsApplier> applier_;
+    QPointer<SetupWizard> wizard_;
+    QPointer<SettingsDialog> settingsDialog_;
+    QAction* settingsAction_ = nullptr;
+    bool setupPending_ = false;
 };
