@@ -28,6 +28,7 @@ add_library(noite-app STATIC
     src/board/ChipBar.h src/board/ChipBar.cpp
     src/Theme.h src/Theme.cpp
     src/VersionText.h src/VersionText.cpp
+    src/SelfCheck.h src/SelfCheck.cpp
     src/DragMover.h src/DragMover.cpp
     src/radar/ReviewScheduler.h src/radar/ReviewScheduler.cpp
     src/radar/ReviewWindow.h src/radar/ReviewWindow.cpp
@@ -97,12 +98,14 @@ qt_add_executable(app-tests
     tests/tst_setup_wizard.cpp
     tests/tst_settings_dialog.cpp
     tests/tst_version.cpp
+    tests/tst_self_check.cpp
     tests/tst_seed.cpp bench/Seed.h bench/Seed.cpp
 )
 # Reuses core's test registry and helpers.
 target_include_directories(app-tests PRIVATE tests bench ${PROJECT_SOURCE_DIR}/core/tests)
 target_link_libraries(app-tests PRIVATE noite-app sqlite3 Qt6::Test)
-target_compile_definitions(app-tests PRIVATE NOITE_GOLDEN_DIR="${PROJECT_SOURCE_DIR}/core/tests/golden" NOITE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+target_compile_definitions(app-tests PRIVATE NOITE_GOLDEN_DIR="${PROJECT_SOURCE_DIR}/core/tests/golden" NOITE_SOURCE_DIR="${PROJECT_SOURCE_DIR}" NOITE_EXE_PATH="$<TARGET_FILE:noite>")
+add_dependencies(app-tests noite)
 add_test(NAME app COMMAND app-tests)
 
 # Crashes on purpose for tst_crash.cpp; lands next to app-tests.exe, never shipped.
