@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-20
+
 ### Added
 
 - The capture window can be resized from any edge or corner; it keeps its size until noite quits.
@@ -30,5 +32,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - First-run setup and a Settings dialog.
 - A portable single exe: no installer, and your data stays next to it.
 
-[Unreleased]: https://github.com/sfadiga/noite/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/sfadiga/noite/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/sfadiga/noite/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sfadiga/noite/releases/tag/v1.0.0
