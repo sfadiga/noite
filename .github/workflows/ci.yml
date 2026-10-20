@@ -52,6 +52,36 @@ jobs:
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/run-tests.ps1 -Config Release -QtDir $env:QT_ROOT_DIR
 
+      # The D5 performance budget (spec 2): the benches run on the real platform, not offscreen,
+      # and fail the job over budget (board open <= 300 ms with 2,000 notes, capture <= 100 ms,
+      # private memory <= 80 MB).
+      - name: Board bench
+        shell: powershell
+        timeout-minutes: 5
+        run: |
+          $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
+          $env:QT_PLUGIN_PATH = "$env:QT_ROOT_DIR\plugins"
+          New-Item -ItemType Directory -Force perf | Out-Null
+          & build/Release/board-bench.exe --notes 2000 --runs 20 | Tee-Object perf/board.txt
+          exit $LASTEXITCODE
+
+      - name: Capture bench
+        shell: powershell
+        timeout-minutes: 5
+        run: |
+          $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
+          $env:QT_PLUGIN_PATH = "$env:QT_ROOT_DIR\plugins"
+          New-Item -ItemType Directory -Force perf | Out-Null
+          & build/Release/capture-bench.exe --warm 20 --csv perf/capture.csv | Tee-Object perf/capture.txt
+          exit $LASTEXITCODE
+
+      - name: Upload perf results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-results
+          path: perf/
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4

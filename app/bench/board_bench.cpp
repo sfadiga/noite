@@ -2,6 +2,7 @@
 // private memory after closing it. Runs on the real platform (a window flashes on screen).
 //   board-bench [--notes N=2000] [--runs R=20] [--keep-hidden]
 // Exits 1 if p95 > 300 ms or private memory > 80 MB.
+#include "BenchUtil.h"
 #include "Seed.h"
 
 #include "board/BoardWindow.h"
@@ -22,10 +23,11 @@
 #include <cstdio>
 #include <memory>
 
-#include <windows.h>
-#include <psapi.h>
-
 namespace {
+
+using bench::intArg;
+using bench::percentile;
+using bench::privateMb;
 
 constexpr double kBudgetMs = 300;
 constexpr double kMemoryBudgetMb = 80;
@@ -51,26 +53,6 @@ private:
     QEventLoop& loop_;
     bool seen_ = false;
 };
-
-double privateMb()
-{
-    PROCESS_MEMORY_COUNTERS_EX counters{};
-    GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&counters), sizeof counters);
-    return double(counters.PrivateUsage) / (1024.0 * 1024.0);
-}
-
-double percentile(std::vector<double> values, double p)
-{
-    std::sort(values.begin(), values.end());
-    const size_t i = std::min(values.size() - 1, size_t(p * double(values.size() - 1) + 0.5));
-    return values[i];
-}
-
-int intArg(const QStringList& args, const QString& name, int fallback)
-{
-    const qsizetype i = args.indexOf(name);
-    return (i >= 0 && i + 1 < args.size()) ? args[i + 1].toInt() : fallback;
-}
 
 } // namespace
 

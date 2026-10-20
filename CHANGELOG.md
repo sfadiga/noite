@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- CI now checks the performance budget on every push: opening the board with 2,000 notes and opening a capture.
+- The latency log (`NOITE_LATENCY_CSV`) records each step of opening a capture (shown, activated, painted) and its page faults.
+
 ## [1.0.1] - 2026-10-20
 
 ### Added

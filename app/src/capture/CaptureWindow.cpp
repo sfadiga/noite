@@ -83,10 +83,14 @@ void CaptureWindow::showAndFocus()
         resize(size().boundedTo(area.size())); // sized on a larger monitor
         move(area.center() - QPoint(width() / 2, height() / 2));
         show();
+        if (probe_)
+            probe_->shown();
     }
     raise();
     activateWindow();
     SetForegroundWindow(reinterpret_cast<HWND>(winId()));
+    if (probe_)
+        probe_->activated();
     editor_->setFocus(Qt::ActiveWindowFocusReason);
 }
 
@@ -97,8 +101,8 @@ QString CaptureWindow::footerText() const
 
 bool CaptureWindow::eventFilter(QObject* watched, QEvent* event)
 {
-    if (probe_ && watched == editor_->viewport() && event->type() == QEvent::Paint && editor_->hasFocus())
-        probe_->painted();
+    if (probe_ && watched == editor_->viewport() && event->type() == QEvent::Paint)
+        probe_->painted(editor_->hasFocus());
     if (watched == footer_->tagField() && event->type() == QEvent::KeyPress
         && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
         controller_.dismiss(); // as Esc in the text: save and hide

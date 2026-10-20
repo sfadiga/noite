@@ -34,7 +34,7 @@ Enforced by automated benchmarks in CI (see §9).
 | Metric | Target |
 |---|---|
 | Hotkey press → editor focused, caret ready | ≤ 100 ms |
-| First summon after 15 min idle | ≤ 100 ms, target ≤ 50 ms. **Known issue:** the M2 app measured 103 ms (keep-warm off) and 91 ms (keep-warm on), one press each (2026-10-17). Keep-warm (offscreen render while hidden) ships on but doesn't reach the target. A phase-by-phase breakdown and the next fix are in M7. |
+| First summon after 15 min idle | ≤ 100 ms, target ≤ 50 ms. **Measured in M7b** (2026-10-20, real hotkey, one press per run). The shipped build was measured once: **119.8 ms** for a fresh process's first summon after 15 min idle, over the budget. Two runs on builds that don't ship give the used-process case: 86.5 ms (working-set floor on) and 82.5 ms (cloaked window); the shipped build without either is expected at or above those, not measured. The ~75 ms over a warm summon is the system waking: the first call into the compositor waits (in `ShowWindow`, or in the first present when the window is cloaked instead), with almost no page faults, and neither the floor nor cloaking moves it. A fresh process's first summon adds ~1,000 first-touch page faults (activation, first focus); with Start with Windows that is usually the day's first capture. **Known issue: the budget is missed by a fresh process's first summon after a long idle; the 50 ms target is not reachable from inside noite on this hardware.** Not gated in CI: no in-process simulation reproduces it. Details: [`spikes/2026-10-m7b-idle-summon.md`](spikes/2026-10-m7b-idle-summon.md). |
 | Board open with 2,000 notes | ≤ 300 ms |
 | Idle memory | ≤ 80 MB (Qt spike: 18.9 MB private) |
 
@@ -204,7 +204,7 @@ Closing the wizard with ✕ ("abandoned") applies what was collected so far, lea
 | Core | Qt Test, written test-first | storage, trash purge, attachment cleanup, backup snapshots, schema migrations, clone rules, title/tag derivation |
 | UI logic | Qt Test on the `offscreen` platform | markdown shortcuts, paste handling, chip combination logic, `@date` parsing |
 | End-to-end | keystroke harness from the spikes (dedicated target window, leak detection) | capture → board → done → trash → restore |
-| Performance | instrumented timestamps ("hotkey received", "editor painted with focus") + seeded 2,000-note benchmark + an idle-then-summon scenario | fails the build if the §2 budget is missed |
+| Performance | `capture-bench` (summon by phase: shown, activated, painted, on screen; page faults) + `board-bench` (seeded 2,000 notes), on the real platform in CI; the after-idle summon is measured by hand with the keystroke harness (no in-process simulation reproduces it, M7b) | fails the build if the §2 budget is missed |
 | CI | GitHub Actions, `windows-latest` | builds, tests, and on every push packages and checks the portable zip (`deploy.ps1`, `package.ps1 -DryRun`); a `vX.Y.Z` tag also creates a draft GitHub Release |
 
 Keystroke and end-to-end runs send real input, so they only run on CI or while the author is away from the PC.
