@@ -4,6 +4,7 @@
 #include "capture/CaptureWindow.h"
 #include "capture/KeepWarm.h"
 #include "capture/LatencyProbe.h"
+#include "capture/Prewarm.h"
 #include "editor/AttachmentStore.h"
 #include "editor/NoteEdit.h"
 #include "editor/OpenFolder.h"
@@ -123,7 +124,8 @@ std::optional<int> App::start()
     editor->setAttachmentStore(attachments_.get());
     controller_ = std::make_unique<CaptureController>(*store_, *editor, [] { return QDate::currentDate(); });
     window_ = std::make_unique<CaptureWindow>(*controller_, editor);
-    window_->winId(); // create the native window now, while hidden (D5)
+    if (const std::optional<QString> error = prewarmCapture(window_.get(), {}))
+        qWarning() << "prewarm:" << *error;
     probe_ = LatencyProbe::fromEnvironment();
     window_->setLatencyProbe(probe_.get());
     if (KeepWarm::enabledByEnvironment()) {

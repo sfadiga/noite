@@ -15,6 +15,7 @@ add_library(noite-app STATIC
     src/capture/CaptureWindow.h src/capture/CaptureWindow.cpp
     src/capture/LatencyProbe.h src/capture/LatencyProbe.cpp
     src/capture/KeepWarm.h src/capture/KeepWarm.cpp
+    src/capture/Prewarm.h src/capture/Prewarm.cpp
     src/capture/NoteFooter.h src/capture/NoteFooter.cpp
     src/capture/TagField.h src/capture/TagField.cpp
     src/capture/NoteFooterBar.h src/capture/NoteFooterBar.cpp
@@ -65,10 +66,15 @@ if(NOITE_STATIC)
         Qt6::QJpegPlugin Qt6::QGifPlugin Qt6::QICOPlugin)
 endif()
 
-# Board performance gate (D5): not shipped, run by hand on a Release build.
-qt_add_executable(board-bench bench/board_bench.cpp bench/Seed.h bench/Seed.cpp)
+# Board performance gate (D5): not shipped; CI runs it on the Release build.
+qt_add_executable(board-bench bench/board_bench.cpp bench/BenchUtil.h bench/Seed.h bench/Seed.cpp)
 target_include_directories(board-bench PRIVATE bench)
 target_link_libraries(board-bench PRIVATE noite-app psapi)
+
+# Capture performance gate (D5, M7b): warm and trimmed summons by phase; CI runs it.
+qt_add_executable(capture-bench bench/capture_bench.cpp bench/BenchUtil.h)
+target_include_directories(capture-bench PRIVATE bench)
+target_link_libraries(capture-bench PRIVATE noite-app psapi)
 
 qt_add_executable(app-tests
     tests/main.cpp
