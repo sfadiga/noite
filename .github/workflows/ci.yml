@@ -75,6 +75,24 @@ jobs:
           & build/Release/capture-bench.exe --warm 20 --csv perf/capture.csv | Tee-Object perf/capture.txt
           exit $LASTEXITCODE
 
+      # Real keystrokes into a real noite (M7c): capture, board, done, trash, restore, each
+      # step checked in its database; any keystroke that misses noite fails the run.
+      - name: End-to-end
+        shell: powershell
+        timeout-minutes: 5
+        run: |
+          $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
+          $env:QT_PLUGIN_PATH = "$env:QT_ROOT_DIR\plugins"
+          powershell -NoProfile -ExecutionPolicy Bypass -File tools/e2e/run-e2e.ps1 -Exe build/Release/noite.exe -Out e2e
+          exit $LASTEXITCODE
+
+      - name: Upload e2e results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: e2e/
+
       - name: Upload perf results
         if: always()
         uses: actions/upload-artifact@v4

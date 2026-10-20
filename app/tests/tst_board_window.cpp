@@ -4,6 +4,8 @@
 #include "board/BoardModel.h"
 #include "board/BoardWindow.h"
 #include "board/ChipBar.h"
+#include "board/NoteOverlay.h"
+#include "editor/NoteEdit.h"
 #include "editor/AttachmentStore.h"
 
 #include <noite/store.h>
@@ -58,6 +60,45 @@ private slots:
         QCOMPARE(b.window->model().rowCount(), 3);
         QCOMPARE(b.window->tabStrip()->currentIndex(), 0);
         QCOMPARE(b.window->tabStrip()->count(), 4);
+    }
+
+    // M7c: Ctrl+1..4 switch tabs (Today, All, Completed, Trash); the first card is selected.
+    void ctrlDigitSwitchesTab()
+    {
+        Board b;
+        b.show();
+        QTest::keyClick(b.window->grid(), Qt::Key_3, Qt::ControlModifier);
+        QCOMPARE(b.window->tabStrip()->currentIndex(), 2);
+        QCOMPARE(b.window->model().tab(), Tab::Completed);
+        QCOMPARE(b.window->grid()->currentIndex().row(), 0);
+        QCOMPARE(b.window->model().summary(0).title, QString("old task"));
+        for (const auto& [key, index] : {std::pair{Qt::Key_4, 3}, {Qt::Key_2, 1}, {Qt::Key_1, 0}}) {
+            QTest::keyClick(b.window->grid(), key, Qt::ControlModifier);
+            QCOMPARE(b.window->tabStrip()->currentIndex(), index);
+            QCOMPARE(int(b.window->model().tab()), index);
+        }
+    }
+
+    void ctrlDigitSwitchesTabFromSearch()
+    {
+        Board b;
+        b.show();
+        b.window->searchField()->setFocus();
+        QTest::keyClicks(b.window->searchField(), "buy");
+        QTest::keyClick(b.window->searchField(), Qt::Key_2, Qt::ControlModifier);
+        QCOMPARE(b.window->model().tab(), Tab::All);
+        QCOMPARE(b.window->searchField()->text(), QString("buy"));
+    }
+
+    // The note overlay's editor keeps its own keys.
+    void ctrlDigitIgnoredWhileOverlayOpen()
+    {
+        Board b;
+        b.show();
+        b.window->openSelected();
+        QVERIFY(b.window->overlay().isOpen());
+        QTest::keyClick(b.window->overlay().editor(), Qt::Key_3, Qt::ControlModifier);
+        QCOMPARE(b.window->tabStrip()->currentIndex(), 0);
     }
 
     void tabsAreEqualCapsButtonsWithCounts()

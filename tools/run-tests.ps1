@@ -62,5 +62,17 @@ foreach ($tool in @("changelog-section.ps1", "bump-version.ps1")) {
     $total += [math]::Abs($toolExit)
 }
 
+# The end-to-end run's database checker carries its own checks on a temporary database.
+$python = (Get-Command python -ErrorAction SilentlyContinue).Source
+if ($python) {
+    & $python -I (Join-Path $PSScriptRoot "e2e\noite_db.py") --self-test
+    $dbExit = $LASTEXITCODE
+    "suite noite_db --self-test: exit $dbExit"
+    $total += [math]::Abs($dbExit)
+} else {
+    "MISSING python for the e2e checker self-test"
+    $total += 1
+}
+
 "TOTAL failures: $total"
 exit $total
