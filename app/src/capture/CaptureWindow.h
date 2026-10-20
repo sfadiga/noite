@@ -12,7 +12,8 @@ class NoteFooterBar;
 // The frameless, always-on-top capture window (D6). Created at startup and kept hidden;
 // summon() opens a blank note centred on the monitor of the foreground window, or just
 // refocuses it if it is already open. Keys: Esc saves and hides, Ctrl+Enter marks done
-// and closes, Ctrl+Shift+C cycles the colour; clicking away saves and hides (D30).
+// and closes, Ctrl+Shift+C cycles the colour (D30). Clicking away leaves it open on top (D6).
+// Its margins move it and their outer edge resizes it; the size lasts for the session.
 class CaptureWindow : public QWidget {
     Q_OBJECT
 public:
@@ -31,7 +32,6 @@ public:
     void setLatencyProbe(LatencyProbe* probe) { probe_ = probe; }
 
 protected:
-    bool event(QEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
@@ -41,5 +41,4 @@ private:
     NoteEdit* editor_;
     NoteFooterBar* footer_;
     LatencyProbe* probe_ = nullptr;
-    bool open_ = false; // a capture is in progress (summoned and not yet finished)
 };

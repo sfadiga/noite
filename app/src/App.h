@@ -115,6 +115,8 @@ private:
     void wizardClosed(bool captureOpen = false);
     // Once nothing holds it any more: the first run's review check and a held review.
     void releaseReview();
+    // The board or the review is about to change note `id`: an open capture of it saves and closes.
+    void closeCaptureHolding(const noite::ScratchId& id);
 
     // Closes the log (after "noite quit") once every member below is gone, the store included.
     // applog's install/uninstall have a single owner: Apps may only overlap if the later one

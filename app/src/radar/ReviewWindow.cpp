@@ -199,6 +199,7 @@ void ReviewWindow::decide(Kind kind, const std::function<std::function<void()>(c
     const std::optional<noite::ScratchId> id = currentId();
     if (!id || editing_)
         return;
+    emit aboutToChange(*id);
     try {
         const noite::Scratch note = store_.get(*id); // NotFound: gone elsewhere
         if (note.status != noite::Status::Active) {  // finished or trashed elsewhere: not a dead end
@@ -304,6 +305,10 @@ void ReviewWindow::editCurrent()
 {
     if (isFinished())
         return;
+    if (const std::optional<noite::ScratchId> id = currentId()) {
+        emit aboutToChange(*id);
+        controller_.open(*id); // with what a capture holding it just saved
+    }
     editing_ = true;
     editor_->setReadOnly(false);
     editor_->setFocus(Qt::OtherFocusReason);

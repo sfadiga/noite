@@ -30,6 +30,7 @@ add_library(noite-app STATIC
     src/VersionText.h src/VersionText.cpp
     src/SelfCheck.h src/SelfCheck.cpp
     src/DragMover.h src/DragMover.cpp
+    src/EdgeResizer.h src/EdgeResizer.cpp
     src/radar/ReviewScheduler.h src/radar/ReviewScheduler.cpp
     src/radar/ReviewWindow.h src/radar/ReviewWindow.cpp
     src/platform/Autostart.h src/platform/Autostart.cpp

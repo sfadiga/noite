@@ -65,24 +65,51 @@ bool looksLikeMarkdown(const QString& text)
     return count >= 2;
 }
 
-// Markdown joins consecutive lines into one paragraph; pasted notes expect each line to
-// stay a line. Separate them with a blank line, except inside fences and table rows.
+// Stands in for a blank line of the paste: markdown has no empty paragraphs.
+constexpr QChar kBlankLine(0x200B);
+
+// Markdown joins consecutive lines into one paragraph and drops blank lines; pasted notes
+// expect each line to stay a line. Separate them with a blank line and mark the blank ones,
+// except inside fences and table rows.
 QString keepLineBreaks(const QString& markdown)
 {
     const QStringList lines = markdown.split('\n');
     QStringList out;
     bool fenced = false;
     for (int i = 0; i < lines.size(); ++i) {
-        const QString line = lines[i];
-        out << line;
-        if (line.trimmed().startsWith("```"))
+        const QString line = lines[i].trimmed();
+        out << (!fenced && line.isEmpty() ? QString(kBlankLine) : lines[i]);
+        if (line.startsWith("```"))
             fenced = !fenced;
-        const bool next = i + 1 < lines.size() && !lines[i + 1].trimmed().isEmpty();
-        const bool table = line.trimmed().startsWith('|') && next && lines[i + 1].trimmed().startsWith('|');
-        if (!fenced && !table && next && !line.trimmed().isEmpty())
+        const bool next = i + 1 < lines.size();
+        const bool table = line.startsWith('|') && next && lines[i + 1].trimmed().startsWith('|');
+        if (!fenced && !table && next)
             out << QString();
     }
     return out.join('\n');
+}
+
+// Laid out like typed text: no paragraph spacing, and the marked blank lines come back empty.
+// No raw HTML: in plain text "<wrong-base>" is a placeholder, and as an unclosed tag it
+// would swallow every line after it.
+QTextDocumentFragment fromPastedMarkdown(const QString& text)
+{
+    QTextDocument doc;
+    doc.setMarkdown(keepLineBreaks(text),
+                    QTextDocument::MarkdownFeatures(QTextDocument::MarkdownDialectGitHub | QTextDocument::MarkdownNoHTML));
+    QTextCursor cursor(&doc);
+    for (QTextBlock block = doc.begin(); block.isValid(); block = block.next()) {
+        QTextBlockFormat format = block.blockFormat();
+        format.setTopMargin(0);
+        format.setBottomMargin(0);
+        cursor.setPosition(block.position());
+        cursor.setBlockFormat(format);
+        if (block.text() == kBlankLine) {
+            cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+            cursor.removeSelectedText();
+        }
+    }
+    return QTextDocumentFragment(&doc);
 }
 
 // Explorer copies: every URL is a local file.
@@ -181,7 +208,7 @@ void NoteEdit::insertFromMimeData(const QMimeData* source)
             return;
         }
         if (looksLikeMarkdown(text)) {
-            textCursor().insertFragment(QTextDocumentFragment::fromMarkdown(keepLineBreaks(text)));
+            textCursor().insertFragment(fromPastedMarkdown(text));
             return;
         }
     }

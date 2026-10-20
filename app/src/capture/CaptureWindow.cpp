@@ -1,6 +1,7 @@
 #include "capture/CaptureWindow.h"
 
 #include "DragMover.h"
+#include "EdgeResizer.h"
 #include "capture/CaptureController.h"
 #include "capture/LatencyProbe.h"
 #include "capture/NoteFooterBar.h"
@@ -41,19 +42,20 @@ CaptureWindow::CaptureWindow(CaptureController& controller, NoteEdit* editor)
     , footer_(new NoteFooterBar(controller, this))
 {
     setWindowTitle("noite");
-    resize(520, 420);
+    setMinimumSize(320, 200);
+    resize(520, 420); // then the user's size, for the session: the window is reused
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(12, 12, 12, 8);
     layout->addWidget(editor_);
     layout->addWidget(footer_);
 
     new DragMover(this, this); // by the margins and footer
+    new EdgeResizer(this);     // by the outer edge of the margins
     editor_->installEventFilter(this);
     editor_->viewport()->installEventFilter(this);
     footer_->tagField()->installEventFilter(this);
     connect(editor_, &NoteEdit::escapePressed, &controller_, &CaptureController::dismiss);
     connect(&controller_, &CaptureController::finished, this, [this] {
-        open_ = false; // before hide(): hiding deactivates the window while it still reports visible
         if (probe_)
             probe_->dismissed(editor_->toPlainText());
         hide();
@@ -77,8 +79,8 @@ void CaptureWindow::summonNote(const noite::ScratchId& id)
 void CaptureWindow::showAndFocus()
 {
     if (!isVisible()) {
-        open_ = true;
         const QRect area = foregroundScreen()->availableGeometry();
+        resize(size().boundedTo(area.size())); // sized on a larger monitor
         move(area.center() - QPoint(width() / 2, height() / 2));
         show();
     }
@@ -91,15 +93,6 @@ void CaptureWindow::showAndFocus()
 QString CaptureWindow::footerText() const
 {
     return footer_->infoText();
-}
-
-bool CaptureWindow::event(QEvent* event)
-{
-    // Clicking away saves and hides (D6) — only while a capture is open: hide() itself
-    // deactivates the window, and Qt still reports it visible at that moment.
-    if (event->type() == QEvent::WindowDeactivate && open_)
-        controller_.dismiss();
-    return QWidget::event(event);
 }
 
 bool CaptureWindow::eventFilter(QObject* watched, QEvent* event)

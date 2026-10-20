@@ -55,6 +55,8 @@ public:
 
 signals:
     void openBoardRequested();
+    // Before the current note is decided on or edited, so a capture holding it can save and close.
+    void aboutToChange(const noite::ScratchId& id);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;

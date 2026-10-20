@@ -16,7 +16,7 @@ Record pass/fail and a one-line note for any failure. Every failure becomes an a
 | 8 | Dark theme | Switch Windows to dark mode, paste black text from Word | Text readable (follows the theme) |
 | 9 | Copied file | Copy a PDF in Explorer, paste | A file chip with its name; `Ctrl+click` opens it |
 | 10 | Copied program | Copy an `.exe`, paste, `Ctrl+click` the chip | Opens the folder, doesn't run the program |
-| 11 | Click away | Type, then click another window | Capture hides; the note is saved |
+| 11 | Click away | Type, then click another window | Capture stays open on top, text kept; `Esc` then saves and hides it |
 | 12 | `Ctrl+Enter` | Type, press `Ctrl+Enter` | Capture closes; the note is marked done |
 | 13 | Colour | `Ctrl+Shift+C` a few times | Footer cycles red → … → purple → none |
 | 14 | Empty capture | Open, press `Esc` without typing | Nothing is saved |
@@ -25,6 +25,7 @@ Record pass/fail and a one-line note for any failure. Every failure becomes an a
 | 17 | Second monitor | Focus a window on the other monitor, press the hotkey | Capture centres on that monitor, crisp |
 | 18 | Display scale | Check at the display's scaling | Text crisp, nothing clipped |
 | 19 | Hotkey taken | Start with another app holding `Ctrl+Alt+J` | Tray warning; tray still opens a capture |
+| 20 | Resize | Hover each edge and corner, drag one in and out; `Esc`, open again | Resize cursor on the edge; it resizes smoothly, stops at its minimum, and reopens at that size |
 
 ## Board
 

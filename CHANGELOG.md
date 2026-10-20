@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-20
+
+### Added
+
+- The capture window can be resized from any edge or corner; it keeps its size until noite quits.
+
+### Changed
+
+- The capture window closes only on `Esc` (or `Ctrl+Enter`): clicking another window leaves it open on top. Opening or acting on the same note from the board or the review saves and closes it first.
+
+### Fixed
+
+- Pasting plain text that looks like markdown no longer cuts off at a `<placeholder>` such as `<my-feature>`, which left empty numbered lines in place of the rest of the paste.
+- Pasted markdown is spaced like typed text: no gap between lines, and its blank lines stay.
+
 ## [1.0.0] - 2026-10-19
 
 ### Added
@@ -17,5 +32,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - First-run setup and a Settings dialog.
 - A portable single exe: no installer, and your data stays next to it.
 
-[Unreleased]: https://github.com/sfadiga/noite/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/sfadiga/noite/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/sfadiga/noite/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sfadiga/noite/releases/tag/v1.0.0

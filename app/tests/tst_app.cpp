@@ -6,6 +6,7 @@
 #include "AppOptions.h"
 #include "board/BoardModel.h"
 #include "board/BoardWindow.h"
+#include "board/NoteOverlay.h"
 #include "board/TabStrip.h"
 #include "capture/CaptureWindow.h"
 #include "editor/NoteEdit.h"
@@ -30,6 +31,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLineEdit>
+#include <QListView>
 #include <QMenu>
 #include <QRandomGenerator>
 #include <QSignalSpy>
@@ -252,6 +254,76 @@ private slots:
         QTest::keyClicks(app.captureWindow()->editor(), "fresh");
         QTest::keyClick(app.captureWindow()->editor(), Qt::Key_Escape);
         QTRY_COMPARE(app.boardWindow()->model().rowCount(), 1);
+    }
+
+    // The pad stays open while other windows are used (D6): one acting on the pad's own note
+    // closes the pad first, saved, so the two never edit one note at once.
+    void boardOpeningThePadsNoteClosesThePad()
+    {
+        QTemporaryDir tmp;
+        prepare(tmp.filePath("data"), "Ctrl+Alt+Shift+F9");
+        App app(AppOptions{tmp.filePath("data")});
+        QVERIFY(!app.start());
+        app.showBoard();
+        BoardWindow* board = app.boardWindow();
+        CaptureWindow* pad = app.captureWindow();
+        pad->summon();
+        QTest::keyClicks(pad->editor(), "held");
+        QTRY_COMPARE(board->model().rowCount(), 1); // autosaved
+        QTest::keyClicks(pad->editor(), " more");
+        board->grid()->setCurrentIndex(board->model().index(0, 0));
+        board->openSelected();
+        QVERIFY(!pad->isVisible());
+        QVERIFY(board->overlay().isOpen());
+        QCOMPARE(board->overlay().editor()->toPlainText(), QString("held more"));
+    }
+
+    void boardActingOnAnotherNoteKeepsThePad()
+    {
+        QTemporaryDir tmp;
+        prepareOverdue(tmp.filePath("data"));
+        App app(AppOptions{tmp.filePath("data")});
+        QVERIFY(!app.start());
+        app.showBoard();
+        BoardWindow* board = app.boardWindow();
+        board->grid()->setCurrentIndex(board->model().index(0, 0)); // "pay rent"
+        CaptureWindow* pad = app.captureWindow();
+        pad->summon();
+        QTest::keyClicks(pad->editor(), "other");
+        board->trashOrRestore();
+        QVERIFY(pad->isVisible());
+    }
+
+    void reviewDecidingThePadsNoteClosesThePad()
+    {
+        QTemporaryDir tmp;
+        prepareOverdue(tmp.filePath("data"));
+        App app(AppOptions{tmp.filePath("data")});
+        QVERIFY(!app.start());
+        QTRY_VERIFY(app.reviewWindow());
+        const ScratchId id = *app.reviewWindow()->currentId();
+        CaptureWindow* pad = app.captureWindow();
+        pad->summonNote(id);
+        QTest::keyClicks(pad->editor(), " today");
+        app.reviewWindow()->trash();
+        QVERIFY(!pad->isVisible());
+        QVERIFY(app.store()->get(id).html.contains("pay rent today"));
+        QCOMPARE(app.store()->get(id).status, Status::Trashed);
+    }
+
+    void reviewEditingThePadsNoteClosesThePad()
+    {
+        QTemporaryDir tmp;
+        prepareOverdue(tmp.filePath("data"));
+        App app(AppOptions{tmp.filePath("data")});
+        QVERIFY(!app.start());
+        QTRY_VERIFY(app.reviewWindow());
+        CaptureWindow* pad = app.captureWindow();
+        pad->summonNote(*app.reviewWindow()->currentId());
+        QTest::keyClicks(pad->editor(), " today");
+        app.reviewWindow()->editCurrent();
+        QVERIFY(!pad->isVisible());
+        QVERIFY(app.reviewWindow()->editor()->toPlainText().contains("pay rent today"));
     }
 
     void boardHotkeyTakenKeepsRunning()
