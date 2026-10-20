@@ -22,10 +22,10 @@ public:
     void start() { timer_.start(); }
     void stop() { timer_.stop(); }
     int ticks() const { return ticks_; }
-    // One render now; the timer calls it. capture-bench calls it before each trim.
-    void tick();
 
 private:
+    void tick();
+
     QPointer<QWidget> window_;
     QTimer timer_;
     int ticks_ = 0;

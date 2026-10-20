@@ -5,7 +5,6 @@ add_library(noite-app STATIC
     src/platform/Hotkey.h src/platform/Hotkey.cpp
     src/platform/HotkeyManager.h src/platform/HotkeyManager.cpp
     src/platform/NativeHost.h src/platform/NativeHost.cpp
-    src/platform/WorkingSetFloor.h src/platform/WorkingSetFloor.cpp
     src/editor/MarkdownShortcuts.h src/editor/MarkdownShortcuts.cpp
     src/editor/NoteEdit.h src/editor/NoteEdit.cpp
     src/editor/AttachmentStore.h src/editor/AttachmentStore.cpp
@@ -72,7 +71,7 @@ qt_add_executable(board-bench bench/board_bench.cpp bench/BenchUtil.h bench/Seed
 target_include_directories(board-bench PRIVATE bench)
 target_link_libraries(board-bench PRIVATE noite-app psapi)
 
-# Capture performance gate (D5, M7b): warm and trimmed summons by phase; CI runs it.
+# Capture performance gate (D5, M7b): summons by phase; CI runs it.
 qt_add_executable(capture-bench bench/capture_bench.cpp bench/BenchUtil.h)
 target_include_directories(capture-bench PRIVATE bench)
 target_link_libraries(capture-bench PRIVATE noite-app psapi)
@@ -91,7 +90,6 @@ qt_add_executable(app-tests
     tests/tst_app.cpp
     tests/tst_latency_probe.cpp
     tests/tst_keep_warm.cpp
-    tests/tst_working_set_floor.cpp
     tests/tst_board_model.cpp
     tests/tst_card_delegate.cpp
     tests/tst_board_window.cpp

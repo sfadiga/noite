@@ -5,7 +5,6 @@
 #include "capture/KeepWarm.h"
 #include "capture/LatencyProbe.h"
 #include "capture/Prewarm.h"
-#include "platform/WorkingSetFloor.h"
 #include "editor/AttachmentStore.h"
 #include "editor/NoteEdit.h"
 #include "editor/OpenFolder.h"
@@ -125,8 +124,7 @@ std::optional<int> App::start()
     editor->setAttachmentStore(attachments_.get());
     controller_ = std::make_unique<CaptureController>(*store_, *editor, [] { return QDate::currentDate(); });
     window_ = std::make_unique<CaptureWindow>(*controller_, editor);
-    if (const std::optional<QString> error = prewarmCapture(window_.get(), {workingSetFloorEnabledByEnvironment()}))
-        qWarning() << "working-set floor:" << *error; // noite runs on without it
+    prewarmCapture(window_.get());
     probe_ = LatencyProbe::fromEnvironment();
     window_->setLatencyProbe(probe_.get());
     if (KeepWarm::enabledByEnvironment()) {

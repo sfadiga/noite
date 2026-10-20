@@ -115,41 +115,7 @@ void openSetupAgain(App& app)
 class AppTest : public QObject {
     Q_OBJECT
 
-    static bool hardMinimumSet()
-    {
-        SIZE_T min = 0;
-        SIZE_T max = 0;
-        DWORD flags = 0;
-        GetProcessWorkingSetSizeEx(GetCurrentProcess(), &min, &max, &flags);
-        return flags & QUOTA_LIMITS_HARDWS_MIN_ENABLE;
-    }
-
 private slots:
-    // Every App in this process would otherwise pin the test process's working set.
-    void init() { qputenv("NOITE_WS_FLOOR", "0"); }
-    void cleanup()
-    {
-        qunsetenv("NOITE_WS_FLOOR");
-        SetProcessWorkingSetSizeEx(GetCurrentProcess(), SIZE_T(-1), SIZE_T(-1), QUOTA_LIMITS_HARDWS_MIN_DISABLE);
-    }
-
-    // M7b: the first capture after a long idle finds its pages resident.
-    void startupAppliesTheFloorUnlessSwitchedOff()
-    {
-        QTemporaryDir tmp;
-        prepare(tmp.filePath("off"), "Ctrl+Alt+Shift+F9");
-        {
-            App app(AppOptions{tmp.filePath("off")});
-            QVERIFY(!app.start());
-            QVERIFY(!hardMinimumSet());
-        }
-        qunsetenv("NOITE_WS_FLOOR");
-        prepare(tmp.filePath("on"), "Ctrl+Alt+Shift+F9");
-        App app(AppOptions{tmp.filePath("on")});
-        QVERIFY(!app.start());
-        QVERIFY(hardMinimumSet());
-    }
-
     void parseArgsReadsData()
     {
         QCOMPARE(parseArgs({"noite.exe", "--data", "D:/x"}).dataDir, QString("D:/x"));

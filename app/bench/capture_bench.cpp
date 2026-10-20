@@ -1,11 +1,11 @@
-// Performance gate for the capture (D5): hotkey -> editor painted and flushed, by phase, in
-// warm trials and in trimmed ones (the working set emptied first, as Windows does to an idle
-// process). Summons through CaptureWindow::summon(), the code the hotkey runs; no input is
-// sent. Runs on the real platform (a window flashes on screen and takes the foreground).
-//   capture-bench [--warm N=20] [--trimmed N=10] [--csv PATH] [--no-keep-warm] [--floor]
-//                 [--warm-wide] [--selftest-timeout]
-// Exits 1 if warm or trimmed ready p95 > 100 ms, private memory > 80 MB, a trial times out,
-// or the trim fails; a trimmed p95 over the 50 ms target only prints a warning.
+// Performance gate for the capture (D5): hotkey -> editor painted and flushed, by phase.
+// Summons through CaptureWindow::summon(), the code the hotkey runs; no input is sent. Runs
+// on the real platform (a window flashes on screen and takes the foreground).
+//   capture-bench [--warm N=20] [--csv PATH] [--no-keep-warm] [--selftest-timeout]
+// Exits 1 if the ready p95 > 100 ms, private memory > 80 MB, or a trial times out.
+// The first summon after a long idle is not simulated here: in M7b its extra ~75 ms was the
+// system waking (GPU/compositor), which no in-process trick reproduces
+// (docs/spikes/2026-10-m7b-idle-summon.md).
 #include "BenchUtil.h"
 
 #include "capture/CaptureController.h"
@@ -35,11 +35,9 @@
 namespace {
 
 constexpr double kBudgetMs = 100;
-constexpr double kTargetMs = 50;
 constexpr double kMemoryBudgetMb = 80;
 constexpr int kTrialTimeoutMs = 5000;
 constexpr int kAfterTrialMs = 300;
-constexpr int kAfterTrimMs = 500;
 
 void idle(int ms)
 {
@@ -77,34 +75,10 @@ const char* lastPhase(const LatencyProbe::Phases& p)
     return "pressed";
 }
 
-struct Series {
-    std::vector<double> shown, activated, painted, ready, faults;
-    int focused = 0;
-
-    void add(const LatencyProbe::Phases& p)
-    {
-        shown.push_back(p.shownMs);
-        activated.push_back(p.activatedMs);
-        painted.push_back(p.paintedMs);
-        ready.push_back(p.readyMs);
-        faults.push_back(double(p.faults));
-        focused += p.focused ? 1 : 0;
-    }
-};
-
-void printSeries(const char* mode, const Series& s)
+void printStats(const char* name, const std::vector<double>& values)
 {
-    const std::pair<const char*, const std::vector<double>*> phases[] = {
-        {"shown", &s.shown}, {"activated", &s.activated}, {"painted", &s.painted}, {"ready", &s.ready}};
-    for (const auto& [name, values] : phases) {
-        if (values->empty())
-            continue;
-        std::printf("mode=%s phase=%s p50=%.1f p95=%.1f max=%.1f\n", mode, name, bench::percentile(*values, 0.5),
-                    bench::percentile(*values, 0.95), *std::max_element(values->begin(), values->end()));
-    }
-    if (!s.faults.empty())
-        std::printf("mode=%s faults p50=%.0f p95=%.0f max=%.0f\n", mode, bench::percentile(s.faults, 0.5),
-                    bench::percentile(s.faults, 0.95), *std::max_element(s.faults.begin(), s.faults.end()));
+    std::printf("phase=%s p50=%.1f p95=%.1f max=%.1f\n", name, bench::percentile(values, 0.5),
+                bench::percentile(values, 0.95), *std::max_element(values.begin(), values.end()));
 }
 
 } // namespace
@@ -113,12 +87,9 @@ int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
     const QStringList args = app.arguments();
-    const int warmTrials = bench::intArg(args, "--warm", 20);
-    const int trimmedTrials = bench::intArg(args, "--trimmed", 10);
+    const int trials = bench::intArg(args, "--warm", 20);
     const qsizetype csvAt = args.indexOf("--csv");
     const QString csvPath = csvAt >= 0 && csvAt + 1 < args.size() ? args[csvAt + 1] : QString();
-    const bool keepWarm = !args.contains("--no-keep-warm");
-    const bool floor = args.contains("--floor");
 
     QTemporaryDir tmp;
     auto store = noite::Store::open(noite::DataDir::acquire(tmp.filePath("data")), std::make_shared<noite::SystemClock>());
@@ -127,15 +98,15 @@ int main(int argc, char* argv[])
     edit->setAttachmentStore(&attachments);
     CaptureController controller(*store, *edit, [] { return QDate::currentDate(); });
     CaptureWindow window(controller, edit);
-    if (const std::optional<QString> error = prewarmCapture(&window, {floor}))
-        std::printf("prewarm: %s\n", qPrintable(*error));
-    std::unique_ptr<KeepWarm> warm;
-    if (keepWarm)
-        warm = std::make_unique<KeepWarm>(&window); // not started: trimmed trials tick it themselves
+    prewarmCapture(&window);
+    std::unique_ptr<KeepWarm> warm; // as App: on unless switched off
+    if (!args.contains("--no-keep-warm")) {
+        warm = std::make_unique<KeepWarm>(&window);
+        warm->start();
+    }
     LatencyProbe probe{QString()};
     probe.setRequireFocus(false); // a CI VM may not hand the window focus
     window.setLatencyProbe(&probe);
-    std::printf("keep_warm=%s floor=%s\n", keepWarm ? "on" : "off", floor ? "on" : "off");
 
     if (args.contains("--selftest-timeout")) { // a trial that never paints: must time out
         probe.pressed();
@@ -153,61 +124,42 @@ int main(int argc, char* argv[])
             std::printf("cannot write %s\n", qPrintable(csvPath));
             return 1;
         }
-        out << "mode,trial,shown_ms,activated_ms,painted_ms,ready_ms,focused,faults\n";
+        out << "trial,shown_ms,activated_ms,painted_ms,ready_ms,focused,faults\n";
     }
 
-    Series warmSeries;
-    Series trimmedSeries;
-    const auto trial = [&](const char* mode, int n, Series& series) -> bool {
+    std::vector<double> shown, activated, painted, ready, faults;
+    int focused = 0;
+    for (int n = 1; n <= trials; ++n) {
         probe.pressed();
         window.summon();
-        const bool ready = waitForReady(probe);
-        const LatencyProbe::Phases phases = probe.lastPhases();
+        const bool done = waitForReady(probe);
+        const LatencyProbe::Phases p = probe.lastPhases();
         controller.dismiss();
-        if (!ready) {
-            std::printf("timeout: %s trial %d last phase %s\n", mode, n, lastPhase(phases));
-            return false;
+        if (!done) {
+            std::printf("timeout: trial %d last phase %s\n", n, lastPhase(p));
+            return 1;
         }
-        series.add(phases);
+        shown.push_back(p.shownMs);
+        activated.push_back(p.activatedMs);
+        painted.push_back(p.paintedMs);
+        ready.push_back(p.readyMs);
+        faults.push_back(double(p.faults));
+        focused += p.focused ? 1 : 0;
         if (!csvPath.isEmpty())
-            out << mode << "," << n << "," << phases.shownMs << "," << phases.activatedMs << "," << phases.paintedMs
-                << "," << phases.readyMs << "," << (phases.focused ? 1 : 0) << "," << phases.faults << "\n";
+            out << n << "," << p.shownMs << "," << p.activatedMs << "," << p.paintedMs << "," << p.readyMs << ","
+                << (p.focused ? 1 : 0) << "," << p.faults << "\n";
         idle(kAfterTrialMs);
-        return true;
-    };
-
-    for (int n = 1; n <= warmTrials; ++n)
-        if (!trial("warm", n, warmSeries))
-            return 1;
-    for (int n = 1; n <= trimmedTrials; ++n) {
-        if (warm)
-            warm->tick(); // trimmed since the last keep-warm tick
-        if (!EmptyWorkingSet(GetCurrentProcess())) {
-            std::printf("EmptyWorkingSet failed: %lu\n", GetLastError());
-            return 1;
-        }
-        idle(kAfterTrimMs);
-        if (!trial("trimmed", n, trimmedSeries))
-            return 1;
     }
 
-    printSeries("warm", warmSeries);
-    printSeries("trimmed", trimmedSeries);
-    const int total = int(warmSeries.ready.size() + trimmedSeries.ready.size());
-    std::printf("focused=%d/%d\n", warmSeries.focused + trimmedSeries.focused, total);
+    printStats("shown", shown);
+    printStats("activated", activated);
+    printStats("painted", painted);
+    printStats("ready", ready);
+    std::printf("first_ready=%.1f first_faults=%.0f\n", ready.front(), faults.front());
+    std::printf("focused=%d/%d\n", focused, trials);
     const double privateMb = bench::privateMb();
     std::printf("private_mb=%.1f\n", privateMb);
-    std::printf("working_set_mb=%.1f\n", bench::workingSetMb());
-
-    bool pass = privateMb <= kMemoryBudgetMb;
-    if (!warmSeries.ready.empty())
-        pass = pass && bench::percentile(warmSeries.ready, 0.95) <= kBudgetMs;
-    if (!trimmedSeries.ready.empty()) {
-        const double trimmedP95 = bench::percentile(trimmedSeries.ready, 0.95);
-        pass = pass && trimmedP95 <= kBudgetMs;
-        if (trimmedP95 > kTargetMs)
-            std::printf("warning: trimmed ready p95 %.1f ms is over the %.0f ms target\n", trimmedP95, kTargetMs);
-    }
+    const bool pass = bench::percentile(ready, 0.95) <= kBudgetMs && privateMb <= kMemoryBudgetMb;
     std::printf("%s\n", pass ? "PASS" : "FAIL");
     return pass ? 0 : 1;
 }

@@ -25,11 +25,6 @@ inline double privateMb()
     return double(memoryCounters().PrivateUsage) / (1024.0 * 1024.0);
 }
 
-inline double workingSetMb()
-{
-    return double(memoryCounters().WorkingSetSize) / (1024.0 * 1024.0);
-}
-
 // Nearest-rank percentile, p in [0, 1]; `values` must not be empty.
 inline double percentile(std::vector<double> values, double p)
 {
