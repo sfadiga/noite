@@ -225,9 +225,15 @@ std::optional<int> App::start()
     createTray();
 
     if (settings.setupCompleted) {
-        if (hotkeys_->set(kCaptureHotkeyId, settings.captureHotkey) != HotkeyStatus::Ok)
+        const bool captureOk = hotkeys_->set(kCaptureHotkeyId, settings.captureHotkey) == HotkeyStatus::Ok;
+        const bool boardOk = hotkeys_->set(kBoardHotkeyId, settings.boardHotkey) == HotkeyStatus::Ok;
+        // The end-to-end run (tools/e2e) waits for this line: noite now answers its hotkeys.
+        qInfo().noquote() << QString::fromUtf8("hotkeys: capture %1 %2 · board %3 %4")
+                                 .arg(settings.captureHotkey, captureOk ? "ok" : "unavailable", settings.boardHotkey,
+                                      boardOk ? "ok" : "unavailable");
+        if (!captureOk)
             emit hotkeyUnavailable(settings.captureHotkey);
-        if (hotkeys_->set(kBoardHotkeyId, settings.boardHotkey) != HotkeyStatus::Ok)
+        if (!boardOk)
             emit hotkeyUnavailable(settings.boardHotkey);
         QTimer::singleShot(0, scheduler_.get(), &ReviewScheduler::check);
     } else {

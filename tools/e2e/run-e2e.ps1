@@ -22,11 +22,12 @@ using System.Runtime.InteropServices;
 using System.Text;
 public static class E2eForeground {
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
-    public static bool TitleIs(string title) {
-        var s = new StringBuilder(256);
-        GetWindowText(GetForegroundWindow(), s, 256);
-        return s.ToString() == title;
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    // The process owning the foreground window; nothing about the window itself is read.
+    public static uint Pid() {
+        uint pid;
+        GetWindowThreadProcessId(GetForegroundWindow(), out pid);
+        return pid;
     }
 }
 "@
@@ -63,6 +64,13 @@ function Started-Lines {
     return @(Get-Content $noiteLog -Encoding UTF8 | Where-Object { $_ -match " started " }).Count
 }
 
+# The "hotkeys: capture <combo> ok|unavailable . board <combo> ok|unavailable" line noite logs
+# once it answers its hotkeys; $null until then.
+function Hotkeys-Line {
+    if (-not (Test-Path $noiteLog)) { return $null }
+    return Get-Content $noiteLog -Encoding UTF8 | Where-Object { $_ -match "hotkeys: capture " } | Select-Object -Last 1
+}
+
 function Start-Noite {
     return Start-Process $Exe -ArgumentList "--data", "`"$data`"" -PassThru
 }
@@ -76,32 +84,47 @@ try {
     $python = (Get-Command python -ErrorAction SilentlyContinue).Source
     if (-not $python) { throw "setup FAIL: python not found" }
     if (-not (Test-Path $Exe)) { throw "setup FAIL: no noite at $Exe" }
+    # Another noite holds the hotkeys: the run's keystrokes would land in it (and its data).
+    if (Get-Process noite -ErrorAction SilentlyContinue) { throw "setup FAIL: quit the running noite first" }
 
-    # A fresh data folder: the first start creates the database, then setup is marked done
-    # so the run doesn't meet the first-run wizard.
+    # A fresh data folder: the first start creates the database (the schema is committed once
+    # prepare can read the settings table), then setup is marked done so the run doesn't
+    # meet the first-run wizard.
     $first = Start-Noite
-    if (-not (Wait-Until { (Test-Path $db) -and (Started-Lines) -ge 1 } 10)) { throw "setup FAIL: noite did not create its data folder" }
+    $ready = Wait-Until {
+        if (-not (Test-Path $db)) { return $false }
+        $ErrorActionPreference = "Continue" # this scope only: "no such table" on stderr means "not yet"
+        & $python -I $checker prepare $db 2>$null | Out-Null
+        return $LASTEXITCODE -eq 0
+    } 10
+    if (-not $ready) { throw "setup FAIL: noite did not create its database" }
     Stop-Process -Id $first.Id -Force
     $first.WaitForExit(5000) | Out-Null
-    $prepared = & $python -I $checker prepare $db # stdout only: under "Stop", 2>&1 would make stderr fatal
-    if ($LASTEXITCODE -ne 0) { throw "setup FAIL: prepare: $prepared" }
 
     $target = Start-Process powershell -PassThru -WindowStyle Minimized -ArgumentList @(
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$(Join-Path $PSScriptRoot 'harness-target.ps1')`"", "-Out", "`"$leak`"")
     if (-not (Wait-Until { Test-Path "$leak.ready" } 10)) { throw "setup FAIL: the harness target window did not open" }
 
     $noite = Start-Noite
-    if (-not (Wait-Until { (Started-Lines) -ge 2 } 10)) { throw "setup FAIL: noite did not start" }
+    if (-not (Wait-Until { (Started-Lines) -ge 2 -and (Hotkeys-Line) } 10)) { throw "setup FAIL: noite did not start" }
+    if ((Hotkeys-Line) -match "unavailable") { throw "setup FAIL: a hotkey is taken by another program" }
     Say "setup PASS"
 
+    # Every keystroke goes only to the process meant to have the foreground: the target
+    # (hotkeys) or noite (everything else). Checked by process id before each send.
     $shell = New-Object -ComObject WScript.Shell
-    function Activate-Target {
-        if (-not $shell.AppActivate("noite-e2e-target")) { throw "setup FAIL: could not activate the harness target" }
-        Start-Sleep -Milliseconds 300
+    function Activate-Target([int]$step) {
+        $shell.AppActivate("noite-e2e-target") | Out-Null
+        if (-not (Wait-Until { [E2eForeground]::Pid() -eq $target.Id } 5)) { throw "step $step FAIL the harness target did not take the foreground" }
     }
-    function Send([string]$keys) {
+    function Send-Hotkey([int]$step, [string]$keys) {
+        if ([E2eForeground]::Pid() -ne $target.Id) { throw "step $step FAIL the harness target lost the foreground" }
         [System.Windows.Forms.SendKeys]::SendWait($keys)
-        Start-Sleep -Milliseconds 300
+    }
+    function Send([int]$step, [string]$keys) {
+        if (-not (Wait-Until { [E2eForeground]::Pid() -eq $noite.Id } 5)) { throw "step $step FAIL noite did not take the foreground" }
+        [System.Windows.Forms.SendKeys]::SendWait($keys)
+        Start-Sleep -Milliseconds 300 # paces the keys; never decides pass or fail
     }
     function Expect([int]$step, [string]$status, [string]$from = "") {
         $arguments = @("-I", $checker, "expect", $db, "--text", $text, "--status", $status)
@@ -112,29 +135,27 @@ try {
     }
 
     # 1. Capture a note with the global hotkey; Esc saves and closes it.
-    Activate-Target
-    Send "^%j"
-    Start-Sleep -Milliseconds 100
-    Send $text
-    Send "{ESC}"
+    Activate-Target 1
+    Send-Hotkey 1 "^%j"
+    Send 1 $text
+    Send 1 "{ESC}"
     Expect 1 "active"
 
     # 2. Open the board with its hotkey; Today first, then mark the selected note done.
-    Activate-Target
-    Send "^%b"
-    if (-not (Wait-Until { [E2eForeground]::TitleIs("noite") } 10)) { throw "step 2 FAIL the board did not come to the foreground" }
-    Send "^1"
-    Send "d"
+    Activate-Target 2
+    Send-Hotkey 2 "^%b"
+    Send 2 "^1"
+    Send 2 "d"
     Expect 2 "done"
 
     # 3. Completed tab: trash it.
-    Send "^3"
-    Send "{DEL}"
+    Send 3 "^3"
+    Send 3 "{DEL}"
     Expect 3 "trashed" "done"
 
     # 4. Trash tab: restore it (back to Completed).
-    Send "^4"
-    Send "{DEL}"
+    Send 4 "^4"
+    Send 4 "{DEL}"
     Expect 4 "done"
 } catch {
     $failed = $true

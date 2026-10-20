@@ -341,6 +341,24 @@ private slots:
         QCOMPARE(unavailable[0][0].toString(), QString("Ctrl+Alt+Shift+F7"));
         app.showBoard(); // the tray path still works
         QVERIFY(app.boardWindow()->isVisible());
+        QFile log(root + "/logs/noite.log");
+        QVERIFY(log.open(QIODevice::ReadOnly));
+        QVERIFY(QString::fromUtf8(log.readAll())
+                    .contains(QString::fromUtf8("hotkeys: capture Ctrl+Alt+Shift+F9 ok · board Ctrl+Alt+Shift+F7 unavailable")));
+    }
+
+    // M7c: the end-to-end run waits for this line before it sends the hotkey.
+    void startLogsTheHotkeys()
+    {
+        QTemporaryDir tmp;
+        const QString root = tmp.filePath("data");
+        prepare(root, "Ctrl+Alt+Shift+F9");
+        App app(AppOptions{root});
+        QVERIFY(!app.start());
+        QFile log(root + "/logs/noite.log");
+        QVERIFY(log.open(QIODevice::ReadOnly));
+        QVERIFY(QString::fromUtf8(log.readAll())
+                    .contains(QString::fromUtf8("hotkeys: capture Ctrl+Alt+Shift+F9 ok · board Ctrl+Alt+Shift+F8 ok")));
     }
 
     // ---- M4: the radar ----
