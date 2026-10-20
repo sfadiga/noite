@@ -23,6 +23,7 @@
 #include <QLineEdit>
 #include <QListView>
 #include <QMenu>
+#include <QShortcut>
 #include <QVBoxLayout>
 
 using noite::ScratchId;
@@ -133,6 +134,14 @@ BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std:
     connect(&searchDelay_, &QTimer::timeout, this, [this] { model_->setSearch(search_->text()); });
     connect(search_, &QLineEdit::textChanged, &searchDelay_, qOverload<>(&QTimer::start));
     connect(tabs_, &TabStrip::currentChanged, this, [this](int index) { model_->setTab(noite::Tab(index)); });
+    // Ctrl+1..4: Today, All, Completed, Trash; not while a note is open over the board.
+    for (const noite::Tab tab : {noite::Tab::Today, noite::Tab::All, noite::Tab::Completed, noite::Tab::Trash}) {
+        auto* shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key(Qt::Key_1 + int(tab))), this);
+        connect(shortcut, &QShortcut::activated, this, [this, tab] {
+            if (!overlay_->isOpen())
+                setTab(tab);
+        });
+    }
     connect(model_, &QAbstractItemModel::modelReset, this, &BoardWindow::onModelReset);
     connect(model_, &BoardModel::errorOccurred, this, &BoardWindow::showStatus);
 

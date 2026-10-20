@@ -161,7 +161,7 @@ Attachments are shared, not duplicated (safe because of D22).
 - **Sort:** automatic — overdue, due today, then undated oldest-first. Every active card shows its age ("3h" on its first day, then "12d"), next to its due label if it has one. No manual reordering in v1. (D9, D17)
 - **Filter chips:** one per tag, one per colour, plus Overdue / Due today / No date. Chips of the same kind combine with OR; different kinds combine with AND. Chips that would yield zero results are hidden. (D18)
 - **Search:** as-you-type full-text search over the current tab, combined with active chips. (D19)
-- Keys: `/` search · `N` new · `D` done · `Del` trash · `Ctrl+Z` undo last board action · arrow keys move between cards. (D30)
+- Keys: `/` search · `N` new · `D` done · `Del` trash · `Ctrl+Z` undo last board action · arrow keys move between cards · `Ctrl+1`–`Ctrl+4` Today / All / Completed / Trash. (D30; tab keys added in M7c)
 - Theme follows Windows light/dark. (D30)
 
 ### The radar (D31–D34, added 2026-10-17)
