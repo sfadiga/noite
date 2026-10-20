@@ -48,3 +48,24 @@ Findings:
 4. `KeepWarm`'s offscreen `grab()` doesn't touch `show()` or activation, consistent with M2's small gain (103 → 91 ms).
 
 Decision (Part B rule): no candidate reaches the budget for the measured reason; the floor is not shipped. Stopped for the author's call.
+
+## Spike: cloak instead of hide (2026-10-20, author away)
+
+`NOITE_CLOAK=1` (throwaway): the capture window stays shown but DWM-cloaked (`DWMWA_CLOAK`) between captures; a summon uncloaks and activates it instead of calling `ShowWindow`; closing re-cloaks it and hands the foreground back. The author checked by hand that it opens focused, gives focus back on `Esc`, lets clicks and keys through while closed, and stays open on click-away.
+
+| | shown | activated | painted | ready | faults |
+|---|---|---|---|---|---|
+| bench, warm (20) p50 | 0.4 | 1.0 | 1.3 | **1.5** | 0 |
+| bench, trimmed (5) p50 | 0.8 | 1.3 | 1.8 | **2.0** | 660 |
+| real, 1st after 15 min idle (used process) | 0.4 | 4.0 | **7.5** | **82.5** | 28 |
+| real, warm (trials 2–10) | ~0.35 | ~4.0 | ~5.1 | ~6 | 0 |
+
+**Finding:** with `ShowWindow` gone, the first summon after idle paints at 7.5 ms and then waits **75 ms in the flush** (the first present to the compositor). The wait moves to whichever call first touches the GPU/compositor; it is the system waking from idle, not noite's work. Cloaking cuts the warm summon from ~8 to ~6 ms in the real harness (1.5 ms in the bench) and doesn't change the after-idle time.
+
+## Conclusion
+
+| Case | Measured | Budget ≤ 100 | Target ≤ 50 |
+|---|---|---|---|
+| warm summon | ~8 ms (harness), ~9 ms p95 (bench) | met | met |
+| 1st summon after 15 min idle, process already used | 82.5–86.5 ms | met | not met: system wake-up (~75 ms in the first compositor call) |
+| 1st summon of a fresh process after 15 min idle | 89.6–119.8 ms | not always met | not met: first-touch code from disk + wake-up |
