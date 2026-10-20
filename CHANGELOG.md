@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Pasting plain text that looks like markdown no longer cuts off at a `<placeholder>` such as `<my-feature>`, which left empty numbered lines in place of the rest of the paste.
+- Pasted markdown is spaced like typed text: no gap between lines, and its blank lines stay.
 
 ## [1.0.0] - 2026-10-19
 

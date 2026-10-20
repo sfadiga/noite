@@ -313,6 +313,21 @@ private slots:
         QVERIFY(findBlock(doc(), "second").textList());
     }
 
+    // Laid out like typed text: no paragraph spacing, and the paste's blank lines stay.
+    void pasteMarkdownSpacedLikeTypedText()
+    {
+        QMimeData mime;
+        mime.setText("first\n\nClean:\ngit restore .\n  \n1. one\n2. two\n\n```\na\n\nb\n```");
+        edit->insertFromMimeData(&mime);
+        QCOMPARE(doc()->toPlainText(), QString("first\n\nClean:\ngit restore .\n\none\ntwo\n\na\n\nb"));
+        for (QTextBlock b = doc()->begin(); b.isValid(); b = b.next()) {
+            QCOMPARE(b.blockFormat().topMargin(), 0.0);
+            QCOMPARE(b.blockFormat().bottomMargin(), 0.0);
+        }
+        QCOMPARE(findBlock(doc(), "one").textList(), findBlock(doc(), "two").textList());
+        QVERIFY(findBlock(doc(), "two").textList());
+    }
+
     // Review C1: each pasted image must get its own valid resource key.
     void twoPastedImagesStayDistinct()
     {
