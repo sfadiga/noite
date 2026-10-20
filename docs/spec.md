@@ -34,7 +34,7 @@ Enforced by automated benchmarks in CI (see §9).
 | Metric | Target |
 |---|---|
 | Hotkey press → editor focused, caret ready | ≤ 100 ms |
-| First summon after 15 min idle | ≤ 100 ms, target ≤ 50 ms. **Known issue:** the M2 app measured 103 ms (keep-warm off) and 91 ms (keep-warm on), one press each (2026-10-17). Keep-warm (offscreen render while hidden) ships on but doesn't reach the target. A phase-by-phase breakdown and the next fix are in M7. |
+| First summon after 15 min idle | ≤ 100 ms, target ≤ 50 ms. **Measured in M7b** (2026-10-20, real hotkey, one press per run): 82.5–86.5 ms once noite has been used; 89.6–119.8 ms when it is the process's first summon. The ~75 ms over a warm summon is the system waking: the first call into the compositor waits (in `ShowWindow`, or in the first present when the window is cloaked instead), with almost no page faults; a working-set floor and a cloaked window were tried and don't move it. The first summon of a fresh process adds ~1,000 first-touch page faults (activation, first focus). **The 50 ms target is not reachable from inside noite on this hardware; the budget holds except for a fresh process's first summon.** Not gated in CI: no in-process simulation reproduces it. Details: [`spikes/2026-10-m7b-idle-summon.md`](spikes/2026-10-m7b-idle-summon.md). |
 | Board open with 2,000 notes | ≤ 300 ms |
 | Idle memory | ≤ 80 MB (Qt spike: 18.9 MB private) |
 
@@ -204,7 +204,7 @@ Closing the wizard with ✕ ("abandoned") applies what was collected so far, lea
 | Core | Qt Test, written test-first | storage, trash purge, attachment cleanup, backup snapshots, schema migrations, clone rules, title/tag derivation |
 | UI logic | Qt Test on the `offscreen` platform | markdown shortcuts, paste handling, chip combination logic, `@date` parsing |
 | End-to-end | keystroke harness from the spikes (dedicated target window, leak detection) | capture → board → done → trash → restore |
-| Performance | instrumented timestamps ("hotkey received", "editor painted with focus") + seeded 2,000-note benchmark + an idle-then-summon scenario | fails the build if the §2 budget is missed |
+| Performance | `capture-bench` (summon by phase: shown, activated, painted, on screen; page faults) + `board-bench` (seeded 2,000 notes), on the real platform in CI; the after-idle summon is measured by hand with the keystroke harness (no in-process simulation reproduces it, M7b) | fails the build if the §2 budget is missed |
 | CI | GitHub Actions, `windows-latest` | builds, tests, and on every push packages and checks the portable zip (`deploy.ps1`, `package.ps1 -DryRun`); a `vX.Y.Z` tag also creates a draft GitHub Release |
 
 Keystroke and end-to-end runs send real input, so they only run on CI or while the author is away from the PC.

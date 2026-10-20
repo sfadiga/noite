@@ -1,6 +1,8 @@
 # M7b: performance — design
 
-**Date:** 2026-10-20 · **Status:** agreed in a brainstorming session · **Spec:** D5 (performance budget), D28 (CI); roadmap row M7b (`docs/superpowers/plans/2026-10-15-noite-roadmap.md`)
+**Date:** 2026-10-20 · **Status:** agreed in a brainstorming session; **outcome below differs** · **Spec:** D5 (performance budget), D28 (CI); roadmap row M7b (`docs/superpowers/plans/2026-10-15-noite-roadmap.md`)
+
+> **Outcome (2026-10-20).** P1's premise didn't hold: `EmptyWorkingSet` added ~1 ms, and real 15-minute idle runs showed the cost is the system waking (the first compositor call waits ~75 ms with almost no page faults), not trimmed pages. By the author's choice no fix ships: the working-set floor (Part B a) and a cloak-instead-of-hide spike were measured and removed, candidate b was not built, and the trimmed mode and its CI gate were dropped. What ships: the probe's phase marks and fault count, `capture-bench` (warm trials), and CI gates for the board and capture benches. Measurements: `docs/spikes/2026-10-m7b-idle-summon.md`.
 
 ## Goal
 

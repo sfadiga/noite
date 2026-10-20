@@ -10,7 +10,7 @@ A note-taking app for busy people who get things done. Press a hotkey, write, an
 
 ## What it does (v1)
 
-- **Instant capture:** a global hotkey (default `Ctrl+Alt+J`) opens a blank scratch note immediately. About 7 ms warm and up to 100 ms on the first press after a long idle; M7b targets the idle case. It saves as you type; `Esc` hides it.
+- **Instant capture:** a global hotkey (default `Ctrl+Alt+J`) opens a blank scratch note immediately. About 8 ms warm and 80–90 ms on the first press after a long idle (that part is Windows waking up the display path). It saves as you type; `Esc` hides it.
 - **Rich notes:**
   - markdown typing shortcuts (`#`, `-`, `[]`, `**bold**`, `[link](url)`),
   - rich paste from browsers and Word, images, tables.
