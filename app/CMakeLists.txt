@@ -51,7 +51,7 @@ add_library(noite-app STATIC
 configure_file(src/version.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/noite_version.h @ONLY)
 configure_file(src/noite.rc.in ${CMAKE_CURRENT_BINARY_DIR}/generated/noite.rc @ONLY)
 target_include_directories(noite-app PUBLIC src ${CMAKE_CURRENT_BINARY_DIR}/generated)
-target_link_libraries(noite-app PUBLIC noite-core Qt6::Widgets user32 wtsapi32 dbghelp)
+target_link_libraries(noite-app PUBLIC noite-core Qt6::Widgets user32 wtsapi32 dbghelp psapi)
 target_compile_definitions(noite-app PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
 
 qt_add_executable(noite WIN32 src/main.cpp ${CMAKE_CURRENT_BINARY_DIR}/generated/noite.rc)

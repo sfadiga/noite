@@ -9,7 +9,7 @@
 // Measures hotkey -> editor painted with focus, for the keystroke harness
 // (spikes/hotkey-latency/run-trials.ps1) and capture-bench. Off unless NOITE_LATENCY_CSV
 // names a file; then each dismissed capture appends
-// "trial,ready_ms,text,shown_ms,activated_ms,painted_ms,focused" (an empty path writes
+// "trial,ready_ms,text,shown_ms,activated_ms,painted_ms,focused,faults" (an empty path writes
 // nothing). The ready reading is taken one event-loop turn after the paint, i.e. after the
 // backing store is flushed to the screen, so it is comparable with the Tauri spike's method
 // (two animation frames). Phases are ms since pressed(); -1 = not reached.
@@ -22,6 +22,7 @@ public:
         double paintedMs = -1;
         double readyMs = -1;
         bool focused = false;
+        qint64 faults = -1; // page faults (soft and hard) from pressed to ready
     };
 
     static std::unique_ptr<LatencyProbe> fromEnvironment();
@@ -46,6 +47,7 @@ private:
 
     QString path_;
     QElapsedTimer timer_;
+    qint64 faultsAtPress_ = 0;
     int trial_ = 0;
     bool pending_ = false;
     bool scheduled_ = false;

@@ -4,11 +4,21 @@
 #include <QTextStream>
 #include <QTimer>
 
+#include <windows.h>
+#include <psapi.h>
+
 namespace {
 
 QString ms(double value)
 {
     return value < 0 ? QString() : QString::number(value, 'f', 2);
+}
+
+qint64 pageFaults()
+{
+    PROCESS_MEMORY_COUNTERS counters{};
+    GetProcessMemoryInfo(GetCurrentProcess(), &counters, sizeof counters);
+    return counters.PageFaultCount;
 }
 
 } // namespace
@@ -28,6 +38,7 @@ LatencyProbe::LatencyProbe(QString csvPath)
 
 void LatencyProbe::pressed()
 {
+    faultsAtPress_ = pageFaults();
     timer_.start();
     ++trial_;
     pending_ = true;
@@ -58,6 +69,7 @@ void LatencyProbe::painted(bool focused)
         if (!pending_)
             return;
         phases_.readyMs = elapsedMs();
+        phases_.faults = pageFaults() - faultsAtPress_;
         pending_ = false;
     });
 }
@@ -71,11 +83,12 @@ void LatencyProbe::dismissed(const QString& text)
             QTextStream out(&file);
             out.setEncoding(QStringConverter::Utf8);
             if (fresh)
-                out << "trial,ready_ms,text,shown_ms,activated_ms,painted_ms,focused\n";
+                out << "trial,ready_ms,text,shown_ms,activated_ms,painted_ms,focused,faults\n";
             QString quoted = text;
             quoted.replace("\"", "\"\"");
             out << trial_ << "," << ms(phases_.readyMs) << ",\"" << quoted << "\"," << ms(phases_.shownMs) << ","
-                << ms(phases_.activatedMs) << "," << ms(phases_.paintedMs) << "," << (phases_.focused ? 1 : 0) << "\n";
+                << ms(phases_.activatedMs) << "," << ms(phases_.paintedMs) << "," << (phases_.focused ? 1 : 0) << ","
+                << (phases_.faults < 0 ? QString() : QString::number(phases_.faults)) << "\n";
         }
     }
     pending_ = false;

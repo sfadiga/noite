@@ -143,14 +143,27 @@ private slots:
         runTrial(probe, "hi");
         const QStringList lines = csvLines(csv);
         QCOMPARE(lines.size(), 2);
-        QCOMPARE(lines[0], QString("trial,ready_ms,text,shown_ms,activated_ms,painted_ms,focused"));
+        QCOMPARE(lines[0], QString("trial,ready_ms,text,shown_ms,activated_ms,painted_ms,focused,faults"));
         const QStringList row = lines[1].split(',');
-        QCOMPARE(row.size(), 7);
+        QCOMPARE(row.size(), 8);
         for (int i = 3; i <= 5; ++i) {
             bool ok = false;
             QVERIFY2(row[i].toDouble(&ok) >= 0 && ok, qPrintable(lines[1]));
         }
         QCOMPARE(row[6], QString("1"));
+        bool ok = false;
+        QVERIFY2(row[7].toInt(&ok) >= 0 && ok, qPrintable(lines[1]));
+    }
+
+    // Page faults between pressed and ready: tells a paged-out summon from a slow wake-up.
+    void countsPageFaultsDuringTheTrial()
+    {
+        LatencyProbe probe{QString()};
+        QVERIFY(probe.lastPhases().faults == -1);
+        probe.pressed();
+        probe.painted(true);
+        QTRY_VERIFY(!probe.pending());
+        QVERIFY(probe.lastPhases().faults >= 0);
     }
 
     // A CSV left by 1.0.x keeps its header; run-trials.ps1 reads the first three fields.

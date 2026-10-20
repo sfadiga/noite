@@ -78,7 +78,7 @@ const char* lastPhase(const LatencyProbe::Phases& p)
 }
 
 struct Series {
-    std::vector<double> shown, activated, painted, ready;
+    std::vector<double> shown, activated, painted, ready, faults;
     int focused = 0;
 
     void add(const LatencyProbe::Phases& p)
@@ -87,6 +87,7 @@ struct Series {
         activated.push_back(p.activatedMs);
         painted.push_back(p.paintedMs);
         ready.push_back(p.readyMs);
+        faults.push_back(double(p.faults));
         focused += p.focused ? 1 : 0;
     }
 };
@@ -101,6 +102,9 @@ void printSeries(const char* mode, const Series& s)
         std::printf("mode=%s phase=%s p50=%.1f p95=%.1f max=%.1f\n", mode, name, bench::percentile(*values, 0.5),
                     bench::percentile(*values, 0.95), *std::max_element(values->begin(), values->end()));
     }
+    if (!s.faults.empty())
+        std::printf("mode=%s faults p50=%.0f p95=%.0f max=%.0f\n", mode, bench::percentile(s.faults, 0.5),
+                    bench::percentile(s.faults, 0.95), *std::max_element(s.faults.begin(), s.faults.end()));
 }
 
 } // namespace
@@ -149,7 +153,7 @@ int main(int argc, char* argv[])
             std::printf("cannot write %s\n", qPrintable(csvPath));
             return 1;
         }
-        out << "mode,trial,shown_ms,activated_ms,painted_ms,ready_ms,focused\n";
+        out << "mode,trial,shown_ms,activated_ms,painted_ms,ready_ms,focused,faults\n";
     }
 
     Series warmSeries;
@@ -167,7 +171,7 @@ int main(int argc, char* argv[])
         series.add(phases);
         if (!csvPath.isEmpty())
             out << mode << "," << n << "," << phases.shownMs << "," << phases.activatedMs << "," << phases.paintedMs
-                << "," << phases.readyMs << "," << (phases.focused ? 1 : 0) << "\n";
+                << "," << phases.readyMs << "," << (phases.focused ? 1 : 0) << "," << phases.faults << "\n";
         idle(kAfterTrialMs);
         return true;
     };
