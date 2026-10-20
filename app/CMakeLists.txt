@@ -5,6 +5,7 @@ add_library(noite-app STATIC
     src/platform/Hotkey.h src/platform/Hotkey.cpp
     src/platform/HotkeyManager.h src/platform/HotkeyManager.cpp
     src/platform/NativeHost.h src/platform/NativeHost.cpp
+    src/platform/WorkingSetFloor.h src/platform/WorkingSetFloor.cpp
     src/editor/MarkdownShortcuts.h src/editor/MarkdownShortcuts.cpp
     src/editor/NoteEdit.h src/editor/NoteEdit.cpp
     src/editor/AttachmentStore.h src/editor/AttachmentStore.cpp
@@ -90,6 +91,7 @@ qt_add_executable(app-tests
     tests/tst_app.cpp
     tests/tst_latency_probe.cpp
     tests/tst_keep_warm.cpp
+    tests/tst_working_set_floor.cpp
     tests/tst_board_model.cpp
     tests/tst_card_delegate.cpp
     tests/tst_board_window.cpp
