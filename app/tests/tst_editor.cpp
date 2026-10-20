@@ -298,6 +298,21 @@ private slots:
         QCOMPARE(doc()->toPlainText(), QString("line one\nline two"));
     }
 
+    // Placeholders such as <wrong-base> are text, not HTML tags: an unclosed tag swallowed
+    // every later line of a pasted markdown note.
+    void pasteMarkdownKeepsAngleBracketText()
+    {
+        QMimeData mime;
+        mime.setText("git stash\ngit rebase --onto develop <wrong-base> <my-feature>\ngit stash pop\n\n"
+                     "1. first\n2. second");
+        edit->insertFromMimeData(&mime);
+        const QString text = doc()->toPlainText();
+        QVERIFY2(text.contains("git rebase --onto develop <wrong-base> <my-feature>"), qPrintable(text));
+        QVERIFY2(text.contains("git stash pop"), qPrintable(text));
+        QVERIFY2(text.contains("second"), qPrintable(text));
+        QVERIFY(findBlock(doc(), "second").textList());
+    }
+
     // Review C1: each pasted image must get its own valid resource key.
     void twoPastedImagesStayDistinct()
     {

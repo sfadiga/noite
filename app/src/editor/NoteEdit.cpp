@@ -180,8 +180,12 @@ void NoteEdit::insertFromMimeData(const QMimeData* source)
             setCurrentCharFormat(outside);
             return;
         }
+        // No raw HTML: in plain text "<wrong-base>" is a placeholder, and as an unclosed tag
+        // it would swallow every line after it.
         if (looksLikeMarkdown(text)) {
-            textCursor().insertFragment(QTextDocumentFragment::fromMarkdown(keepLineBreaks(text)));
+            textCursor().insertFragment(QTextDocumentFragment::fromMarkdown(
+                keepLineBreaks(text),
+                QTextDocument::MarkdownFeatures(QTextDocument::MarkdownDialectGitHub | QTextDocument::MarkdownNoHTML)));
             return;
         }
     }
