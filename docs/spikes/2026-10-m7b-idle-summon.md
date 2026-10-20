@@ -64,8 +64,13 @@ Decision (Part B rule): no candidate reaches the budget for the measured reason;
 
 ## Conclusion
 
-| Case | Measured | Budget ≤ 100 | Target ≤ 50 |
-|---|---|---|---|
-| warm summon | ~8 ms (harness), ~9 ms p95 (bench) | met | met |
-| 1st summon after 15 min idle, process already used | 82.5–86.5 ms | met | not met: system wake-up (~75 ms in the first compositor call) |
-| 1st summon of a fresh process after 15 min idle | 89.6–119.8 ms | not always met | not met: first-touch code from disk + wake-up |
+What ships has neither the floor nor cloaking (both removed in 7a22560), so only run 1 and the warm runs measured the shipped build.
+
+| Case | Measured | Build | Budget ≤ 100 | Target ≤ 50 |
+|---|---|---|---|---|
+| warm summon | ~8 ms (harness), ~9 ms p95 (bench) | shipped | met | met |
+| 1st summon of a fresh process after 15 min idle | **119.8 ms** (run 1) | shipped | **not met** | not met: first-touch code from disk + wake-up |
+| same, floor on | 89.6 ms (run 2) | not shipped | — | — |
+| 1st summon after 15 min idle, process already used | 86.5 ms (run 3, floor on), 82.5 ms (cloak) | not shipped | — | — |
+
+The used-process case on the shipped build was not measured; without the floor its pages may be trimmed during the idle, so it should land at or above 82.5–86.5 ms. Either way ~75 ms of it is the system waking, outside noite.
