@@ -133,6 +133,20 @@ private slots:
         QVERIFY(QString::fromUtf8(csv.readAll()).contains(",\"hello\""));
     }
 
+    void summonReportsPhasesInOrder()
+    {
+        LatencyProbe probe{QString()};
+        Window w;
+        w.window.setLatencyProbe(&probe);
+        probe.pressed();
+        w.window.summon();
+        QTRY_VERIFY(!probe.pending());
+        const LatencyProbe::Phases& p = probe.lastPhases();
+        QVERIFY(p.shownMs >= 0);
+        QVERIFY(p.shownMs <= p.activatedMs);
+        QVERIFY(p.activatedMs <= p.paintedMs);
+    }
+
     // Dragging the frame moves the window, so text behind it can be read.
     void dragOnFrameMovesWindow()
     {

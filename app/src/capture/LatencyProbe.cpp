@@ -4,6 +4,15 @@
 #include <QTextStream>
 #include <QTimer>
 
+namespace {
+
+QString ms(double value)
+{
+    return value < 0 ? QString() : QString::number(value, 'f', 2);
+}
+
+} // namespace
+
 std::unique_ptr<LatencyProbe> LatencyProbe::fromEnvironment()
 {
     const QString path = qEnvironmentVariable("NOITE_LATENCY_CSV");
@@ -22,36 +31,53 @@ void LatencyProbe::pressed()
     timer_.start();
     ++trial_;
     pending_ = true;
-    readyMs_ = -1;
+    phases_ = {};
 }
 
-void LatencyProbe::painted()
+void LatencyProbe::shown()
 {
-    if (!pending_ || scheduled_)
+    if (pending_ && phases_.shownMs < 0)
+        phases_.shownMs = elapsedMs();
+}
+
+void LatencyProbe::activated()
+{
+    if (pending_ && phases_.activatedMs < 0)
+        phases_.activatedMs = elapsedMs();
+}
+
+void LatencyProbe::painted(bool focused)
+{
+    if (!pending_ || scheduled_ || (requireFocus_ && !focused))
         return;
+    phases_.paintedMs = elapsedMs();
+    phases_.focused = focused;
     scheduled_ = true;
     QTimer::singleShot(0, this, [this] {
         scheduled_ = false;
         if (!pending_)
             return;
-        readyMs_ = timer_.nsecsElapsed() / 1e6;
+        phases_.readyMs = elapsedMs();
         pending_ = false;
     });
 }
 
 void LatencyProbe::dismissed(const QString& text)
 {
-    QFile file(path_);
-    const bool fresh = !file.exists();
-    if (!file.open(QIODevice::Append | QIODevice::Text))
-        return;
-    QTextStream out(&file);
-    out.setEncoding(QStringConverter::Utf8);
-    if (fresh)
-        out << "trial,ready_ms,text\n";
-    QString quoted = text;
-    quoted.replace("\"", "\"\"");
-    out << trial_ << "," << (readyMs_ < 0 ? QString() : QString::number(readyMs_, 'f', 2)) << ",\"" << quoted << "\"\n";
+    if (!path_.isEmpty()) {
+        QFile file(path_);
+        const bool fresh = !file.exists();
+        if (file.open(QIODevice::Append | QIODevice::Text)) {
+            QTextStream out(&file);
+            out.setEncoding(QStringConverter::Utf8);
+            if (fresh)
+                out << "trial,ready_ms,text,shown_ms,activated_ms,painted_ms,focused\n";
+            QString quoted = text;
+            quoted.replace("\"", "\"\"");
+            out << trial_ << "," << ms(phases_.readyMs) << ",\"" << quoted << "\"," << ms(phases_.shownMs) << ","
+                << ms(phases_.activatedMs) << "," << ms(phases_.paintedMs) << "," << (phases_.focused ? 1 : 0) << "\n";
+        }
+    }
     pending_ = false;
-    readyMs_ = -1;
+    phases_.readyMs = -1;
 }
