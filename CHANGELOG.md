@@ -6,7 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- On the board, `Ctrl+1` to `Ctrl+4` switch to Today, All, Completed and Trash.
+
 ### Changed
+
+- CI now runs an end-to-end test on every push: a note is captured with the hotkey, then marked done, trashed and restored on the board, with real keystrokes.
 
 - CI now checks the performance budget on every push: opening the board with 2,000 notes and opening a capture.
 - The latency log (`NOITE_LATENCY_CSV`) records each step of opening a capture (shown, activated, painted) and its page faults.

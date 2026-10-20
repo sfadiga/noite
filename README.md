@@ -84,7 +84,7 @@ powershell -File tools\package.ps1 -Version 0.1.0         # dist\noite-0.1.0-win
 
 The released single `noite.exe` is built only in CI (the `single-exe` job): `-DNOITE_STATIC=ON` against a static Qt from [sfadiga/qt-static-windows](https://github.com/sfadiga/qt-static-windows), pinned by tag and SHA-256 in `tools\qt-static.json`. `tools\package.ps1 -Static` packages it, running `noite.exe --self-check` and refusing a Qt, VC runtime or bundled-ICU dependency. CI runs both flavours on every push: the dynamic build, tests, `deploy.ps1` and `package.ps1 -DryRun`, and the static build with `package.ps1 -Static -DryRun`.
 
-The keystroke latency harness (`spikes/hotkey-latency/run-trials.ps1`) **sends real keystrokes and takes focus**. Only run it when you're away from the keyboard.
+The end-to-end test (`tools\e2e\run-e2e.ps1`, after `tools\deploy.ps1`) and the keystroke latency harness (`spikes/hotkey-latency/run-trials.ps1`) **send real keystrokes and take focus**. Only run them when you're away from the keyboard. CI runs the end-to-end test on every push; it needs Python 3 on the PATH.
 
 ### Releasing
 

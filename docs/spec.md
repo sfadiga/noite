@@ -203,7 +203,7 @@ Closing the wizard with ✕ ("abandoned") applies what was collected so far, lea
 |---|---|---|
 | Core | Qt Test, written test-first | storage, trash purge, attachment cleanup, backup snapshots, schema migrations, clone rules, title/tag derivation |
 | UI logic | Qt Test on the `offscreen` platform | markdown shortcuts, paste handling, chip combination logic, `@date` parsing |
-| End-to-end | keystroke harness from the spikes (dedicated target window, leak detection) | capture → board → done → trash → restore |
+| End-to-end | `tools/e2e/run-e2e.ps1`: real keystrokes from a dedicated target window (leak detection), each step checked in `noite.db` read-only by `tools/e2e/noite_db.py`; CI on every push (M7c) | capture → board → done → trash → restore |
 | Performance | `capture-bench` (summon by phase: shown, activated, painted, on screen; page faults) + `board-bench` (seeded 2,000 notes), on the real platform in CI; the after-idle summon is measured by hand with the keystroke harness (no in-process simulation reproduces it, M7b) | fails the build if the §2 budget is missed |
 | CI | GitHub Actions, `windows-latest` | builds, tests, and on every push packages and checks the portable zip (`deploy.ps1`, `package.ps1 -DryRun`); a `vX.Y.Z` tag also creates a draft GitHub Release |
 
