@@ -53,7 +53,6 @@ CaptureWindow::CaptureWindow(CaptureController& controller, NoteEdit* editor)
     footer_->tagField()->installEventFilter(this);
     connect(editor_, &NoteEdit::escapePressed, &controller_, &CaptureController::dismiss);
     connect(&controller_, &CaptureController::finished, this, [this] {
-        open_ = false; // before hide(): hiding deactivates the window while it still reports visible
         if (probe_)
             probe_->dismissed(editor_->toPlainText());
         hide();
@@ -77,7 +76,6 @@ void CaptureWindow::summonNote(const noite::ScratchId& id)
 void CaptureWindow::showAndFocus()
 {
     if (!isVisible()) {
-        open_ = true;
         const QRect area = foregroundScreen()->availableGeometry();
         move(area.center() - QPoint(width() / 2, height() / 2));
         show();
@@ -91,15 +89,6 @@ void CaptureWindow::showAndFocus()
 QString CaptureWindow::footerText() const
 {
     return footer_->infoText();
-}
-
-bool CaptureWindow::event(QEvent* event)
-{
-    // Clicking away saves and hides (D6) — only while a capture is open: hide() itself
-    // deactivates the window, and Qt still reports it visible at that moment.
-    if (event->type() == QEvent::WindowDeactivate && open_)
-        controller_.dismiss();
-    return QWidget::event(event);
 }
 
 bool CaptureWindow::eventFilter(QObject* watched, QEvent* event)

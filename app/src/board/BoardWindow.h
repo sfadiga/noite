@@ -95,6 +95,8 @@ public:
 signals:
     // The board is closing (after an open note was saved); `state` is what to restore.
     void closing(BoardWindow::ViewState state);
+    // Before a card's note is opened or acted on, so a capture holding it can save and close.
+    void aboutToChange(const noite::ScratchId& id);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;

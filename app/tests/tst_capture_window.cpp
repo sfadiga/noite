@@ -74,32 +74,18 @@ private slots:
         QCOMPARE(w.edit->toPlainText(), QString("done thing")); // no newline inserted
     }
 
-    // D6: clicking away saves and hides.
-    void deactivationDismisses()
-    {
-        Window w;
-        w.window.summon();
-        QTest::keyClicks(w.edit, "typed then clicked away");
-        QEvent deactivate(QEvent::WindowDeactivate);
-        QApplication::sendEvent(&w.window, &deactivate);
-        QVERIFY(!w.window.isVisible());
-        QCOMPARE(w.count(Tab::All), 1);
-    }
-
-    // Found by the M2 harness run: hiding the window deactivates it while Qt still reports it
-    // visible, and the click-away handler dismissed a second time (two "finished" per Esc).
-    void deactivationAfterDismissDoesNotDismissAgain()
+    // D6 (1.0.1): only Esc closes it; clicking away leaves it open, text and all.
+    void deactivationKeepsItOpen()
     {
         Window w;
         QSignalSpy finished(&w.controller, &CaptureController::finished);
         w.window.summon();
-        QTest::keyClicks(w.edit, "note");
-        QTest::keyClick(w.edit, Qt::Key_Escape);
-        QCOMPARE(finished.count(), 1);
-        w.window.show(); // visible again, but not a new capture (no summon)
+        QTest::keyClicks(w.edit, "typed then clicked away");
         QEvent deactivate(QEvent::WindowDeactivate);
         QApplication::sendEvent(&w.window, &deactivate);
-        QCOMPARE(finished.count(), 1);
+        QVERIFY(w.window.isVisible());
+        QCOMPARE(finished.count(), 0);
+        QCOMPARE(w.edit->toPlainText(), QString("typed then clicked away"));
     }
 
     void colourKeyCycles()

@@ -205,7 +205,8 @@ void BoardWindow::openSelected()
         toggleSelectedStack();
         return;
     }
-    const ScratchSummary& s = model_->summary(current.row());
+    const ScratchSummary s = model_->summary(current.row()); // aboutToChange may reload the model
+    emit aboutToChange(s.id);
     overlay_->openNote(s.id, s.status == noite::Status::Trashed);
 }
 
@@ -405,6 +406,7 @@ void BoardWindow::act(const std::function<std::optional<ScratchId>(const Scratch
     }
     const int row = current.row();
     const ScratchSummary summary = model_->summary(row); // the action reloads the model
+    emit aboutToChange(summary.id);
     std::optional<ScratchId> select;
     try {
         select = action(summary);

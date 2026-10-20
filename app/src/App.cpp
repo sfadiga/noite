@@ -247,7 +247,7 @@ void App::wizardClosed(bool captureOpen)
         checkPending_ = true;
     }
     jobs_->setHeld(false); // runs a check skipped while the wizard was open
-    // The review would take the focus from the capture, which hides on losing it (S2).
+    // The review would take the focus from the Try-it capture (S2).
     if (captureOpen && !captureHoldsReview_) {
         captureHoldsReview_ = true;
         connect(
@@ -521,6 +521,7 @@ void App::showReview()
                 review_->close();
             showBoard();
         });
+        connect(review_, &ReviewWindow::aboutToChange, this, &App::closeCaptureHolding);
         review_->start();
     } else if (!review_->isEditing()) {
         review_->start(); // a window left open (since yesterday, say) gets today's queue
@@ -538,11 +539,18 @@ void App::showBoard()
         board_->setAttribute(Qt::WA_DeleteOnClose);
         board_->restoreViewState(boardState_);
         connect(board_, &BoardWindow::closing, this, [this](const BoardWindow::ViewState& state) { boardState_ = state; });
+        connect(board_, &BoardWindow::aboutToChange, this, &App::closeCaptureHolding);
     }
     board_->show();
     board_->raise();
     board_->activateWindow();
     SetForegroundWindow(reinterpret_cast<HWND>(board_->winId()));
+}
+
+void App::closeCaptureHolding(const noite::ScratchId& id)
+{
+    if (window_->isVisible() && controller_->currentId() == id)
+        controller_->dismiss();
 }
 
 int App::run()
