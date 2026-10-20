@@ -1,6 +1,7 @@
 #include "capture/CaptureWindow.h"
 
 #include "DragMover.h"
+#include "EdgeResizer.h"
 #include "capture/CaptureController.h"
 #include "capture/LatencyProbe.h"
 #include "capture/NoteFooterBar.h"
@@ -41,13 +42,15 @@ CaptureWindow::CaptureWindow(CaptureController& controller, NoteEdit* editor)
     , footer_(new NoteFooterBar(controller, this))
 {
     setWindowTitle("noite");
-    resize(520, 420);
+    setMinimumSize(320, 200);
+    resize(520, 420); // then the user's size, for the session: the window is reused
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(12, 12, 12, 8);
     layout->addWidget(editor_);
     layout->addWidget(footer_);
 
     new DragMover(this, this); // by the margins and footer
+    new EdgeResizer(this);     // by the outer edge of the margins
     editor_->installEventFilter(this);
     editor_->viewport()->installEventFilter(this);
     footer_->tagField()->installEventFilter(this);
@@ -77,6 +80,7 @@ void CaptureWindow::showAndFocus()
 {
     if (!isVisible()) {
         const QRect area = foregroundScreen()->availableGeometry();
+        resize(size().boundedTo(area.size())); // sized on a larger monitor
         move(area.center() - QPoint(width() / 2, height() / 2));
         show();
     }

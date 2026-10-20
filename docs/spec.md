@@ -132,6 +132,7 @@ Attachments are shared, not duplicated (safe because of D22).
 - The hotkey **always opens a new blank scratch**, always-on-top, centred on the monitor with the active window. (D6)
 - Autosave on every keystroke (debounced). No Save button. (D6)
 - `Esc` saves and hides it. Clicking away leaves it open on top, so you can keep typing while reading something else; if the board or the review opens or acts on the same note, the capture saves and hides first. A scratch closed while empty is discarded. (D6, revised in 1.0.1)
+- Its margins move it; dragging any edge or corner resizes it (at least 320×200). The size lasts until noite quits, shrunk to fit a smaller monitor. (1.0.1)
 - Editing: WYSIWYG with markdown typing shortcuts. (D7)
   - `#`/`##`/`###` give headings; `-`/`*` give bullets; `1.` gives a numbered list.
   - `[ ]`, `[]` and `[x]`, either after a bullet or at the start of a line, give a checkbox, and clicking it toggles it.

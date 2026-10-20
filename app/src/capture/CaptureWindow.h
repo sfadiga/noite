@@ -13,6 +13,7 @@ class NoteFooterBar;
 // summon() opens a blank note centred on the monitor of the foreground window, or just
 // refocuses it if it is already open. Keys: Esc saves and hides, Ctrl+Enter marks done
 // and closes, Ctrl+Shift+C cycles the colour (D30). Clicking away leaves it open on top (D6).
+// Its margins move it and their outer edge resizes it; the size lasts for the session.
 class CaptureWindow : public QWidget {
     Q_OBJECT
 public:

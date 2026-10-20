@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- The capture window can be resized from any edge or corner; it keeps its size until noite quits.
+
 ### Changed
 
 - The capture window closes only on `Esc` (or `Ctrl+Enter`): clicking another window leaves it open on top. Opening or acting on the same note from the board or the review saves and closes it first.

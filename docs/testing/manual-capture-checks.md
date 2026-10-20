@@ -25,6 +25,7 @@ Record pass/fail and a one-line note for any failure. Every failure becomes an a
 | 17 | Second monitor | Focus a window on the other monitor, press the hotkey | Capture centres on that monitor, crisp |
 | 18 | Display scale | Check at the display's scaling | Text crisp, nothing clipped |
 | 19 | Hotkey taken | Start with another app holding `Ctrl+Alt+J` | Tray warning; tray still opens a capture |
+| 20 | Resize | Hover each edge and corner, drag one in and out; `Esc`, open again | Resize cursor on the edge; it resizes smoothly, stops at its minimum, and reopens at that size |
 
 ## Board
 
