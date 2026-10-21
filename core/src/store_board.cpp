@@ -46,6 +46,8 @@ QString tabWhere(Tab tab)
         return "status = 'active'";
     case Tab::Completed:
         return "status = 'done'";
+    case Tab::Deferred:
+        return "status = 'deferred'";
     case Tab::Trash:
         return "status = 'trashed'";
     }
@@ -60,6 +62,8 @@ QString tabOrder(Tab tab)
         return QString("%1, due_date, created_at, id").arg(kBucket);
     case Tab::Completed:
         return "done_at DESC, id";
+    case Tab::Deferred:
+        return "created_at, id";
     case Tab::Trash:
         return "trashed_at DESC, id";
     }
@@ -181,13 +185,14 @@ TabCounts Store::tabCounts(QDate today, const QString& search, const BoardFilter
     QStringList binds;
     const QString sql = "SELECT coalesce(sum(status = 'active' AND (due_date IS NULL OR due_date <= ?1)), 0), "
                         "coalesce(sum(status = 'active'), 0), coalesce(sum(status = 'done'), 0), "
-                        "coalesce(sum(status = 'trashed'), 0) FROM scratches WHERE 1"
+                        "coalesce(sum(status = 'deferred'), 0), coalesce(sum(status = 'trashed'), 0) "
+                        "FROM scratches WHERE 1"
         + QString(match ? kFtsClause : "") + filterWhere(filter, std::nullopt, binds);
     Stmt s = db().prepare(sql);
     bindBoard(s, sql, today, match, binds);
     s.step();
     TabCounts out;
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 5; ++i)
         out.counts[i] = int(s.int64(i));
     return out;
 }

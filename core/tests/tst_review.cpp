@@ -70,6 +70,18 @@ private slots:
         QCOMPARE(queue[0].days, 7);
     }
 
+    // M8c F2: a deferred note raises nothing, not even in the fallback.
+    void deferredNotesRaiseNothing()
+    {
+        auto f = fixture();
+        const QString overdue = noteFrom(*f, "overdue", 20 * kDayMs);
+        f->store->setDue(overdue, QDate(2026, 10, 10));
+        f->store->defer(overdue);
+        f->store->defer(noteFrom(*f, "stale", 20 * kDayMs));
+        QVERIFY(f->store->reviewQueue(today(), 7).isEmpty());
+        QCOMPARE(f->store->reviewCounts(today()).overdue, 0);
+    }
+
     void touchResetsStaleClock()
     {
         auto f = fixture();

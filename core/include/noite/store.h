@@ -43,12 +43,14 @@ public:
     void setManualTags(const ScratchId& id, const QStringList& tags);
 
     // ---- Lifecycle (store_lifecycle.cpp, D11) ----
-    // Active -> Done; Done -> Active; Active|Done -> Trashed; Trashed -> previous status.
-    // Anything else throws InvalidTransition.
+    // Active|Deferred -> Done; Done -> Active; Active|Done|Deferred -> Trashed; Trashed ->
+    // previous status; Active -> Deferred -> Active (M8c). Anything else throws InvalidTransition.
     void markDone(const ScratchId& id);
     void reopen(const ScratchId& id);
     void trash(const ScratchId& id);
     void restore(const ScratchId& id);
+    void defer(const ScratchId& id);
+    void bringBack(const ScratchId& id);
 
     // ---- Bundles and clone (store_bundles.cpp, D12, D20) ----
     // Dropping `dragged` onto `target`: joins target's bundle, or creates one named after

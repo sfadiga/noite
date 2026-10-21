@@ -58,6 +58,52 @@ private slots:
         NOITE_EXPECT_ERROR(ErrorCode::InvalidTransition, f->store->setColor(s.id, Color::Red));
         NOITE_EXPECT_ERROR(ErrorCode::NotFound, f->store->markDone("missing"));
     }
+
+    // M8c F1.
+    void deferAndBringBack()
+    {
+        auto f = fixture();
+        const Scratch s = f->store->createScratch(html({"someday"}));
+        f->clock->advance(1000);
+        f->store->defer(s.id);
+        QCOMPARE(f->store->get(s.id).status, Status::Deferred);
+        QCOMPARE(f->store->get(s.id).modifiedAt, t0() + 1000);
+        f->store->updateContent(s.id, html({"someday, edited"})); // editing keeps it deferred
+        QCOMPARE(f->store->get(s.id).status, Status::Deferred);
+        f->store->bringBack(s.id);
+        QCOMPARE(f->store->get(s.id).status, Status::Active);
+    }
+
+    // F7: only active notes are deferred; only deferred ones come back.
+    void deferOnlyFromActive()
+    {
+        auto f = fixture();
+        const Scratch s = f->store->createScratch(html({"x"}));
+        NOITE_EXPECT_ERROR(ErrorCode::InvalidTransition, f->store->bringBack(s.id));
+        f->store->markDone(s.id);
+        NOITE_EXPECT_ERROR(ErrorCode::InvalidTransition, f->store->defer(s.id));
+        f->store->trash(s.id);
+        NOITE_EXPECT_ERROR(ErrorCode::InvalidTransition, f->store->defer(s.id));
+        NOITE_EXPECT_ERROR(ErrorCode::InvalidTransition, f->store->bringBack(s.id));
+        NOITE_EXPECT_ERROR(ErrorCode::NotFound, f->store->defer("missing"));
+    }
+
+    // F6: done and trash from Deferred; restore goes back to Deferred.
+    void doneAndTrashFromDeferred()
+    {
+        auto f = fixture();
+        const Scratch a = f->store->createScratch(html({"a"}));
+        f->store->defer(a.id);
+        f->store->markDone(a.id);
+        QCOMPARE(f->store->get(a.id).status, Status::Done);
+
+        const Scratch b = f->store->createScratch(html({"b"}));
+        f->store->defer(b.id);
+        f->store->trash(b.id);
+        QCOMPARE(f->store->get(b.id).status, Status::Trashed);
+        f->store->restore(b.id);
+        QCOMPARE(f->store->get(b.id).status, Status::Deferred);
+    }
 };
 
 NOITE_TEST(LifecycleTest)

@@ -39,7 +39,7 @@ private slots:
     void openCreatesLatestSchema()
     {
         auto f = fixture();
-        QCOMPARE(f->store->schemaVersion(), 2);
+        QCOMPARE(f->store->schemaVersion(), 3);
         QCOMPARE(f->store->dataDir().root(), f->root());
     }
 
@@ -65,7 +65,7 @@ private slots:
                     "VALUES ('s1', '<p>old</p>', 'old', 'old', 1, 1, 'active')");
         }
         auto store = Store::open(DataDir::acquire(root), std::make_shared<FixedClock>(t0()));
-        QCOMPARE(store->schemaVersion(), 2);
+        QCOMPARE(store->schemaVersion(), 3);
         QCOMPARE(store->list(Tab::All, today()).size(), 1);
         QCOMPARE(QDir(root + "/migration-backups").entryList({"noite-v1-*.db"}, QDir::Files).size(), 1);
         store.reset();

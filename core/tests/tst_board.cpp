@@ -18,7 +18,7 @@ QStringList ids(const QList<ScratchSummary>& list)
 
 struct Board {
     std::unique_ptr<Fixture> f = fixture();
-    QString overdueA, overdueB, dueToday, upcoming, undatedOld, undatedNew, done, trashed;
+    QString overdueA, overdueB, dueToday, upcoming, undatedOld, undatedNew, done, trashed, deferred;
 
     QString make(const QString& title, std::optional<QDate> due = std::nullopt)
     {
@@ -41,6 +41,8 @@ struct Board {
         f->store->markDone(done);
         trashed = make("trashed");
         f->store->trash(trashed);
+        deferred = make("deferred overdue", QDate(2026, 10, 12)); // M8c: never in Today or All
+        f->store->defer(deferred);
     }
 };
 
@@ -146,12 +148,22 @@ private slots:
     {
         Board b;
         const TabCounts c = b.f->store->tabCounts(today());
-        for (Tab tab : {Tab::Today, Tab::All, Tab::Completed, Tab::Trash})
+        for (Tab tab : {Tab::Today, Tab::All, Tab::Completed, Tab::Deferred, Tab::Trash})
             QCOMPARE(c.of(tab), int(b.f->store->list(tab, today()).size()));
         QCOMPARE(c.of(Tab::Today), 5);
         QCOMPARE(c.of(Tab::All), 6);
         QCOMPARE(c.of(Tab::Completed), 1);
+        QCOMPARE(c.of(Tab::Deferred), 1);
         QCOMPARE(c.of(Tab::Trash), 1);
+    }
+
+    // M8c F8: only deferred notes, oldest created first.
+    void deferredTabListsOnlyDeferred()
+    {
+        Board b;
+        const QString later = b.make("deferred later");
+        b.f->store->defer(later);
+        QCOMPARE(ids(b.f->store->list(Tab::Deferred, today())), QStringList({b.deferred, later}));
     }
 
     void tabCountsFollowSearch()

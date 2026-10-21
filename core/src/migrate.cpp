@@ -16,6 +16,7 @@ namespace noite::detail {
 const std::vector<Migration> kMigrations = {
     {1, kSchemaV1},
     {2, kSchemaV2},
+    {3, kSchemaV3},
 };
 
 void migrate(Db& db, const std::vector<Migration>& migrations, const QString& snapshotDir, qint64 nowMs)

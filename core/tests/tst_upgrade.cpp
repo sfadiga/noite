@@ -113,7 +113,7 @@ private slots:
         Store& store = *o.store;
 
         QHash<QString, ScratchSummary> byTitle;
-        for (Tab tab : {Tab::Today, Tab::All, Tab::Completed, Tab::Trash})
+        for (Tab tab : {Tab::Today, Tab::All, Tab::Completed, Tab::Deferred, Tab::Trash})
             for (const ScratchSummary& s : store.list(tab, goldenToday()))
                 byTitle.insert(s.title, s);
 

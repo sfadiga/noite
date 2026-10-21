@@ -14,9 +14,9 @@ namespace noite {
 using ScratchId = QString;
 using BundleId = QString;
 
-enum class Status { Active, Done, Trashed };
+enum class Status { Active, Done, Trashed, Deferred }; // Deferred: M8c
 enum class Color { Red, Orange, Yellow, Green, Blue, Purple };
-enum class Tab { Today, All, Completed, Trash };
+enum class Tab { Today, All, Completed, Deferred, Trash }; // the board's tab order
 
 struct Scratch {
     ScratchId id;
@@ -80,7 +80,7 @@ struct ChipFacets {
 
 // How many notes each board tab holds; indexed by Tab.
 struct TabCounts {
-    int counts[4]{};
+    int counts[5]{};
     int of(Tab tab) const { return counts[int(tab)]; }
 };
 
