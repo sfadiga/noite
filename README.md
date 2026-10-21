@@ -102,13 +102,11 @@ The end-to-end test (`tools\e2e\run-e2e.ps1`, after `tools\deploy.ps1`) and the 
 
 ### Releasing
 
-1.0.0 is already prepared: `version.txt` is 1.0.0 and `CHANGELOG.md` has the 1.0.0 section. For 1.0.0 skip steps 1 and 2; check the CHANGELOG date (step 3), merge, wait for a green `single-exe` job on `main`, then tag.
-
-1. Write the release's changes under `[Unreleased]` in `CHANGELOG.md`.
+1. Write the release's changes under `[Unreleased]` in `CHANGELOG.md`. After merging several PRs, read the section once: a merge can leave two versions of the same line. If the release changes the database schema, add an **Upgrading** note (older versions can't open the folder afterwards).
 2. Run `tools\bump-version.ps1 X.Y.Z`. It updates `version.txt` and turns `[Unreleased]` into the `X.Y.Z` section.
 3. Check that the date on the `X.Y.Z` CHANGELOG heading is the day you are releasing; fix it before tagging.
 4. Open a PR with that, wait for CI to be green, and merge it to `main`.
-5. Pull, then tag `main`'s HEAD and push the tag: `git tag vX.Y.Z` then `git push origin vX.Y.Z`.
+5. Wait for `main`'s CI to be green on the merge commit (both jobs), pull, then tag `main`'s HEAD and push the tag: `git tag vX.Y.Z` then `git push origin vX.Y.Z`.
 6. CI builds the single exe and creates a **draft** release with the zip, the PDB zip and `SHA256SUMS.txt`, and the notes from the CHANGELOG section. It fails if the tag differs from `version.txt`, if the CHANGELOG has no entry for the version, or if a release for that tag already exists. In that case delete the draft and re-tag, or re-run the release job within 7 days (the `noite-single-exe` build artifact expires after that).
 7. Check the draft on GitHub and publish.
 
