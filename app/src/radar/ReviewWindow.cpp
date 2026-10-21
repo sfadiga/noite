@@ -144,6 +144,8 @@ QString ReviewWindow::headerText() const
         return tr("DUE TODAY");
     case noite::ReviewReason::Stale:
         return item.days == 1 ? tr("STALE · 1 day untouched") : tr("STALE · %1 days untouched").arg(item.days);
+    case noite::ReviewReason::Undated:
+        return item.days == 1 ? tr("UNDATED · 1 day old") : tr("UNDATED · %1 days old").arg(item.days);
     }
     return {};
 }

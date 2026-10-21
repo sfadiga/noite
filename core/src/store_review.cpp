@@ -23,6 +23,8 @@ QList<ReviewItem> Store::reviewQueue(QDate today, int staleDays) const
                 item.days = int(item.note.due->daysTo(today));
             else if (reason == ReviewReason::Stale)
                 item.days = int((now - s.int64(11)) / kDayMs);
+            else if (reason == ReviewReason::Undated)
+                item.days = int((now - item.note.createdAt) / kDayMs);
             out.append(item);
         }
     };
@@ -30,6 +32,8 @@ QList<ReviewItem> Store::reviewQueue(QDate today, int staleDays) const
     collect("due_date = ?", "created_at, id", ReviewReason::DueToday, [&](Stmt& s) { s.bind(1, day); });
     collect("due_date IS NULL AND modified_at <= ?", "modified_at, id", ReviewReason::Stale,
             [&](Stmt& s) { s.bind(1, now - qint64(staleDays) * kDayMs); });
+    if (out.isEmpty()) // nothing to decide: the review still opens, over the undated notes (M8d)
+        collect("due_date IS NULL", "created_at, id", ReviewReason::Undated, [](Stmt&) {});
     return out;
 }
 

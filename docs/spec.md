@@ -170,13 +170,13 @@ Attachments are shared, not duplicated (safe because of D22).
 The app's core promise: **what you capture stays under your radar until you dismiss it for good.**
 
 - **D31 Radar rule.** Every active scratch stays on the radar until it is marked **done** or **trashed**; those are the only two ways to dismiss one. Nothing expires or drops off on its own.
-- **D32 Morning review.** Once a day (trigger: D16) a review steps through what needs a decision: overdue (most overdue first), due today, then stale (D33). The rest of the radar stays on the board. For each scratch the user can choose **Done**, **Snooze**, **Keep** or **Trash**. Left goes back and undoes the previous choice. Esc ends early; the notes not reached stay as they are. (M4 R2, R3)
+- **D32 Morning review.** Once a day (trigger: D16) a review steps through what needs a decision: overdue (most overdue first), due today, then stale (D33). When none of those exists, it steps through the undated notes instead, oldest first ("UNDATED · N days old"); notes with a future due date stay out (M8d, the author's call). The rest of the radar stays on the board. For each scratch the user can choose **Done**, **Snooze**, **Keep** or **Trash**. Left goes back and undoes the previous choice. Esc ends early; the notes not reached stay as they are. (M4 R2, R3)
 - **D33 Stale resurfacing.** An undated active scratch whose `modified_at` is older than *N* days (setting, default **7**, range 1–90) comes after the due-today notes in the review, so nothing quietly rots. **Keep** marks it as looked at (`modified_at` = now), so it returns only after another *N* untouched days. (M4 R2, R4)
 - **D34 Snooze = due date.** Snoozing sets a future due date (quick picks: tomorrow, next Monday, pick a date). The scratch leaves Today and comes back on that day (D9). There is no separate snooze state.
 
 ### Start-of-day review (D16)
 
-Configurable day-start hour (default 06:00). The first time the PC is awake and unlocked after that hour, the morning review (D32) opens directly, in front (the author's choice in M4, R1). Triggers: app start, session unlock, resume from sleep, and a timer at the day start. It counts as shown once it opens, so closing it early doesn't bring it back that day. If nothing needs a decision, nothing opens. The tray's "Morning review" opens it any time.
+Configurable day-start hour (default 06:00). The first time the PC is awake and unlocked after that hour, the morning review (D32) opens directly, in front (the author's choice in M4, R1). Triggers: app start, session unlock, resume from sleep, and a timer at the day start. It counts as shown once it opens, so closing it early doesn't bring it back that day. Only with no active note to show (none, or all due later) does nothing open. Every check logs one line, `review: <trigger> · <outcome>` (trigger: start, unlock, resume, timer, settings, setup; outcome: before the day start, already shown today, locked, nothing to review, or shown with its counts) (M8d). The tray's "Morning review" opens it any time.
 
 ## 7. Setup wizard (D24)
 
