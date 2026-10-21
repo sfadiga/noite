@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The morning review now opens every morning: when nothing is overdue, due today or stale, it goes over your undated notes, oldest first.
+- Each morning-review check writes a line to the log (what triggered it and what it decided), so a review that didn't open can be explained.
 - CI now runs an end-to-end test on every push: a note is captured with the hotkey, then marked done, trashed and restored on the board, with real keystrokes.
 
 - CI now checks the performance budget on every push: opening the board with 2,000 notes and opening a capture.

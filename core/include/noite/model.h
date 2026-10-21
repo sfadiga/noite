@@ -51,12 +51,13 @@ struct ScratchSummary {
 };
 
 // The morning review (D32, M4 R2/R3): why a note needs a decision today.
-enum class ReviewReason { Overdue, DueToday, Stale };
+// Undated is the fallback (M8d): listed only when nothing is overdue, due today or stale.
+enum class ReviewReason { Overdue, DueToday, Stale, Undated };
 
 struct ReviewItem {
     ScratchSummary note;
     ReviewReason reason{};
-    int days = 0; // overdue: days late; stale: whole days untouched; due today: 0
+    int days = 0; // overdue: days late; stale: whole days untouched; undated: whole days old; due today: 0
 };
 
 // The start-of-day notification's numbers (D16). `open` = all active scratches.
