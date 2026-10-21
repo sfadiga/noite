@@ -27,7 +27,7 @@ private:
     QString count_;
 };
 
-// The board's tab row (D17): Today · All · Completed · Trash as equal-width buttons, each
+// The board's tab row (D17): Today · All · Completed · Deferred · Trash as equal-width buttons, each
 // showing how many notes it holds under the current search. Indexed like noite::Tab.
 class TabStrip : public QWidget {
     Q_OBJECT

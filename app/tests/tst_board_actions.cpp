@@ -102,6 +102,61 @@ private slots:
         QCOMPARE(w.window->model().rowCount(), 0);
     }
 
+    // M8c F4: L defers; Ctrl+Z brings it back.
+    void lDefersAndUndo()
+    {
+        Board w;
+        w.select(w.a);
+        QTest::keyClick(w.grid(), Qt::Key_L);
+        QCOMPARE(w.store().get(w.a).status, Status::Deferred);
+        QCOMPARE(w.window->model().rowCount(), 2);
+        QVERIFY(w.window->statusText().contains("Deferred"));
+        QCOMPARE(w.count(Tab::Deferred), 1);
+        QTest::keyClick(w.grid(), Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(w.store().get(w.a).status, Status::Active);
+    }
+
+    void lOnDeferredBringsBack()
+    {
+        Board w;
+        w.store().defer(w.a);
+        w.window->setTab(Tab::Deferred);
+        w.select(w.a);
+        QTest::keyClick(w.grid(), Qt::Key_L);
+        QCOMPARE(w.store().get(w.a).status, Status::Active);
+        QCOMPARE(w.window->model().rowCount(), 0);
+        QVERIFY(w.window->statusText().contains("Brought back"));
+    }
+
+    // F7: done and trashed notes are never deferred.
+    void lIgnoredOnCompletedAndTrash()
+    {
+        Board w;
+        w.store().markDone(w.a);
+        w.store().trash(w.b);
+        w.window->setTab(Tab::Completed);
+        w.select(w.a);
+        QTest::keyClick(w.grid(), Qt::Key_L);
+        QCOMPARE(w.store().get(w.a).status, Status::Done);
+        w.window->setTab(Tab::Trash);
+        w.select(w.b);
+        QTest::keyClick(w.grid(), Qt::Key_L);
+        QCOMPARE(w.store().get(w.b).status, Status::Trashed);
+    }
+
+    // F6: D on a deferred note; its undo returns it to Deferred, not to Active.
+    void doneOnDeferredUndoReturnsToDeferred()
+    {
+        Board w;
+        w.store().defer(w.a);
+        w.window->setTab(Tab::Deferred);
+        w.select(w.a);
+        QTest::keyClick(w.grid(), Qt::Key_D);
+        QCOMPARE(w.store().get(w.a).status, Status::Done);
+        QTest::keyClick(w.grid(), Qt::Key_Z, Qt::ControlModifier);
+        QCOMPARE(w.store().get(w.a).status, Status::Deferred);
+    }
+
     void reopenInCompletedTab()
     {
         Board w;

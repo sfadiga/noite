@@ -108,8 +108,11 @@ A named group, shown on the board as a stack of cards. A scratch belongs to at m
 
 ```
 active ──done──▶ done        (reopenable; never auto-deleted)
-active ─┐
-done   ─┴trash─▶ trashed ──after N days──▶ permanently deleted
+active ──defer──▶ deferred ──bring back──▶ active        (M8c, D36)
+deferred ──done──▶ done
+active   ─┐
+done     ─┼trash─▶ trashed ──after N days──▶ permanently deleted
+deferred ─┘
 trashed ──restore──▶ previous status
 ```
 
@@ -156,22 +159,23 @@ Attachments are shared, not duplicated (safe because of D22).
 ## 6. Board
 
 - A normal window opened by tray click or the board hotkey (default `Ctrl+Alt+B`). (D17)
-- **Tabs:** Today · All · Completed · Trash, each showing how many notes it holds under the current search. (D17)
+- **Tabs:** Today · All · Completed · Deferred · Trash, each showing how many notes it holds under the current search. (D17)
 - **Layout:** card grid (Google Keep–style). Bundles render as stacked cards that expand in place. Drag a card onto another card or a bundle to bundle it. (D17)
 - **Sort:** automatic — overdue, due today, then undated oldest-first. Every active card shows its age ("3h" on its first day, then "12d"), next to its due label if it has one. No manual reordering in v1. (D9, D17)
 - **Filter chips:** one per tag, one per colour, plus Overdue / Due today / No date. Chips of the same kind combine with OR; different kinds combine with AND. Chips that would yield zero results are hidden. (D18)
 - **Search:** as-you-type full-text search over the current tab, combined with active chips. (D19)
-- Keys: `/` search · `N` new · `D` done · `Del` trash · `Ctrl+Z` undo last board action · arrow keys move between cards · `Ctrl+1`–`Ctrl+4` Today / All / Completed / Trash. (D30; tab keys added in M7c)
+- Keys: `/` search · `N` new · `D` done · `Del` trash · `Ctrl+Z` undo last board action · arrow keys move between cards · `L` defer / bring back · `Ctrl+1`–`Ctrl+5` Today / All / Completed / Deferred / Trash. (D30; tab keys added in M7c, Deferred in M8c)
 - Theme follows Windows light/dark. (D30)
 
 ### The radar (D31–D34, added 2026-10-17)
 
 The app's core promise: **what you capture stays under your radar until you dismiss it for good.**
 
-- **D31 Radar rule.** Every active scratch stays on the radar until it is marked **done** or **trashed**; those are the only two ways to dismiss one. Nothing expires or drops off on its own.
-- **D32 Morning review.** Once a day (trigger: D16) a review steps through what needs a decision: overdue (most overdue first), due today, then stale (D33). The rest of the radar stays on the board. For each scratch the user can choose **Done**, **Snooze**, **Keep** or **Trash**. Left goes back and undoes the previous choice. Esc ends early; the notes not reached stay as they are. (M4 R2, R3)
+- **D31 Radar rule.** Every active scratch stays on the radar until it is marked **done**, **trashed** or **deferred** (M8c); those are the only ways to dismiss one. Nothing expires or drops off on its own.
+- **D32 Morning review.** Once a day (trigger: D16) a review steps through what needs a decision: overdue (most overdue first), due today, then stale (D33). The rest of the radar stays on the board. For each scratch the user can choose **Done**, **Snooze**, **Keep**, **Defer** (M8c) or **Trash**. Left goes back and undoes the previous choice. Esc ends early; the notes not reached stay as they are. (M4 R2, R3)
 - **D33 Stale resurfacing.** An undated active scratch whose `modified_at` is older than *N* days (setting, default **7**, range 1–90) comes after the due-today notes in the review, so nothing quietly rots. **Keep** marks it as looked at (`modified_at` = now), so it returns only after another *N* untouched days. (M4 R2, R4)
 - **D34 Snooze = due date.** Snoozing sets a future due date (quick picks: tomorrow, next Monday, pick a date). The scratch leaves Today and comes back on that day (D9). There is no separate snooze state.
+- **D36 Deferred (M8c).** A note can be **deferred**: kept, but off the radar. It leaves Today, All and the morning review (the undated fallback too) and never turns overdue or stale, until it is brought back (`L` on the Deferred tab, or the card menu). Done and trash work from Deferred; restoring from Trash returns it there. Design: `docs/superpowers/specs/2026-10-21-m8c-deferred-design.md`.
 
 ### Start-of-day review (D16)
 

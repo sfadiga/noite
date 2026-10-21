@@ -8,7 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- On the board, `Ctrl+1` to `Ctrl+4` switch to Today, All, Completed and Trash.
+- On the board, `Ctrl+1` to `Ctrl+5` switch to Today, All, Completed, Deferred and Trash.
+- A Deferred tab: `L` (or **Defer** in the card menu, or in the morning review) parks a note there. It stays out of Today, All and the morning review, and its due date never turns overdue, until you bring it back with `L`. Done and trash work from there, and a restored note goes back to Deferred.
 
 ### Changed
 

@@ -93,7 +93,7 @@ TabStrip::TabStrip(QWidget* parent)
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(6);
     int index = 0;
-    for (const QString& name : {tr("Today"), tr("All"), tr("Completed"), tr("Trash")}) {
+    for (const QString& name : {tr("Today"), tr("All"), tr("Completed"), tr("Deferred"), tr("Trash")}) {
         auto* button = new TabButton(name, this);
         buttons_.append(button);
         group_->addButton(button, index++);

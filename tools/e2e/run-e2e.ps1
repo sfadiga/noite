@@ -153,8 +153,8 @@ try {
     Send 3 "{DEL}"
     Expect 3 "trashed" "done"
 
-    # 4. Trash tab: restore it (back to Completed).
-    Send 4 "^4"
+    # 4. Trash tab (Ctrl+5 since the Deferred tab, M8c): restore it (back to Completed).
+    Send 4 "^5"
     Send 4 "{DEL}"
     Expect 4 "done"
 } catch {

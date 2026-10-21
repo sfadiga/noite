@@ -63,6 +63,7 @@ ReviewWindow::ReviewWindow(noite::Store& store, AttachmentStore& attachments, st
     snoozeMenu->addAction(tr("3  Pick…"), this, &ReviewWindow::pickSnoozeDate);
     snoozeButton->setMenu(snoozeMenu);
     addButton(tr("K  Keep"), [this] { keep(); });
+    addButton(tr("L  Defer"), [this] { defer(); });
     addButton(tr("Del  Trash"), [this] { trash(); });
     auto* hint = new QLabel(tr("Enter: edit  ·  ←: back  ·  Ctrl+Z: undo  ·  Esc: finish later"), review);
     hint->setEnabled(false);
@@ -155,11 +156,16 @@ QString ReviewWindow::statusText() const
 
 QString ReviewWindow::summaryText() const
 {
-    int counts[4] = {};
+    int counts[5] = {};
     for (const std::optional<Outcome>& outcome : outcomes_)
         if (outcome)
             ++counts[int(outcome->kind)];
-    return tr("Done %1 · Snoozed %2 · Kept %3 · Trashed %4").arg(counts[0]).arg(counts[1]).arg(counts[2]).arg(counts[3]);
+    return tr("Done %1 · Snoozed %2 · Kept %3 · Deferred %4 · Trashed %5")
+        .arg(counts[0])
+        .arg(counts[1])
+        .arg(counts[2])
+        .arg(counts[3])
+        .arg(counts[4]);
 }
 
 QDate ReviewWindow::nextMonday(QDate today)
@@ -247,6 +253,14 @@ void ReviewWindow::keep()
     decide(Kind::Kept, [this](const noite::ScratchId& id) -> std::function<void()> {
         store_.touch(id);
         return [] {}; // decide() restores modified_at
+    });
+}
+
+void ReviewWindow::defer()
+{
+    decide(Kind::Deferred, [this](const noite::ScratchId& id) -> std::function<void()> {
+        store_.defer(id);
+        return [this, id] { store_.bringBack(id); };
     });
 }
 
@@ -399,6 +413,9 @@ bool ReviewWindow::eventFilter(QObject* watched, QEvent* event)
             return true;
         case Qt::Key_K:
             keep();
+            return true;
+        case Qt::Key_L:
+            defer();
             return true;
         case Qt::Key_Delete:
             trash();
