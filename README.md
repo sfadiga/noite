@@ -78,12 +78,12 @@ python -m pip install --user aqtinstall
 python -m aqt install-qt windows desktop 6.10.3 win64_msvc2022_64 -O "$env:USERPROFILE\Qt"
 ```
 
-Everyday loop: `tools\dev.ps1` runs steps in order and stops at the first failure (`-Config Debug` for a debug build).
+Everyday loop: `tools\dev.cmd` (a wrapper for `tools\dev.ps1` that works even where PowerShell scripts are blocked, the Windows default) runs steps in order and stops at the first failure (`-Config Debug` for a debug build).
 
 ```powershell
-powershell -File tools\dev.ps1 build run          # build, then start it on build\Release\dev-data (not your notes)
-powershell -File tools\dev.ps1 ci                 # clean + build + test
-powershell -File tools\dev.ps1 deploy run-dist    # refresh dist\noite and start it on its own data (your notes)
+tools\dev.cmd build run          # build, then start it on build\Release\dev-data (not your notes)
+tools\dev.cmd ci                 # clean + build + test
+tools\dev.cmd deploy run-dist    # refresh dist\noite and start it on its own data (your notes)
 ```
 
 Steps: `clean` (build folder only, never `dist\`), `build`, `test`, `deploy`, `run` (`-Data <dir>` for another folder), `run-dist`, `ci`. The scripts behind them:
