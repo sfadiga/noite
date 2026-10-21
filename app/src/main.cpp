@@ -1,4 +1,5 @@
 #include "App.h"
+#include "AppIcon.h"
 #include "SelfCheck.h"
 #include "Theme.h"
 #include "log/Log.h"
@@ -16,6 +17,7 @@ int main(int argc, char* argv[])
     applog::startBuffering(); // before anything logs; start() opens the file once the data folder is ours
     QApplication qapp(argc, argv);
     QApplication::setFont(theme::appFont());
+    QApplication::setWindowIcon(appIcon()); // every window, the setup wizard included
     applyAppIdentity();
     qapp.setQuitOnLastWindowClosed(false);
     AppOptions options = parseArgs(QCoreApplication::arguments());

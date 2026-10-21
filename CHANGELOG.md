@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - On the board, `Ctrl+1` to `Ctrl+4` switch to Today, All, Completed and Trash.
+- An icon: an 8-bit crescent moon with blue stars, on the exe, every window and the tray.
 - Export a note, with its images, to a single HTML file or a PDF: `Ctrl+E` on the board or in an open note, or **Export…** in the card menu.
 
 ### Changed

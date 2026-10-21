@@ -3,6 +3,7 @@
 #include "registry.h"
 
 #include "App.h"
+#include "AppIcon.h"
 #include "AppOptions.h"
 #include "VersionText.h"
 #include "board/BoardWindow.h"
@@ -51,6 +52,16 @@ private slots:
         applyAppIdentity();
         QCOMPARE(QCoreApplication::applicationName(), QString("noite"));
         QCOMPARE(QCoreApplication::applicationVersion(), QString(NOITE_VERSION));
+    }
+
+    // M8b: the 8-bit moon at every size, from the app's own resources (no image plugin).
+    void appIconHasEverySize()
+    {
+        const QIcon icon = appIcon();
+        QCOMPARE(icon.availableSizes(), QList<QSize>({{16, 16}, {32, 32}, {48, 48}, {64, 64}, {128, 128}, {256, 256}}));
+        const QImage small = icon.pixmap(QSize(16, 16), 1.0).toImage();
+        QCOMPARE(small.size(), QSize(16, 16));
+        QCOMPARE(small.pixelColor(0, 0), QColor("#0e1a40")); // the sky fills the square
     }
 
     void boardVersionTextForms()
