@@ -161,8 +161,9 @@ Attachments are shared, not duplicated (safe because of D22).
 - **Sort:** automatic — overdue, due today, then undated oldest-first. Every active card shows its age ("3h" on its first day, then "12d"), next to its due label if it has one. No manual reordering in v1. (D9, D17)
 - **Filter chips:** one per tag, one per colour, plus Overdue / Due today / No date. Chips of the same kind combine with OR; different kinds combine with AND. Chips that would yield zero results are hidden. (D18)
 - **Search:** as-you-type full-text search over the current tab, combined with active chips. (D19)
-- Keys: `/` search · `N` new · `D` done · `Del` trash · `Ctrl+Z` undo last board action · arrow keys move between cards · `Ctrl+1`–`Ctrl+4` Today / All / Completed / Trash. (D30; tab keys added in M7c)
+- Keys: `/` search · `N` new · `D` done · `Del` trash · `Ctrl+Z` undo last board action · arrow keys move between cards · `Ctrl+1`–`Ctrl+4` Today / All / Completed / Trash · `Ctrl+E` export. (D30; tab keys added in M7c, export in M8a)
 - Theme follows Windows light/dark. (D30)
+- **D35 Export (M8a).** One note to a self-contained **HTML** file (images embedded) or an A4 **PDF** (20 mm margins, wide images fitted to the text width, links kept), from the card menu's **Export…** or `Ctrl+E`, on the board or in the note open over it (saved first), on any tab. A Save dialog suggests the title as a safe file name in the last export folder (Documents the first time). Light look, content only. A missing image becomes `[missing image]`; a failed write leaves no file and shows the reason. Design: `docs/superpowers/specs/2026-10-21-m8a-export-design.md`.
 
 ### The radar (D31–D34, added 2026-10-17)
 

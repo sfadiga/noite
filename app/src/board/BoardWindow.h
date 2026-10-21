@@ -28,7 +28,7 @@ class ChipBar;
 // The board (D17): tabs Today · All · Completed · Trash, an as-you-type search over the
 // current tab (D19) and a grid of cards. Keys (D30): "/" focuses search; Esc clears a
 // non-empty search, otherwise closes the board; D done/reopen; Del trash/restore;
-// Ctrl+Shift+C colour; Ctrl+Z undo. Actions apply to the selected card, and do nothing
+// Ctrl+Shift+C colour; Ctrl+Z undo; Ctrl+E export. Actions apply to the selected card, and do nothing
 // without one. A store error is shown in the status line and the board reloads.
 class BoardWindow : public QWidget {
     Q_OBJECT
@@ -62,6 +62,14 @@ public:
     void setDue(std::optional<QDate> due);
     void cloneSelected();
     void undo();
+    // M8a: Export… / Ctrl+E. The note open over the board (saved first) or the selected card,
+    // to the path the picker returns: .pdf is a PDF, anything else HTML (".html" added when
+    // there is no extension).
+    void exportSelected();
+    // The picker gets the suggested path and returns the chosen one ("" cancels); the
+    // reporter shows a failed export. Defaults: a Save dialog and a message box.
+    void setExportPathPicker(std::function<QString(const QString& suggested)> picker);
+    void setExportErrorReporter(std::function<void(const QString& message)> reporter);
 
     // Click or Enter opens the selected card in the overlay; N opens a blank note there.
     void openSelected();
@@ -136,4 +144,6 @@ private:
     QLabel* status_;
     NoteOverlay* overlay_;
     QTimer searchDelay_;
+    std::function<QString(const QString&)> pickExportPath_;
+    std::function<void(const QString&)> reportExportError_;
 };

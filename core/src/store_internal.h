@@ -6,7 +6,14 @@
 
 #include <QHash>
 
+#include <memory>
 #include <optional>
+
+class QTextDocument;
+
+namespace noite {
+class Store;
+}
 
 namespace noite::detail {
 
@@ -32,6 +39,11 @@ Status requireStatus(Db& db, const ScratchId& id);
 void requireEditable(Db& db, const ScratchId& id);
 
 void touch(Db& db, const ScratchId& id, qint64 nowMs);
+
+// The note as exported (M8a): unreadable images replaced by "[missing image]", the rest
+// added as resources, light default font. With `textWidth` > 0, images wider than it get
+// that width (aspect kept).
+std::unique_ptr<QTextDocument> exportDocument(const Store& store, const QString& html, qreal textWidth);
 
 // Deletes bundles that no scratch (of any status) belongs to. Returns how many.
 int deleteEmptyBundles(Db& db);

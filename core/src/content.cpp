@@ -137,4 +137,27 @@ bool isValidAttachmentId(const QString& id)
     return valid.match(id).hasMatch();
 }
 
+QString exportFileName(const QString& title)
+{
+    QString name;
+    for (const QChar c : title)
+        name += (c.unicode() < 0x20 || QStringView(u"<>:\"/\\|?*").contains(c)) ? QChar('_') : c;
+    const auto trimEnd = [&name] {
+        while (!name.isEmpty() && (name.back() == '.' || name.back().isSpace()))
+            name.chop(1);
+    };
+    name = name.trimmed();
+    trimEnd();
+    if (name.size() > 100)
+        name.truncate(name.at(99).isHighSurrogate() ? 99 : 100);
+    trimEnd();
+    if (name.isEmpty())
+        return QStringLiteral("note");
+    static const QRegularExpression device("^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\\.|$)",
+                                           QRegularExpression::CaseInsensitiveOption);
+    if (device.match(name).hasMatch())
+        name += '_';
+    return name;
+}
+
 } // namespace noite::content
