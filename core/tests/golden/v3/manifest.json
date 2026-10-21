@@ -1,0 +1,90 @@
+{
+    "activeCount": 4,
+    "attachment": {
+        "id": "c58049030fd33c7061cb22ce0ee8def1ed35c6f1586f1f53b687d6a8aea0fad9.png",
+        "noteTitle": "Plan the week #work",
+        "sha256": "c58049030fd33c7061cb22ce0ee8def1ed35c6f1586f1f53b687d6a8aea0fad9",
+        "size": 281
+    },
+    "bundles": [
+        {
+            "members": [
+                "Milk and eggs",
+                "Bread and butter"
+            ],
+            "name": "Groceries"
+        }
+    ],
+    "dbSha256": "b23627f6dd46f3bed16b6e9e31ee6c33bf9ac9f4e9ee8d11e84a28616e5ad54d",
+    "jobState": {
+        "lastPurgeDay": "2026-10-09"
+    },
+    "lastReviewDay": "2026-10-09",
+    "notes": [
+        {
+            "status": "active",
+            "tags": [
+                "home",
+                "work"
+            ],
+            "title": "Plan the week #work"
+        },
+        {
+            "dueDate": "2026-10-12",
+            "status": "active",
+            "tags": [
+            ],
+            "title": "Dentist golden crown fitting"
+        },
+        {
+            "bundle": "Groceries",
+            "color": "yellow",
+            "status": "active",
+            "tags": [
+            ],
+            "title": "Milk and eggs"
+        },
+        {
+            "bundle": "Groceries",
+            "status": "active",
+            "tags": [
+            ],
+            "title": "Bread and butter"
+        },
+        {
+            "status": "done",
+            "tags": [
+            ],
+            "title": "Call the bank"
+        },
+        {
+            "status": "trashed",
+            "tags": [
+            ],
+            "title": "Old receipts to shred",
+            "trashedAtMs": 1791450000000
+        },
+        {
+            "status": "deferred",
+            "tags": [
+                "music"
+            ],
+            "title": "Someday learn the cello"
+        }
+    ],
+    "schema": 3,
+    "searchHit": "Dentist golden crown fitting",
+    "searchWord": "golden",
+    "settings": {
+        "backupDir": "C:/noite-golden-backups",
+        "backupFrequency": "weekly",
+        "backupKeep": 5,
+        "boardHotkey": "Ctrl+Alt+B",
+        "captureHotkey": "Ctrl+Alt+K",
+        "dayStart": "07:30",
+        "setupCompleted": true,
+        "staleDays": 9,
+        "startWithWindows": false,
+        "trashRetentionDays": 40
+    }
+}

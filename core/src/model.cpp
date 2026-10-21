@@ -7,10 +7,11 @@ namespace noite {
 
 namespace {
 
-constexpr std::array<std::pair<Status, const char*>, 3> kStatuses = {{
+constexpr std::array<std::pair<Status, const char*>, 4> kStatuses = {{
     {Status::Active, "active"},
     {Status::Done, "done"},
     {Status::Trashed, "trashed"},
+    {Status::Deferred, "deferred"},
 }};
 
 constexpr std::array<std::pair<Color, const char*>, 6> kColors = {{

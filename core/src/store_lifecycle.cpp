@@ -30,7 +30,7 @@ void Store::markDone(const ScratchId& id)
 {
     transition(db(), id, nowMs(),
                "UPDATE scratches SET status = 'done', done_at = ?1, modified_at = ?1 "
-               "WHERE id = ?2 AND status = 'active'",
+               "WHERE id = ?2 AND status IN ('active', 'deferred')",
                "mark done");
 }
 
@@ -46,7 +46,7 @@ void Store::trash(const ScratchId& id)
 {
     transition(db(), id, nowMs(),
                "UPDATE scratches SET trashed_from = status, status = 'trashed', trashed_at = ?1, modified_at = ?1 "
-               "WHERE id = ?2 AND status IN ('active', 'done')",
+               "WHERE id = ?2 AND status IN ('active', 'done', 'deferred')",
                "trash");
 }
 
@@ -56,6 +56,20 @@ void Store::restore(const ScratchId& id)
                "UPDATE scratches SET status = trashed_from, trashed_from = NULL, trashed_at = NULL, modified_at = ?1 "
                "WHERE id = ?2 AND status = 'trashed'",
                "restore");
+}
+
+void Store::defer(const ScratchId& id)
+{
+    transition(db(), id, nowMs(),
+               "UPDATE scratches SET status = 'deferred', modified_at = ?1 WHERE id = ?2 AND status = 'active'",
+               "defer");
+}
+
+void Store::bringBack(const ScratchId& id)
+{
+    transition(db(), id, nowMs(),
+               "UPDATE scratches SET status = 'active', modified_at = ?1 WHERE id = ?2 AND status = 'deferred'",
+               "bring back");
 }
 
 } // namespace noite

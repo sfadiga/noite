@@ -100,7 +100,7 @@ private slots:
         r.key(Qt::Key_1);
         QCOMPARE(r.store().get(r.staleB).due, std::optional<QDate>(QDate(2026, 10, 16)));
         QVERIFY(r.window->isFinished());
-        QCOMPARE(r.window->summaryText(), QString("Done 1 · Snoozed 1 · Kept 1 · Trashed 1"));
+        QCOMPARE(r.window->summaryText(), QString("Done 1 · Snoozed 1 · Kept 1 · Deferred 0 · Trashed 1"));
     }
 
     // Review Focus 3.
@@ -115,6 +115,23 @@ private slots:
         QCOMPARE(r.store().get(r.overdue).due, std::optional<QDate>(QDate(2026, 10, 19)));
     }
 
+    // M8c F5: L defers the note; Left undoes it; the summary counts it.
+    void lDefersAndCounts()
+    {
+        Review r;
+        r.key(Qt::Key_L);
+        QCOMPARE(r.store().get(r.overdue).status, Status::Deferred);
+        QCOMPARE(r.window->position(), 2);
+        r.key(Qt::Key_Left);
+        QCOMPARE(r.store().get(r.overdue).status, Status::Active);
+        r.key(Qt::Key_L);
+        r.key(Qt::Key_K);
+        r.key(Qt::Key_K);
+        r.key(Qt::Key_L);
+        QVERIFY(r.window->isFinished());
+        QCOMPARE(r.window->summaryText(), QString("Done 0 · Snoozed 0 · Kept 2 · Deferred 2 · Trashed 0"));
+    }
+
     void backUndoesPrevious()
     {
         Review r;
@@ -126,7 +143,7 @@ private slots:
         r.key(Qt::Key_K);
         r.key(Qt::Key_K);
         r.key(Qt::Key_K);
-        QCOMPARE(r.window->summaryText(), QString("Done 0 · Snoozed 0 · Kept 4 · Trashed 0"));
+        QCOMPARE(r.window->summaryText(), QString("Done 0 · Snoozed 0 · Kept 4 · Deferred 0 · Trashed 0"));
     }
 
     void ctrlZUndoesLast()

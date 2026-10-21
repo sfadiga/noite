@@ -25,10 +25,10 @@ class QListView;
 class TabStrip;
 class ChipBar;
 
-// The board (D17): tabs Today · All · Completed · Trash, an as-you-type search over the
-// current tab (D19) and a grid of cards. Keys (D30): "/" focuses search; Esc clears a
-// non-empty search, otherwise closes the board; D done/reopen; Del trash/restore;
-// Ctrl+Shift+C colour; Ctrl+Z undo; Ctrl+E export. Actions apply to the selected card, and do nothing
+// The board (D17): tabs Today · All · Completed · Deferred · Trash, an as-you-type search over
+// the current tab (D19) and a grid of cards. Keys (D30): "/" focuses search; Esc clears a
+// non-empty search, otherwise closes the board; D done/reopen; Del trash/restore; L defer /
+// bring back; Ctrl+Shift+C colour; Ctrl+Z undo; Ctrl+E export. Actions apply to the selected card, and do nothing
 // without one. A store error is shown in the status line and the board reloads.
 class BoardWindow : public QWidget {
     Q_OBJECT
@@ -57,6 +57,7 @@ public:
     // Board actions on the selected card.
     void markDoneOrReopen(); // Reopen in Completed
     void trashOrRestore();   // Restore in Trash
+    void deferOrBringBack(); // L (M8c): Active -> Deferred, Deferred -> Active; nothing otherwise
     void cycleColor();
     void setColor(std::optional<noite::Color> color);
     void setDue(std::optional<QDate> due);

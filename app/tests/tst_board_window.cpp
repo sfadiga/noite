@@ -61,10 +61,10 @@ private slots:
         Board b;
         QCOMPARE(b.window->model().rowCount(), 3);
         QCOMPARE(b.window->tabStrip()->currentIndex(), 0);
-        QCOMPARE(b.window->tabStrip()->count(), 4);
+        QCOMPARE(b.window->tabStrip()->count(), 5);
     }
 
-    // M7c: Ctrl+1..4 switch tabs (Today, All, Completed, Trash); the first card is selected.
+    // M7c: Ctrl+1..5 switch tabs (Today, All, Completed, Deferred, Trash since M8c); the first card is selected.
     void ctrlDigitSwitchesTab()
     {
         Board b;
@@ -74,7 +74,7 @@ private slots:
         QCOMPARE(b.window->model().tab(), Tab::Completed);
         QCOMPARE(b.window->grid()->currentIndex().row(), 0);
         QCOMPARE(b.window->model().summary(0).title, QString("old task"));
-        for (const auto& [key, index] : {std::pair{Qt::Key_4, 3}, {Qt::Key_2, 1}, {Qt::Key_1, 0}}) {
+        for (const auto& [key, index] : {std::pair{Qt::Key_5, 4}, {Qt::Key_4, 3}, {Qt::Key_2, 1}, {Qt::Key_1, 0}}) {
             QTest::keyClick(b.window->grid(), key, Qt::ControlModifier);
             QCOMPARE(b.window->tabStrip()->currentIndex(), index);
             QCOMPARE(int(b.window->model().tab()), index);
@@ -190,11 +190,12 @@ private slots:
         Board b;
         b.show();
         TabStrip* tabs = b.window->tabStrip();
-        QCOMPARE(QStringList({tabs->label(0), tabs->label(1), tabs->label(2), tabs->label(3)}),
-                 QStringList({"TODAY", "ALL", "COMPLETED", "TRASH"}));
-        QCOMPARE(QStringList({tabs->countText(0), tabs->countText(1), tabs->countText(2), tabs->countText(3)}),
-                 QStringList({"3", "3", "1", "0"}));
-        for (int i = 1; i < 4; ++i)
+        QCOMPARE(QStringList({tabs->label(0), tabs->label(1), tabs->label(2), tabs->label(3), tabs->label(4)}),
+                 QStringList({"TODAY", "ALL", "COMPLETED", "DEFERRED", "TRASH"}));
+        QCOMPARE(QStringList({tabs->countText(0), tabs->countText(1), tabs->countText(2), tabs->countText(3),
+                              tabs->countText(4)}),
+                 QStringList({"3", "3", "1", "0", "0"}));
+        for (int i = 1; i < 5; ++i)
             QCOMPARE(tabs->button(i)->size(), tabs->button(0)->size());
         QVERIFY(tabs->button(0)->font().pointSizeF() > b.window->font().pointSizeF());
     }
@@ -216,9 +217,11 @@ private slots:
     {
         Board b;
         b.show();
-        QTest::mouseClick(b.window->tabStrip()->button(3), Qt::LeftButton);
+        QTest::mouseClick(b.window->tabStrip()->button(4), Qt::LeftButton);
         QCOMPARE(b.window->model().tab(), Tab::Trash);
-        QCOMPARE(b.window->tabStrip()->currentIndex(), 3);
+        QCOMPARE(b.window->tabStrip()->currentIndex(), 4);
+        QTest::mouseClick(b.window->tabStrip()->button(3), Qt::LeftButton);
+        QCOMPARE(b.window->model().tab(), Tab::Deferred);
     }
 
     void searchMatchesTabs()
@@ -290,7 +293,7 @@ private slots:
 
         auto other = b.make();
         other->restoreViewState(state);
-        QCOMPARE(other->tabStrip()->currentIndex(), 3);
+        QCOMPARE(other->tabStrip()->currentIndex(), 4);
         QCOMPARE(other->searchField()->text(), QString("a"));
         QCOMPARE(other->model().tab(), Tab::Trash);
         QCOMPARE(other->model().search(), QString("a"));

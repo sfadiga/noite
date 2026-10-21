@@ -1,6 +1,6 @@
 // Generator for the golden data folders (core/tests/golden/v<N>/{noite.db,manifest.json}).
 //
-//   noite_golden <dir> <1|2>
+//   noite_golden <dir> <1|2|3>
 //
 // NEVER re-run this for a schema version whose folder already exists: the committed files are
 // frozen evidence of what real data of that version looks like, and tst_upgrade proves the
@@ -9,7 +9,7 @@
 //
 // Every timestamp comes from a fixed clock (2026-10-10 09:00 UTC). Version 1 is written with
 // SQL against the embedded v1 schema (no Store: the current Store only writes the latest
-// schema); version 2 goes through Store.
+// schema); later versions go through Store, which writes the current schema.
 
 #include "db.h"
 #include "noite_schema.h"
@@ -61,6 +61,16 @@ const QList<NoteSpec> kNotes = {
     {"Call the bank", "done", 0, std::nullopt, {}, {}, {}, false},
     {"Old receipts to shred", "trashed", kNow - 2 * kDayMs, std::nullopt, {}, {}, {}, false},
 };
+
+// The notes of a version's folder: v3 adds a deferred note (M8c) with a manual tag, so the
+// tags' trip through the v3 table rebuild stays proven for later versions too.
+QList<NoteSpec> notesFor(int version)
+{
+    QList<NoteSpec> notes = kNotes;
+    if (version >= 3)
+        notes.append({"Someday learn the cello", "deferred", 0, std::nullopt, {}, {"music"}, {}, false});
+    return notes;
+}
 
 QJsonObject settingsJson()
 {
@@ -190,7 +200,8 @@ void writeV1(const QString& dbPath)
     setting("last_review_day", "2026-10-09");
 }
 
-QString writeV2(const QString& workDir, QString& attachmentId, qint64& attachmentSize, QString& attachmentSha)
+QString writeWithStore(const QString& workDir, int version, QString& attachmentId, qint64& attachmentSize,
+                       QString& attachmentSha)
 {
     auto clock = std::make_shared<FixedClock>(kNow);
     auto store = Store::open(DataDir::acquire(workDir), clock);
@@ -201,7 +212,7 @@ QString writeV2(const QString& workDir, QString& attachmentId, qint64& attachmen
     attachmentSha = sha256Hex(png);
 
     QHash<QString, ScratchId> byBundle;
-    for (const NoteSpec& n : kNotes) {
+    for (const NoteSpec& n : notesFor(version)) {
         clock->set(n.status == "trashed" ? n.trashedAtMs : kNow);
         const Scratch s = store->createScratch(htmlOf(n, attachmentId));
         if (!n.dueDate.isEmpty())
@@ -221,6 +232,8 @@ QString writeV2(const QString& workDir, QString& attachmentId, qint64& attachmen
             store->markDone(s.id);
         if (n.status == "trashed")
             store->trash(s.id);
+        if (n.status == "deferred")
+            store->defer(s.id);
         clock->set(kNow);
     }
     for (const Bundle& b : store->listBundles())
@@ -241,13 +254,13 @@ int main(int argc, char* argv[])
     QCoreApplication app(argc, argv);
     QTextStream err(stderr);
     if (argc != 3) {
-        err << "usage: noite_golden <dir> <1|2>\n";
+        err << "usage: noite_golden <dir> <1|2|3>\n";
         return 2;
     }
     const QString outDir = QDir::fromNativeSeparators(QString::fromLocal8Bit(argv[1]));
     const int version = QString::fromLocal8Bit(argv[2]).toInt();
-    if (version != 1 && version != 2) {
-        err << "version must be 1 or 2\n";
+    if (version < 1 || version > 3) {
+        err << "version must be 1, 2 or 3\n";
         return 2;
     }
     if (QFile::exists(outDir + "/noite.db")) {
@@ -264,7 +277,7 @@ int main(int argc, char* argv[])
             QDir().mkpath(work.filePath("data"));
             writeV1(workDb); // Db closes at end of scope, folding the WAL into the file
         } else {
-            writeV2(work.filePath("data"), attId, attSize, attSha);
+            writeWithStore(work.filePath("data"), version, attId, attSize, attSha);
         }
     } catch (const std::exception& e) {
         err << "failed: " << e.what() << "\n";
@@ -284,7 +297,7 @@ int main(int argc, char* argv[])
     QJsonArray notes;
     QMap<QString, QStringList> members;
     int active = 0;
-    for (const NoteSpec& n : kNotes) {
+    for (const NoteSpec& n : notesFor(version)) {
         const QString title = content::deriveTitle(content::plainText(htmlOf(n, {})));
         QJsonObject o;
         o["title"] = title;

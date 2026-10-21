@@ -43,6 +43,7 @@ public:
 
     void done();
     void keep();
+    void defer(); // L (M8c)
     void trash();
     void snooze(QDate due);
     void back();
@@ -64,7 +65,7 @@ protected:
     void keyPressEvent(QKeyEvent* event) override;
 
 private:
-    enum class Kind { Done, Snoozed, Kept, Trashed };
+    enum class Kind { Done, Snoozed, Kept, Deferred, Trashed }; // the summary's order
     struct Outcome {
         Kind kind;
         std::function<void()> undo;

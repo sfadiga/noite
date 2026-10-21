@@ -141,8 +141,9 @@ BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std:
     connect(&searchDelay_, &QTimer::timeout, this, [this] { model_->setSearch(search_->text()); });
     connect(search_, &QLineEdit::textChanged, &searchDelay_, qOverload<>(&QTimer::start));
     connect(tabs_, &TabStrip::currentChanged, this, [this](int index) { model_->setTab(noite::Tab(index)); });
-    // Ctrl+1..4: Today, All, Completed, Trash; not while a note is open over the board.
-    for (const noite::Tab tab : {noite::Tab::Today, noite::Tab::All, noite::Tab::Completed, noite::Tab::Trash}) {
+    // Ctrl+1..5: Today, All, Completed, Deferred, Trash; not while a note is open over the board.
+    for (const noite::Tab tab :
+         {noite::Tab::Today, noite::Tab::All, noite::Tab::Completed, noite::Tab::Deferred, noite::Tab::Trash}) {
         auto* shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key(Qt::Key_1 + int(tab))), this);
         connect(shortcut, &QShortcut::activated, this, [this, tab] {
             if (!overlay_->isOpen())
@@ -467,9 +468,31 @@ void BoardWindow::markDoneOrReopen()
             pushUndo(tr("Reopen"), id, [this, id] { store_.markDone(id); });
             showStatus(tr("Reopened"));
         } else {
+            const bool wasDeferred = s.status == noite::Status::Deferred;
             store_.markDone(id);
-            pushUndo(tr("Done"), id, [this, id] { store_.reopen(id); });
+            pushUndo(tr("Done"), id, [this, id, wasDeferred] {
+                store_.reopen(id);
+                if (wasDeferred) // reopen lands in Active; the note came from Deferred
+                    store_.defer(id);
+            });
             showStatus(tr("Marked done · Ctrl+Z to undo"));
+        }
+        return std::nullopt;
+    });
+}
+
+void BoardWindow::deferOrBringBack()
+{
+    act([this](const ScratchSummary& s) -> std::optional<ScratchId> {
+        const ScratchId id = s.id;
+        if (s.status == noite::Status::Deferred) {
+            store_.bringBack(id);
+            pushUndo(tr("Bring back"), id, [this, id] { store_.defer(id); });
+            showStatus(tr("Brought back"));
+        } else if (s.status == noite::Status::Active) {
+            store_.defer(id);
+            pushUndo(tr("Defer"), id, [this, id] { store_.bringBack(id); });
+            showStatus(tr("Deferred · Ctrl+Z to undo"));
         }
         return std::nullopt;
     });
@@ -580,6 +603,9 @@ void BoardWindow::showContextMenu(const QPoint& pos)
     if (s.status != noite::Status::Trashed)
         menu.addAction(s.status == noite::Status::Done ? tr("Reopen") : tr("Done"), this, &BoardWindow::markDoneOrReopen);
     menu.addAction(s.status == noite::Status::Trashed ? tr("Restore") : tr("Trash"), this, &BoardWindow::trashOrRestore);
+    if (s.status == noite::Status::Active || s.status == noite::Status::Deferred)
+        menu.addAction(s.status == noite::Status::Deferred ? tr("Bring back") : tr("Defer"), this,
+                       &BoardWindow::deferOrBringBack);
     menu.addSeparator();
 
     QMenu* colours = menu.addMenu(tr("Colour"));
@@ -756,6 +782,10 @@ bool BoardWindow::eventFilter(QObject* watched, QEvent* event)
         }
         if (key->key() == Qt::Key_Delete && mods == Qt::NoModifier) {
             trashOrRestore();
+            return true;
+        }
+        if (key->key() == Qt::Key_L && mods == Qt::NoModifier) {
+            deferOrBringBack();
             return true;
         }
         if (key->key() == Qt::Key_C && mods == (Qt::ControlModifier | Qt::ShiftModifier)) {

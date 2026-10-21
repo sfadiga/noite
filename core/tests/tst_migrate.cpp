@@ -45,9 +45,31 @@ private slots:
         QTemporaryDir tmp;
         Db db = Db::open(tmp.filePath("noite.db"));
         migrate(db, kMigrations, tmp.filePath("snap"), 1000);
-        QCOMPARE(kLatest, 2);
-        QCOMPARE(db.userVersion(), 2);
+        QCOMPARE(db.userVersion(), kLatest);
         QCOMPARE(tableCount(db, "attachments"), 1);
+    }
+
+    // M8c: v3 rebuilds scratches for the deferred status and keeps the tags (the rebuild's
+    // DROP TABLE would cascade them away).
+    void v3AllowsDeferredAndKeepsTags()
+    {
+        QTemporaryDir tmp;
+        Db db = Db::open(tmp.filePath("noite.db"));
+        migrate(db, {kMigrations[0], kMigrations[1]}, tmp.filePath("snap"), 1000);
+        db.exec("INSERT INTO scratches(id, content, plain_text, title, created_at, modified_at, status) "
+                "VALUES ('n1', '', 'x', 'x', 1, 1, 'active');"
+                "INSERT INTO scratch_tags(scratch_id, tag, source) VALUES ('n1', 'home', 'manual');");
+        QVERIFY_THROWS_EXCEPTION(Error, db.exec("UPDATE scratches SET status = 'deferred'"));
+        migrate(db, kMigrations, tmp.filePath("snap"), 2000);
+        QCOMPARE(db.userVersion(), 3);
+        db.exec("UPDATE scratches SET status = 'deferred'");
+        db.exec("UPDATE scratches SET trashed_from = 'deferred', status = 'trashed'");
+        Stmt tags = db.prepare("SELECT count(*) FROM scratch_tags WHERE scratch_id = 'n1'");
+        tags.step();
+        QCOMPARE(tags.int64(0), qint64(1));
+        Stmt index = db.prepare("SELECT count(*) FROM sqlite_master WHERE name = 'scratches_status'");
+        index.step();
+        QCOMPARE(index.int64(0), qint64(1));
     }
 
     void upgradeSnapshotsOldVersionFirst()
