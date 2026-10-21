@@ -94,6 +94,15 @@ public:
     std::optional<QDate> lastReviewDay() const;
     void setLastReviewDay(QDate day);
 
+    // ---- Export (store_export.cpp, M8a) ----
+    // Writes the note to `path`: one self-contained HTML file (images as data: URIs) or an
+    // A4 PDF. Light look, content only; a missing image becomes "[missing image]". Never
+    // leaves a partial file. Throws NotFound, or Io with the path and the reason.
+    void exportScratch(const ScratchId& id, const QString& path, ExportFormat format) const;
+    // The folder of the last export; kept apart from Settings like lastReviewDay.
+    std::optional<QString> lastExportDir() const;
+    void setLastExportDir(const QString& dir);
+
     // ---- Attachments and purge (store_attachments.cpp, D13, D22; in the database, A1) ----
     // Stores bytes under <sha256>.<ext> (ext lowercased; "bin" unless 1-8 alphanumerics),
     // deduplicated; a re-put restarts its grace period. Returns the id. Throws AttachmentTooLarge.
