@@ -88,8 +88,38 @@ private slots:
         const QString stale = noteFrom(*f, "stale", 20 * kDayMs);
         QCOMPARE(f->store->reviewQueue(today(), 7).size(), 1);
         f->store->touch(stale);
-        QVERIFY(f->store->reviewQueue(today(), 7).isEmpty());
+        const QList<ReviewItem> after = f->store->reviewQueue(today(), 7);
+        QCOMPARE(after.size(), 1);
+        QCOMPARE(after[0].reason, ReviewReason::Undated); // no longer stale: only the fallback lists it
         QCOMPARE(f->store->get(stale).modifiedAt, t0());
+    }
+
+    // M8d: a morning with nothing to decide still has a review, over the undated notes,
+    // oldest first; `days` is the note's age.
+    void nothingDueFallsBackToUndatedOldestFirst()
+    {
+        auto f = fixture();
+        const QString newer = noteFrom(*f, "newer", 2 * kDayMs);
+        const QString older = noteFrom(*f, "older", 3 * kDayMs);
+        const QString upcoming = noteFrom(*f, "upcoming", 5 * kDayMs);
+        f->store->setDue(upcoming, QDate(2026, 10, 20));
+        f->store->markDone(noteFrom(*f, "done", 5 * kDayMs));
+        f->store->trash(noteFrom(*f, "trashed", 5 * kDayMs));
+
+        const QList<ReviewItem> queue = f->store->reviewQueue(today(), 7);
+        QCOMPARE(ids(queue), QStringList({older, newer}));
+        QCOMPARE(queue[0].reason, ReviewReason::Undated);
+        QCOMPARE(queue[1].reason, ReviewReason::Undated);
+        QCOMPARE(queue[0].days, 3);
+        QCOMPARE(queue[1].days, 2);
+    }
+
+    // A snoozed note (future due date) stays out of the fallback.
+    void onlyUpcomingNotesGiveAnEmptyQueue()
+    {
+        auto f = fixture();
+        f->store->setDue(noteFrom(*f, "upcoming", 0), QDate(2026, 10, 20));
+        QVERIFY(f->store->reviewQueue(today(), 7).isEmpty());
     }
 
     // Undo of Keep puts the stale clock back where it was.

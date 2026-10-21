@@ -2,6 +2,7 @@
 add_library(noite-app STATIC
     src/App.h src/App.cpp
     src/AppOptions.h src/AppOptions.cpp
+    src/AppIcon.h src/AppIcon.cpp
     src/platform/Hotkey.h src/platform/Hotkey.cpp
     src/platform/HotkeyManager.h src/platform/HotkeyManager.cpp
     src/platform/NativeHost.h src/platform/NativeHost.cpp
@@ -49,7 +50,15 @@ add_library(noite-app STATIC
     src/setup/SettingsDialog.h src/setup/SettingsDialog.cpp
 )
 configure_file(src/version.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/noite_version.h @ONLY)
+# The icon (M8b): packaging/icon, built from its pixel grids by make_icon.py. The exe resource
+# takes the .ico; the app's QIcon the PNGs, so no image plugin is needed.
+set(NOITE_ICON_ICO "${CMAKE_SOURCE_DIR}/packaging/icon/noite.ico")
 configure_file(src/noite.rc.in ${CMAKE_CURRENT_BINARY_DIR}/generated/noite.rc @ONLY)
+set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/generated/noite.rc PROPERTIES OBJECT_DEPENDS "${NOITE_ICON_ICO}")
+qt_add_resources(noite-app "noite_icons" PREFIX "/icons" BASE "${CMAKE_SOURCE_DIR}/packaging/icon" FILES
+    "${CMAKE_SOURCE_DIR}/packaging/icon/noite-16.png" "${CMAKE_SOURCE_DIR}/packaging/icon/noite-32.png"
+    "${CMAKE_SOURCE_DIR}/packaging/icon/noite-48.png" "${CMAKE_SOURCE_DIR}/packaging/icon/noite-64.png"
+    "${CMAKE_SOURCE_DIR}/packaging/icon/noite-128.png" "${CMAKE_SOURCE_DIR}/packaging/icon/noite-256.png")
 target_include_directories(noite-app PUBLIC src ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(noite-app PUBLIC noite-core Qt6::Widgets user32 wtsapi32 dbghelp psapi)
 target_compile_definitions(noite-app PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)

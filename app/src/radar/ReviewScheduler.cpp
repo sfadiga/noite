@@ -13,7 +13,7 @@ ReviewScheduler::ReviewScheduler(noite::Store& store, std::function<QDateTime()>
     , unlocked_(std::move(unlocked))
 {
     timer_.setSingleShot(true);
-    connect(&timer_, &QTimer::timeout, this, &ReviewScheduler::check);
+    connect(&timer_, &QTimer::timeout, this, [this] { check(QStringLiteral("timer")); });
 }
 
 int ReviewScheduler::msUntilNextCheck() const
@@ -31,24 +31,44 @@ int ReviewScheduler::msUntilNextCheck() const
     return int(now.msecsTo(next));
 }
 
-void ReviewScheduler::check()
+void ReviewScheduler::check(const QString& trigger)
 {
     const auto rearm = qScopeGuard([this] { timer_.start(msUntilNextCheck()); });
+    const auto log = [&](const QString& outcome) {
+        qInfo().noquote() << QString::fromUtf8("review: %1 · %2").arg(trigger, outcome);
+    };
     try {
         const noite::Settings settings = store_.settings();
         const QDateTime now = now_();
         const QDate today = now.date();
-        if (now.time() < settings.dayStart)
+        if (now.time() < settings.dayStart) {
+            log(QStringLiteral("before the day start (%1)").arg(settings.dayStart.toString("HH:mm")));
             return;
-        if (store_.lastReviewDay() == today)
+        }
+        if (store_.lastReviewDay() == today) {
+            log(QStringLiteral("already shown today"));
             return;
-        if (!unlocked_())
-            return; // the unlock will check again
+        }
+        if (!unlocked_()) {
+            log(QStringLiteral("locked, waits for the unlock"));
+            return;
+        }
         store_.setLastReviewDay(today);
-        if (store_.reviewQueue(today, settings.staleDays).isEmpty())
+        const QList<noite::ReviewItem> queue = store_.reviewQueue(today, settings.staleDays);
+        if (queue.isEmpty()) {
+            log(QStringLiteral("nothing to review"));
             return;
+        }
+        int counts[4] = {}; // by ReviewReason
+        for (const noite::ReviewItem& item : queue)
+            ++counts[int(item.reason)];
+        log(QString::fromUtf8("shown · %1 overdue, %2 due today, %3 stale, %4 undated")
+                .arg(counts[0])
+                .arg(counts[1])
+                .arg(counts[2])
+                .arg(counts[3]));
         emit reviewDue();
     } catch (const std::exception& error) {
-        qWarning() << "review:" << error.what();
+        qWarning().noquote() << "review:" << trigger << error.what();
     }
 }

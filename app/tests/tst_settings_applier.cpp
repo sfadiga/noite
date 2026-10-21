@@ -242,7 +242,7 @@ private slots:
         QDateTime now(QDate(2026, 10, 15), QTime(8, 0));
         ReviewScheduler scheduler(*f->store, [&] { return now; }, [] { return true; });
         QSignalSpy due(&scheduler, &ReviewScheduler::reviewDue);
-        scheduler.check(); // arms the timer; 08:00 is before 10:00
+        scheduler.check("test"); // arms the timer; 08:00 is before 10:00
         QCOMPARE(due.size(), 0);
 
         FakeBackend backend;
@@ -250,7 +250,7 @@ private slots:
         manager.set(kCap, late.captureHotkey);
         manager.set(kBrd, late.boardHotkey);
         SettingsApplier applier(
-            *f->store, manager, [](bool) {}, [&] { scheduler.check(); });
+            *f->store, manager, [](bool) {}, [&] { scheduler.check("test"); });
 
         Settings early = late;
         early.dayStart = QTime(6, 0);
@@ -278,7 +278,7 @@ private slots:
         manager.set(kCap, early.captureHotkey);
         manager.set(kBrd, early.boardHotkey);
         SettingsApplier applier(
-            *f->store, manager, [](bool) {}, [&] { scheduler.check(); });
+            *f->store, manager, [](bool) {}, [&] { scheduler.check("test"); });
 
         Settings later = early;
         later.dayStart = QTime(10, 0);
@@ -288,7 +288,7 @@ private slots:
         QCOMPARE(scheduler.msUntilNextCheck(), 7'200'000);
 
         now = QDateTime(QDate(2026, 10, 15), QTime(10, 0));
-        scheduler.check();
+        scheduler.check("test");
         QCOMPARE(due.size(), 1);
     }
 

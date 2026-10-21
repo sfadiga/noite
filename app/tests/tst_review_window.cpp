@@ -65,6 +65,24 @@ private slots:
         QCOMPARE(r.window->editor()->toPlainText(), QString("pay rent"));
     }
 
+    // M8d: with nothing overdue, due or stale, the review goes over the undated notes.
+    void undatedHeaderShowsAge()
+    {
+        auto f = test::fixture();
+        StoreAttachments attachments{*f->store};
+        f->clock->set(test::t0() - 3 * kDayMs);
+        f->store->createScratch(test::html({"a thought"}));
+        f->clock->set(test::t0() - kDayMs);
+        f->store->createScratch(test::html({"another"}));
+        f->clock->set(test::t0());
+        ReviewWindow window(*f->store, attachments, [] { return test::today(); });
+        window.start();
+        QCOMPARE(window.total(), 2);
+        QCOMPARE(window.headerText(), QString("UNDATED · 3 days old"));
+        window.keep();
+        QCOMPARE(window.headerText(), QString("UNDATED · 1 day old"));
+    }
+
     void keysActAndAdvance()
     {
         Review r;

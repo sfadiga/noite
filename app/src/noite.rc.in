@@ -2,6 +2,9 @@
 #pragma code_page(65001)
 #include <winver.h>
 
+// The first icon resource is the exe's icon in Explorer, the taskbar and Alt+Tab (M8b).
+IDI_ICON1 ICON "@NOITE_ICON_ICO@"
+
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION @NOITE_VERSION_MAJOR@,@NOITE_VERSION_MINOR@,@NOITE_VERSION_PATCH@,0
  PRODUCTVERSION @NOITE_VERSION_MAJOR@,@NOITE_VERSION_MINOR@,@NOITE_VERSION_PATCH@,0

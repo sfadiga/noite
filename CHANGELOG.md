@@ -10,10 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - On the board, `Ctrl+1` to `Ctrl+5` switch to Today, All, Completed, Deferred and Trash.
 - A Deferred tab: `L` (or **Defer** in the card menu, or in the morning review) parks a note there. It stays out of Today, All and the morning review, and its due date never turns overdue, until you bring it back with `L`. Done and trash work from there, and a restored note goes back to Deferred.
+- On the board, `Ctrl+1` to `Ctrl+4` switch to Today, All, Completed and Trash.
+- An icon: an 8-bit crescent moon with blue stars, on the exe, every window and the tray.
 - Export a note, with its images, to a single HTML file or a PDF: `Ctrl+E` on the board or in an open note, or **Export…** in the card menu.
 
 ### Changed
 
+- The morning review now opens every morning: when nothing is overdue, due today or stale, it goes over your undated notes, oldest first.
+- Each morning-review check writes a line to the log (what triggered it and what it decided), so a review that didn't open can be explained.
 - CI now runs an end-to-end test on every push: a note is captured with the hotkey, then marked done, trashed and restored on the board, with real keystrokes.
 
 - CI now checks the performance budget on every push: opening the board with 2,000 notes and opening a capture.

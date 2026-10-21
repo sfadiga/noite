@@ -1,4 +1,5 @@
 #include "App.h"
+#include "AppIcon.h"
 
 #include "capture/CaptureController.h"
 #include "capture/CaptureWindow.h"
@@ -205,12 +206,12 @@ std::optional<int> App::start()
     // today's review (R7).
     scheduler_ = std::make_unique<ReviewScheduler>(
         *store_, [] { return QDateTime::currentDateTime(); }, [this] { return host_->isUnlocked(); });
-    const auto checkReview = [this] {
+    const auto checkReview = [this](const QString& trigger) {
         if (!setupPending_)
-            scheduler_->check();
+            scheduler_->check(trigger);
     };
-    connect(host_.get(), &NativeHost::sessionUnlocked, this, checkReview);
-    connect(host_.get(), &NativeHost::resumed, this, checkReview);
+    connect(host_.get(), &NativeHost::sessionUnlocked, this, [=] { checkReview(QStringLiteral("unlock")); });
+    connect(host_.get(), &NativeHost::resumed, this, [=] { checkReview(QStringLiteral("resume")); });
     connect(scheduler_.get(), &ReviewScheduler::reviewDue, this, [this] {
         if (reviewWaits())
             reviewHeld_ = true;
@@ -219,7 +220,8 @@ std::optional<int> App::start()
     });
 
     applier_ = std::make_unique<SettingsApplier>(
-        *store_, *hotkeys_, [this](bool enabled) { syncAutostart(enabled); }, checkReview);
+        *store_, *hotkeys_, [this](bool enabled) { syncAutostart(enabled); },
+        [=] { checkReview(QStringLiteral("settings")); });
 
     startJobs();
     createTray();
@@ -235,7 +237,7 @@ std::optional<int> App::start()
             emit hotkeyUnavailable(settings.captureHotkey);
         if (!boardOk)
             emit hotkeyUnavailable(settings.boardHotkey);
-        QTimer::singleShot(0, scheduler_.get(), &ReviewScheduler::check);
+        QTimer::singleShot(0, scheduler_.get(), [this] { scheduler_->check(QStringLiteral("start")); });
     } else {
         showWizard();
     }
@@ -273,7 +275,7 @@ void App::releaseReview()
     if (reviewWaits())
         return; // the next wizardClosed() or the capture's finish comes back here
     if (std::exchange(checkPending_, false))
-        QTimer::singleShot(0, scheduler_.get(), &ReviewScheduler::check);
+        QTimer::singleShot(0, scheduler_.get(), [this] { scheduler_->check(QStringLiteral("setup")); });
     if (std::exchange(reviewHeld_, false))
         showReview();
 }
@@ -591,7 +593,7 @@ void App::createTray()
 
     if (!QSystemTrayIcon::isSystemTrayAvailable())
         return;
-    tray_ = new QSystemTrayIcon(qApp->style()->standardIcon(QStyle::SP_FileDialogDetailedView), this);
+    tray_ = new QSystemTrayIcon(appIcon(), this);
     tray_->setToolTip(trayToolTip());
     tray_->setContextMenu(trayMenu_.get());
     connect(tray_, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
