@@ -38,4 +38,9 @@ QString preview(const QString& plainText);
 // <64 lowercase hex SHA-256>.<1-8 lowercase alphanumerics>
 bool isValidAttachmentId(const QString& id);
 
+// A title as a Windows file name, no extension (M8a X9): <>:"/\|?* and control characters
+// become '_', trailing dots and spaces go, a device name (CON, NUL, COM1...) gets '_',
+// at most 100 characters, "note" when nothing is left.
+QString exportFileName(const QString& title);
+
 } // namespace noite::content

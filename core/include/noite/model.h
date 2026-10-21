@@ -17,6 +17,7 @@ using BundleId = QString;
 enum class Status { Active, Done, Trashed };
 enum class Color { Red, Orange, Yellow, Green, Blue, Purple };
 enum class Tab { Today, All, Completed, Trash };
+enum class ExportFormat { Html, Pdf }; // M8a
 
 struct Scratch {
     ScratchId id;

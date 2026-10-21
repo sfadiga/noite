@@ -111,6 +111,22 @@ private slots:
                                    QString(64, 'a') + ".toolongext", QString(64, 'g') + ".png"})
             QVERIFY2(!content::isValidAttachmentId(bad), qPrintable(bad));
     }
+
+    // M8a X9: a note title as a Windows file name, without the extension.
+    void exportFileNameIsSafeOnWindows()
+    {
+        QCOMPARE(content::exportFileName("a/b:c*?\"<>|"), QString("a_b_c______"));
+        QCOMPARE(content::exportFileName("tab\there"), QString("tab_here"));
+        QCOMPARE(content::exportFileName("report. "), QString("report"));
+        QCOMPARE(content::exportFileName("CON"), QString("CON_"));
+        QCOMPARE(content::exportFileName("nul"), QString("nul_"));
+        QCOMPARE(content::exportFileName("com1"), QString("com1_"));
+        QCOMPARE(content::exportFileName("Console"), QString("Console"));
+        QCOMPARE(content::exportFileName(""), QString("note"));
+        QCOMPARE(content::exportFileName(" . "), QString("note"));
+        QCOMPARE(content::exportFileName(QString(150, 'x')), QString(100, 'x'));
+        QCOMPARE(content::exportFileName("Tarefas da manhã"), QString("Tarefas da manhã"));
+    }
 };
 
 NOITE_TEST(ContentTest)
