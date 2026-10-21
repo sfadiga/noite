@@ -16,7 +16,7 @@ add_library(noite-core STATIC
     src/store_lifecycle.cpp
     src/store_bundles.cpp
     src/store_board.cpp src/store_review.cpp
-    src/store_attachments.cpp src/store_jobs.cpp
+    src/store_attachments.cpp src/store_jobs.cpp src/store_export.cpp
     include/noite/settings.h src/settings.cpp
     include/noite/backup.h src/backup.cpp
     src/db.h src/db.cpp
@@ -39,6 +39,7 @@ qt_add_executable(core-tests
     tests/tst_bundles.cpp
     tests/tst_board.cpp
     tests/tst_review.cpp
+    tests/tst_export.cpp
     tests/tst_attachments.cpp
     tests/tst_settings.cpp
     tests/tst_backup.cpp

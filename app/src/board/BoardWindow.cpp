@@ -9,12 +9,17 @@
 #include "VersionText.h"
 #include "capture/CaptureController.h"
 
+#include <noite/content.h>
+#include <noite/error.h>
 #include <noite/store.h>
 #include <noite_version.h>
 
 #include <QCalendarWidget>
 #include <QDebug>
 #include <QDialog>
+#include <QDir>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QDropEvent>
@@ -23,7 +28,9 @@
 #include <QLineEdit>
 #include <QListView>
 #include <QMenu>
+#include <QMessageBox>
 #include <QShortcut>
+#include <QStandardPaths>
 #include <QVBoxLayout>
 
 using noite::ScratchId;
@@ -143,6 +150,21 @@ BoardWindow::BoardWindow(noite::Store& store, AttachmentStore& attachments, std:
                 setTab(tab);
         });
     }
+    // Ctrl+E: export; with a note open over the board, that note.
+    connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_E), this), &QShortcut::activated, this,
+            &BoardWindow::exportSelected);
+    pickExportPath_ = [this](const QString& suggested) {
+        const QString pdfFilter = tr("PDF (*.pdf)");
+        QString filter;
+        QString path = QFileDialog::getSaveFileName(this, tr("Export note"), suggested,
+                                                    tr("Web page (*.html)") + ";;" + pdfFilter, &filter);
+        if (!path.isEmpty() && filter == pdfFilter && QFileInfo(path).suffix().compare("pdf", Qt::CaseInsensitive))
+            path = QFileInfo(path).path() + '/' + QFileInfo(path).completeBaseName() + ".pdf";
+        return path;
+    };
+    reportExportError_ = [this](const QString& message) {
+        QMessageBox::warning(this, tr("Export failed"), message);
+    };
     connect(model_, &QAbstractItemModel::modelReset, this, &BoardWindow::onModelReset);
     connect(model_, &BoardModel::errorOccurred, this, &BoardWindow::showStatus);
 
@@ -601,7 +623,49 @@ void BoardWindow::showContextMenu(const QPoint& pos)
     due->addAction(tr("Clear"), this, [this] { setDue(std::nullopt); });
     menu.addSeparator();
     menu.addAction(tr("Clone"), this, &BoardWindow::cloneSelected);
+    menu.addAction(tr("Export…"), this, &BoardWindow::exportSelected);
     menu.exec(grid_->viewport()->mapToGlobal(pos));
+}
+
+void BoardWindow::exportSelected()
+{
+    std::optional<ScratchId> id;
+    if (overlay_->isOpen()) {
+        overlay_->controller().flush(); // X14: export what is on screen
+        id = overlay_->controller().currentId();
+    } else {
+        id = selectedId();
+    }
+    if (!id)
+        return;
+    emit aboutToChange(*id); // a capture holding the note saves it first
+    try {
+        const QString dir = store_.lastExportDir().value_or(
+            QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));
+        const QString name = noite::content::exportFileName(store_.get(*id).title);
+        QString path = pickExportPath_(QDir(dir).filePath(name + ".html"));
+        if (path.isEmpty())
+            return;
+        const QFileInfo chosen(path);
+        if (chosen.suffix().isEmpty())
+            path += ".html";
+        const bool pdf = chosen.suffix().compare("pdf", Qt::CaseInsensitive) == 0;
+        store_.exportScratch(*id, path, pdf ? noite::ExportFormat::Pdf : noite::ExportFormat::Html);
+        store_.setLastExportDir(chosen.absolutePath());
+    } catch (const noite::Error& error) {
+        qWarning() << "export:" << error.what();
+        reportExportError_(QString::fromUtf8(error.what()));
+    }
+}
+
+void BoardWindow::setExportPathPicker(std::function<QString(const QString&)> picker)
+{
+    pickExportPath_ = std::move(picker);
+}
+
+void BoardWindow::setExportErrorReporter(std::function<void(const QString&)> reporter)
+{
+    reportExportError_ = std::move(reporter);
 }
 
 void BoardWindow::pickDue()

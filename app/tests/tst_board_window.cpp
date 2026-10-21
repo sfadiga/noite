@@ -10,8 +10,10 @@
 
 #include <noite/store.h>
 
+#include <QDir>
 #include <QLineEdit>
 #include <QListView>
+#include <QStandardPaths>
 #include "board/TabStrip.h"
 #include <QSignalSpy>
 #include <QTest>
@@ -99,6 +101,88 @@ private slots:
         QVERIFY(b.window->overlay().isOpen());
         QTest::keyClick(b.window->overlay().editor(), Qt::Key_3, Qt::ControlModifier);
         QCOMPARE(b.window->tabStrip()->currentIndex(), 0);
+    }
+
+    // M8a X3/X4: Ctrl+E asks for <last folder>/<safe title>.html and writes the file there.
+    void ctrlEExportsSelectedWithSafeName()
+    {
+        Board b(false);
+        b.add("q1/q2: plan");
+        b.window = b.make();
+        b.f->store->setLastExportDir(b.f->tmp.path());
+        b.show();
+        QString asked;
+        b.window->setExportPathPicker([&](const QString& suggested) { return asked = suggested; });
+        QSignalSpy aboutToChange(b.window.get(), &BoardWindow::aboutToChange);
+        QTest::keyClick(b.window->grid(), Qt::Key_E, Qt::ControlModifier);
+        QCOMPARE(asked, QDir(b.f->tmp.path()).filePath("q1_q2_ plan.html"));
+        QFile file(asked);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        QVERIFY(file.readAll().contains("q1/q2: plan"));
+        QCOMPARE(aboutToChange.size(), 1); // a capture holding the note saves first
+    }
+
+    void exportStartsInDocumentsAndFollowsTheChosenFormat()
+    {
+        Board b;
+        b.show();
+        QString asked;
+        QString answer = b.f->tmp.filePath("note.pdf");
+        b.window->setExportPathPicker([&](const QString& suggested) {
+            asked = suggested;
+            return answer;
+        });
+        b.window->exportSelected();
+        QVERIFY(asked.startsWith(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)));
+        QFile pdf(answer);
+        QVERIFY(pdf.open(QIODevice::ReadOnly));
+        QVERIFY(pdf.readAll().startsWith("%PDF-"));
+        QCOMPARE(b.f->store->lastExportDir(), std::optional<QString>(b.f->tmp.path()));
+
+        answer = b.f->tmp.filePath("plain"); // no extension: HTML
+        b.window->exportSelected();
+        QVERIFY(QFile::exists(b.f->tmp.filePath("plain.html")));
+    }
+
+    void exportCancelledWritesNothing()
+    {
+        Board b;
+        b.show();
+        b.window->setExportPathPicker([](const QString&) { return QString(); });
+        const QStringList before = QDir(b.f->tmp.path()).entryList(QDir::Files);
+        b.window->exportSelected();
+        QCOMPARE(QDir(b.f->tmp.path()).entryList(QDir::Files), before);
+        QCOMPARE(b.f->store->lastExportDir(), std::optional<QString>());
+    }
+
+    // X14: the open note is saved first, so the export has what is on screen.
+    void ctrlEInOverlayExportsEditedText()
+    {
+        Board b;
+        b.show();
+        b.window->openSelected();
+        QVERIFY(b.window->overlay().isOpen());
+        b.window->overlay().editor()->moveCursor(QTextCursor::End);
+        QTest::keyClicks(b.window->overlay().editor(), " unsaved words");
+        const QString path = b.f->tmp.filePath("open.html");
+        b.window->setExportPathPicker([&](const QString&) { return path; });
+        QTest::keyClick(b.window->overlay().editor(), Qt::Key_E, Qt::ControlModifier);
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        QVERIFY(file.readAll().contains("unsaved words"));
+        QVERIFY(b.window->overlay().isOpen());
+    }
+
+    void exportFailureIsReported()
+    {
+        Board b;
+        b.show();
+        QString reported;
+        b.window->setExportPathPicker([&](const QString&) { return b.f->tmp.filePath("no-such-folder/x.html"); });
+        b.window->setExportErrorReporter([&](const QString& message) { reported = message; });
+        b.window->exportSelected();
+        QVERIFY2(reported.contains("no-such-folder"), qPrintable(reported));
+        QCOMPARE(b.f->store->lastExportDir(), std::optional<QString>());
     }
 
     void tabsAreEqualCapsButtonsWithCounts()
