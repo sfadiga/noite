@@ -1,5 +1,7 @@
 # noite
 
+<img src="packaging/icon/noite-128.png" width="128" height="128" alt="noite's icon: an 8-bit crescent moon and blue stars on a night sky" />
+
 A note-taking app for busy people who get things done. Press a hotkey, write, and it's there tomorrow.
 
 > **Status: v1 features are built (M1–M6); 1.0.0 is the first release, shipped as a single `noite.exe` (M7).** *noite* is a working name.

@@ -1,4 +1,5 @@
 #include "App.h"
+#include "AppIcon.h"
 
 #include "capture/CaptureController.h"
 #include "capture/CaptureWindow.h"
@@ -591,7 +592,7 @@ void App::createTray()
 
     if (!QSystemTrayIcon::isSystemTrayAvailable())
         return;
-    tray_ = new QSystemTrayIcon(qApp->style()->standardIcon(QStyle::SP_FileDialogDetailedView), this);
+    tray_ = new QSystemTrayIcon(appIcon(), this);
     tray_->setToolTip(trayToolTip());
     tray_->setContextMenu(trayMenu_.get());
     connect(tray_, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {

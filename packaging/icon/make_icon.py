@@ -2,8 +2,9 @@
 
 noite-16.txt and noite-32.txt hold one character per pixel (palette below). Sizes 16 and
 32 are drawn as they are; 48 = 16 x 3, 64 = 32 x 2, 128 = 32 x 4, 256 = 32 x 8, scaled
-nearest-neighbour so the pixels stay crisp. Writes noite.ico (every size, PNG-encoded)
-and noite-128.png (the README) here. With --preview DIR, also writes each size to DIR.
+nearest-neighbour so the pixels stay crisp. Writes noite.ico (every size, PNG-encoded; the
+exe's icon) and noite-<size>.png (the app's QIcon and the README) here. With --preview DIR,
+also writes the PNGs to DIR.
 
 Run with `python -I packaging/icon/make_icon.py`. Standard library only.
 """
@@ -78,12 +79,11 @@ def main():
     images = [(size, png(grids[grid], factor)) for size, grid, factor in SIZES]
     with open(os.path.join(HERE, "noite.ico"), "wb") as f:
         f.write(ico(images))
-    with open(os.path.join(HERE, "noite-128.png"), "wb") as f:
-        f.write(dict(images)[128])
-    if preview:
-        os.makedirs(preview, exist_ok=True)
+    # One PNG per size: the app's QIcon (a Qt resource) and the README use these.
+    for folder in [HERE] + ([preview] if preview else []):
+        os.makedirs(folder, exist_ok=True)
         for size, data in images:
-            with open(os.path.join(preview, "noite-%d.png" % size), "wb") as f:
+            with open(os.path.join(folder, "noite-%d.png" % size), "wb") as f:
                 f.write(data)
     print("noite.ico: %s" % ", ".join(str(s) for s, _ in images))
 

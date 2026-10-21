@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - On the board, `Ctrl+1` to `Ctrl+4` switch to Today, All, Completed and Trash.
+- An icon: an 8-bit crescent moon with blue stars, on the exe, every window and the tray.
 
 ### Changed
 
