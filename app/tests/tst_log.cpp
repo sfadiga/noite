@@ -4,6 +4,7 @@
 
 #include <QDateTime>
 #include <QFile>
+#include <QMutex>
 #include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QTest>
@@ -18,8 +19,13 @@ namespace {
 // Stands in for QTest's handler: swallows messages (pristine output) and records them.
 QStringList g_seen;
 
+// applog calls the previous handler outside its own mutex, so from several threads at once
+// (threadsDoNotTearLines); unguarded appends corrupted the heap (0xC0000374 in CI).
+QMutex g_seenMutex;
+
 void captureHandler(QtMsgType, const QMessageLogContext&, const QString& message)
 {
+    QMutexLocker lock(&g_seenMutex);
     g_seen << message;
 }
 
@@ -210,6 +216,9 @@ private slots:
         b.wait();
         const QString path = currentLogPath();
         uninstall();
+        // The previous handler runs outside the log mutex, from both threads at once: the
+        // capture must take its own lock, or appends race (lost lines, heap corruption).
+        QCOMPARE(g_seen.size(), 1000);
 
         const QStringList lines = readLines(path);
         QCOMPARE(lines.size(), 1000);
