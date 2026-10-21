@@ -4,7 +4,7 @@
 
 A note-taking app for busy people who get things done. Press a hotkey, write, and it's there tomorrow.
 
-> **Status: v1 features are built (M1–M6); 1.0.0 is the first release, shipped as a single `noite.exe` (M7).** *noite* is a working name.
+> **Status: 1.1.0 adds export to HTML/PDF, a Deferred tab and an icon (M8), on top of the v1 features (M1–M7), shipped as a single `noite.exe`.** *noite* is a working name.
 
 <img width="1002" height="732" alt="image" src="https://github.com/user-attachments/assets/8369d8ed-901c-44e8-a341-837aec25f573" />
 

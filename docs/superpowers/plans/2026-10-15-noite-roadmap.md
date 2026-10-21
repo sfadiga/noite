@@ -19,7 +19,16 @@ v1 is split into milestones. Each one produces software that works and can be te
 | M7a | Release pipeline | Versioned build (`git describe`), exe version resource, trimmed portable zip + PDB zip + checksums built by CI on every push, licence notices, draft GitHub Release on a `vX.Y.Z` tag, golden-data upgrade test, README for downloading / building / releasing | D23, D26, D28 | M6 | [m7a](2026-10-19-m7a-release-pipeline.md) |
 | M7b | Performance | Phase breakdown of a summon (show / activate / paint / flush, page faults) in the latency probe and a `capture-bench`; real-idle runs found the idle cost is the system waking (no in-app fix: a working-set floor and a cloaked window were measured and dropped); CI gates the board bench (2,000 notes) and the capture bench on the D5 budget | D5, D28 | M7a | [m7b](2026-10-20-m7b-performance.md) (done; [results](../../spikes/2026-10-m7b-idle-summon.md)) |
 | M7c | End-to-end harness | Real-keystroke run (capture → board → done → trash → restore) checked against the database, on every CI push; board tab keys `Ctrl+1`–`Ctrl+4` | D28 | M7a | [m7c](2026-10-20-m7c-e2e.md) (done) |
-| M7d | Single-exe build | A single-exe release via a static Qt build (Qt is LGPL, noite is MIT with public source); the path to 1.0.0 | D23 | M7a | [m7d](2026-10-19-m7d-single-exe.md) |
+| M7d | Single-exe build | A single-exe release via a static Qt build (Qt is LGPL, noite is MIT with public source); the path to 1.0.0 | D23 | M7a | [m7d](2026-10-19-m7d-single-exe.md) (done: 1.0.0, 1.0.1) |
+
+## 1.1.0 (added 2026-10-21)
+
+| # | Milestone | Delivers | Spec | Plan |
+|---|---|---|---|---|
+| M8a | Export | One note to a self-contained HTML file or an A4 PDF, images included (`Ctrl+E`, card menu) | D35 | [m8a](2026-10-21-m8a-export.md) (done) |
+| M8b | Icon | 8-bit crescent moon and blue stars: pixel grids in `packaging/icon`, `make_icon.py`; exe, windows, tray | — | done (no plan; approved from rendered previews) |
+| M8c | Deferred tab | Status `deferred` (schema v3), a Deferred tab, `L` on the board and in the review; deferred notes raise no alarms | D36, D11, D31, D32 | [m8c](2026-10-21-m8c-deferred.md) (done) |
+| M8d | Morning review fix | The review opens every morning (undated fallback), and each check is logged | D16, D32 | done (bug fix, no plan) |
 
 ## Decisions made while planning (not in the spec, confirm on review)
 
