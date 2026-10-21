@@ -15,6 +15,7 @@ A note-taking app for busy people who get things done. Press a hotkey, write, an
   - markdown typing shortcuts (`#`, `-`, `[]`, `**bold**`, `[link](url)`),
   - rich paste from browsers and Word, images, tables.
 - **A board:** Today / All / Completed / Trash tabs (`Ctrl+1`–`Ctrl+4`), bundles, filter chips by tag, colour or due date, and full-text search.
+- **Export:** a note to one HTML file or a PDF, images included (`Ctrl+E` or the card menu's **Export…**).
 - **A start-of-day review:** overdue, due today, then the oldest notes first.
 - **Done and trash:** finished notes go to Completed; trash is recoverable for a window you set (default 30 days).
 - **Portable and offline:** unzip and run, with everything in a `data\` folder next to the exe and no network code. Backups are snapshots to a folder you choose, such as your Google Drive folder.
