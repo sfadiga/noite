@@ -155,6 +155,9 @@ std::optional<int> App::start()
         else
             window_->summon();
     });
+    // Windows logging off or shutting down (WM_QUERYENDSESSION): the process is killed right after
+    // aboutToQuit, before "noite quit" is logged, so this line is what the log shows instead.
+    connect(qApp, &QGuiApplication::commitDataRequest, this, [] { qInfo() << "session ending"; });
     connect(qApp, &QCoreApplication::aboutToQuit, controller_.get(), &CaptureController::flush);
     connect(qApp, &QCoreApplication::aboutToQuit, this, [this] {
         if (board_)
