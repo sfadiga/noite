@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- When Windows logs off or shuts down, the log gets a `session ending` line. Windows ends noite before it can log `noite quit`, so a run that stops without that line is no longer a mystery.
+
 ## [1.1.0] - 2026-10-21
 
 ### Added
